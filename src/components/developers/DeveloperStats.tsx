@@ -1,0 +1,3 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+const stats=[["API Calls","18.2M","success"],["Developers","12.4k","info"],["SDKs","6","success"],["Webhook Success","99.6%","success"],["P95 Latency","186ms","neutral"],["Sandbox Apps","428","info"]];export default function DeveloperStats(){return <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:20,marginBottom:28}}>{stats.map(([l,v,variant])=><Card key={l} variant="elevated"><Badge variant={variant as "success"|"info"|"neutral"}>{l}</Badge><div style={{marginTop:18,color:brand.colors.navy,fontSize:"2.25rem",fontWeight:brand.typography.weight.bold,letterSpacing:"-0.045em"}}>{v}</div></Card>)}</section>}

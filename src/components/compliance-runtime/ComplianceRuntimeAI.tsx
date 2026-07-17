@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Evaluate controls continuously from real system events, not only during audits.","Every policy decision needs version, subject, resource, action, tenant, result, reason, and correlation metadata.","Exceptions must be time-limited, approved, risk-rated, and linked to remediation.","Privacy deletion must propagate across databases, files, search, vectors, logs, and AI memory.","Production requires policy-as-code, evidence collectors, immutable audit storage, and legal validation."];
+export default function ComplianceRuntimeAI(){return <Card variant="glass"><Badge variant="success">Compliance Runtime AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Continuous assurance recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

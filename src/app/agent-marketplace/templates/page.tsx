@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { AgentMarketplaceHeader, AgentMarketplaceStats, AgentCatalog, AgentBuilder, AgentTemplates, AgentGovernance, AgentPerformance, ToolPermissionMatrix, AgentAuditLogs } from "@/components/agent-marketplace";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><AgentTemplates/></main></Container><Footer/></>}

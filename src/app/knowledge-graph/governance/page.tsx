@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { KnowledgeGraphHeader, KnowledgeGraphStats, EntityMap, RelationshipExplorer, LineageTracker, GraphInsights, GraphGovernance, ImpactAnalysis, KnowledgeGraphAI } from "@/components/knowledge-graph";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><GraphGovernance/><ImpactAnalysis/></section></main></Container><Footer/></>}

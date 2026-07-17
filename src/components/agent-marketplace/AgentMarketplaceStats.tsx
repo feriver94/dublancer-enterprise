@@ -1,0 +1,3 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+const stats=[["Published Agents","86","success"],["Installed Agents","248","info"],["Monthly Runs","1.2M","success"],["Avg Rating","4.9","neutral"],["Governed Tools","64","info"],["Cost Saved","$84k","success"]];export default function AgentMarketplaceStats(){return <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:20,marginBottom:28}}>{stats.map(([l,v,variant])=><Card key={l} variant="elevated"><Badge variant={variant as "success"|"info"|"neutral"}>{l}</Badge><div style={{marginTop:18,color:brand.colors.navy,fontSize:"2.25rem",fontWeight:brand.typography.weight.bold,letterSpacing:"-0.045em"}}>{v}</div></Card>)}</section>}

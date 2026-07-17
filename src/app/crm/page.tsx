@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { CRMHeader, CRMStats, AccountDirectory, ContactCenter, DealPipeline, Customer360, HealthScoring, RenewalExpansion, CRMAI } from "@/components/crm";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><CRMHeader/><CRMStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><AccountDirectory/><DealPipeline/><Customer360/><RenewalExpansion/></div><aside style={{display:"grid",gap:24}}><CRMAI/><HealthScoring/><ContactCenter/></aside></section></main></Container><Footer/></>}

@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { AnalyticsHeader, AnalyticsStats, ExecutiveDashboard, RevenueAnalytics, ProductAnalytics, AIAnalytics, OperationsAnalytics, ForecastingPanel, AnalyticsAI } from "@/components/analytics";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><OperationsAnalytics/></main></Container><Footer/></>}

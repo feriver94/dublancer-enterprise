@@ -1,0 +1,9 @@
+export { default as TalentHeader } from "./TalentHeader";
+export { default as TalentStats } from "./TalentStats";
+export { default as JobPipeline } from "./JobPipeline";
+export { default as CandidateBoard } from "./CandidateBoard";
+export { default as InterviewScheduler } from "./InterviewScheduler";
+export { default as FreelancerCloud } from "./FreelancerCloud";
+export { default as SkillsIntelligence } from "./SkillsIntelligence";
+export { default as PerformanceReviews } from "./PerformanceReviews";
+export { default as TalentAI } from "./TalentAI";

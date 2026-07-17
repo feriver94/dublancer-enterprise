@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Every knowledge object needs tenant, source, owner, classification, version, permissions, and lineage metadata.","Retrieval should combine vector, keyword, graph, freshness, authority, and permission filters.","Durable memory must be separated from temporary context and inferred signals.","Deletion must propagate across records, files, indexes, vectors, graph edges, caches, and AI memory.","Production requires ingestion workers, parsers, embeddings, vector storage, graph storage, retrieval APIs, and evaluations."];
+export default function KnowledgePlatformAI(){return <Card variant="glass"><Badge variant="success">Knowledge Platform AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Enterprise knowledge architecture recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

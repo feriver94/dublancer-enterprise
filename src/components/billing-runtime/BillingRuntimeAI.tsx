@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Usage events must be immutable, tenant-scoped, idempotent, timestamped, and linked to a meter version.","Pricing, plans, and entitlements must be versioned so historic invoices can be reproduced exactly.","Separate event ingestion, aggregation, rating, invoicing, collection, and accounting.","Proration, discounts, tax, credits, and contract overrides need deterministic rules and audit evidence.","Production requires payment integration, tax review, accounting validation, and ledger reconciliation."];
+export default function BillingRuntimeAI(){return <Card variant="glass"><Badge variant="success">Billing Runtime AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Monetization architecture recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

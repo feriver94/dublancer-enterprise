@@ -1,0 +1,4 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const metrics=[["Agent success rate","98.7%"],["Retry recovery","93.1%"],["Avg tool calls/run","4.8"],["Token spend/mo","$6.4k"],["Policy blocks","128"],["Audit coverage","100%"]];export default function ObservabilityConsole(){return <Card variant="elevated"><Badge variant="info">Observability</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18,marginBottom:22}}>Agent telemetry and controls</h2><div style={{display:"grid",gap:12}}>{metrics.map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",gap:16,padding:14,borderRadius:brand.radius.md,background:brand.colors.background,border:`1px solid ${brand.colors.border}`}}><span style={{color:brand.colors.text}}>{l}</span><strong style={{color:brand.colors.navy}}>{v}</strong></div>)}</div></Card>}

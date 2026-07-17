@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { IntegrationHeader, IntegrationStats, ConnectorCatalog, ConnectionManager, WebhookManager, EventBusDashboard, ApiKeysPanel, RetryQueue, IntegrationHealth, DataMappingStudio } from "@/components/integrations";
+export default function EventsPage(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><EventBusDashboard/><RetryQueue/></section></main></Container><Footer/></>}

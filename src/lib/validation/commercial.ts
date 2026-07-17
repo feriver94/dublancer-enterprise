@@ -1,0 +1,12 @@
+import { z } from "zod";
+const id=z.string().trim().min(1).max(191);const minor=z.coerce.bigint().nonnegative();
+export const updateListingSchema=z.object({title:z.string().trim().min(5).max(200).optional(),description:z.string().trim().min(20).max(20000).optional(),status:z.enum(["DRAFT","PUBLISHED","PAUSED","AWARDED","CLOSED","CANCELLED"]).optional(),applicationDeadline:z.coerce.date().nullable().optional()}).refine(v=>Object.keys(v).length>0);
+export const contractTransitionSchema=z.object({status:z.enum(["DRAFT","PENDING_SIGNATURES","ACTIVE","PAUSED","COMPLETED","TERMINATED","DISPUTED"])});
+export const amendmentSchema=z.object({summary:z.string().trim().min(3).max(1000),changes:z.record(z.string(),z.unknown()),submit:z.boolean().default(true)});
+export const contractMilestoneSchema=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).optional(),amountMinor:minor,currency:z.string().regex(/^[A-Z]{3}$/).default("AED"),dueAt:z.coerce.date().optional()});
+export const disputeSchema=z.object({category:z.string().trim().min(2).max(100),reason:z.string().trim().min(10).max(10000),againstUserId:id.optional(),evidence:z.record(z.string(),z.unknown()).optional()});
+export const updateFileSchema=z.object({name:z.string().trim().min(1).max(255).optional(),retentionUntil:z.coerce.date().nullable().optional(),legalHold:z.boolean().optional(),deleted:z.boolean().optional()}).refine(v=>Object.keys(v).length>0);
+export const lockFileSchema=z.object({expiresInMinutes:z.number().int().min(1).max(1440).default(30)});
+export const subscriptionSchema=z.object({planId:id,status:z.enum(["TRIALING","ACTIVE","PAST_DUE","PAUSED","CANCELLED","EXPIRED"]).default("ACTIVE"),currentPeriodEnd:z.coerce.date(),cancelAtPeriodEnd:z.boolean().default(false)});
+export const moderationDecisionSchema=z.object({reportId:id,status:z.enum(["TRIAGED","INVESTIGATING","ACTIONED","DISMISSED"]),resolution:z.string().trim().min(2).max(5000)});
+export const retentionSchema=z.object({resourceType:z.string().trim().min(2).max(100),retentionDays:z.number().int().min(1).max(36500),legalHoldDefault:z.boolean().default(false),configuration:z.record(z.string(),z.unknown()).optional()});

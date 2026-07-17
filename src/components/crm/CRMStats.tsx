@@ -1,0 +1,3 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+const stats=[["Accounts","4.8k","success"],["Pipeline Value","$8.4M","info"],["Win Rate","34%","success"],["Expansion Pipeline","$1.9M","success"],["At-risk Clients","28","neutral"],["Avg Health","89%","info"]];export default function CRMStats(){return <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:20,marginBottom:28}}>{stats.map(([l,v,variant])=><Card key={l} variant="elevated"><Badge variant={variant as "success"|"info"|"neutral"}>{l}</Badge><div style={{marginTop:18,color:brand.colors.navy,fontSize:"2.25rem",fontWeight:brand.typography.weight.bold,letterSpacing:"-0.045em"}}>{v}</div></Card>)}</section>}

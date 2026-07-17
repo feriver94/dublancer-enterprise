@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Privileged actions need step-up authentication, reason codes, approvals, and immutable audit logs.","Feature flags must be tenant-aware, versioned, reversible, and linked to rollout metrics.","Compliance evidence should be generated continuously from real controls.","Policy evaluation must occur at API, database, workflow, AI tool, and admin boundaries.","Production requires a real authorization service, audit pipeline, secrets management, and evidence retention."];
+export default function AdminControlAI(){return <Card variant="glass"><Badge variant="success">Admin Control AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Governance and compliance recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

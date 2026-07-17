@@ -1,0 +1,3 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+const stats=[["Agent Runs","1.2M","success"],["Success Rate","98.7%","success"],["Avg Cost","$0.08","info"],["Tool Calls","6.4M","neutral"],["Memory Hits","94%","success"],["Policy Blocks","12.4k","info"]];export default function AIRuntimeStats(){return <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:20,marginBottom:28}}>{stats.map(([l,v,variant])=><Card key={l} variant="elevated"><Badge variant={variant as "success"|"info"|"neutral"}>{l}</Badge><div style={{marginTop:18,color:brand.colors.navy,fontSize:"2.25rem",fontWeight:brand.typography.weight.bold,letterSpacing:"-0.045em"}}>{v}</div></Card>)}</section>}

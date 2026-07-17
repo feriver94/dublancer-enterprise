@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Nexa Cloud conversations combine billing, support, and stakeholder risk and should be escalated.","UrbanTech UAE meetings show expansion intent and should trigger an enterprise proposal workflow.","Meeting summaries should create workspace decisions, risks, and assigned actions.","External communication drafts must remain human-approved until sender identity and audit controls are live.","Production implementation needs real email, calendar, meeting, transcription, storage, and notification services."];
+export default function CommunicationsAI(){return <Card variant="glass"><Badge variant="success">Communication AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Omnichannel intelligence</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

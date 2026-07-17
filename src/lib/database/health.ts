@@ -1,0 +1,2 @@
+import { prisma } from "./prisma";
+export async function checkDatabaseHealth(){ const started=performance.now(); try { await prisma.$queryRaw`SELECT 1`; return {status:"healthy",latencyMs:Math.round(performance.now()-started),checkedAt:new Date().toISOString()}; } catch(error){ console.error("Database health check failed",error); return {status:"unhealthy",latencyMs:Math.round(performance.now()-started),checkedAt:new Date().toISOString()}; }}

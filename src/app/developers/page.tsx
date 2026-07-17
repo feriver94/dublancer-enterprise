@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { DeveloperHeader, DeveloperStats, ApiExplorer, SDKLibrary, ApiKeysConsole, WebhookDocs, SandboxEnvironment, RateLimitMonitor, DeveloperLogs } from "@/components/developers";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><DeveloperHeader/><DeveloperStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><ApiExplorer/><SDKLibrary/><SandboxEnvironment/></div><aside style={{display:"grid",gap:24}}><ApiKeysConsole/><RateLimitMonitor/><DeveloperLogs/></aside></section></main></Container><Footer/></>}

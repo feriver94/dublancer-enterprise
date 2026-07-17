@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Evaluate identity, device, workload, location, behavior, tenant, action, and resource context on every sensitive request.","Never store secrets in source code, client bundles, logs, or long-lived environment files.","Enforce API authorization server-side at route and resource level.","Use short-lived credentials, automatic rotation, mutual TLS, and workload identity.","Production requires a managed vault or KMS, API gateway or WAF, policy engine, centralized revocation, and tested compromise procedures."];
+export default function SecurityRuntimeAI(){return <Card variant="glass"><Badge variant="success">Security Runtime AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Zero-trust architecture recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

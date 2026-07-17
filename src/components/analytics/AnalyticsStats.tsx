@@ -1,0 +1,3 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+const stats=[["ARR Forecast","$7.1M","success"],["Platform Usage","18.2M events","info"],["AI ROI","312%","success"],["Customer Health","89%","neutral"],["Marketplace GMV","$42M","success"],["Ops Efficiency","94%","info"]];export default function AnalyticsStats(){return <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:20,marginBottom:28}}>{stats.map(([l,v,variant])=><Card key={l} variant="elevated"><Badge variant={variant as "success"|"info"|"neutral"}>{l}</Badge><div style={{marginTop:18,color:brand.colors.navy,fontSize:"2.25rem",fontWeight:brand.typography.weight.bold,letterSpacing:"-0.045em"}}>{v}</div></Card>)}</section>}

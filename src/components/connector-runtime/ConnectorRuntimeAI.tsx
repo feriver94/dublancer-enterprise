@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Require OAuth state, PKCE, redirect validation, and tenant binding on every authorization flow.","Verify webhook signatures before parsing, queueing, or business processing.","Sync jobs need durable checkpoints, idempotency, conflict policy, and replay-safe handling.","Connector actions should use workflow approvals, retries, permissions, and audit lineage.","Production requires provider apps, secure callbacks, encrypted token storage, queue workers, and automated connector certification."];
+export default function ConnectorRuntimeAI(){return <Card variant="glass"><Badge variant="success">Connector Runtime AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Connector runtime recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

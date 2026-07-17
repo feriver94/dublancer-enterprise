@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Capture agent version, prompt version, model route, memory, tool calls, approvals, output, cost, latency, and policy decisions for every run.","Agent tool access must inherit tenant isolation and RBAC from the identity platform.","Multi-agent workflows need ownership, timeouts, retry budgets, compensation, and supervisor control.","Prompt and model changes should pass automated evaluations before release.","Production requires backend orchestration workers, durable run state, queues, model clients, vector retrieval, and policy enforcement."];
+export default function AIPlatformArchitect(){return <Card variant="glass"><Badge variant="success">AI Platform Architect</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Multi-agent architecture recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

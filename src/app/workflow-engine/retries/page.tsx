@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { WorkflowEngineHeader, WorkflowEngineStats, WorkflowDesigner, ExecutionMonitor, ScheduleManager, RetryDLQConsole, WorkflowVersioning, GovernanceControls, EventSchemaRegistry, WorkflowPerformance, WorkflowEngineArchitect } from "@/components/workflow-engine";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px",display:"grid",gap:28}}><RetryDLQConsole/><ExecutionMonitor/></main></Container><Footer/></>}

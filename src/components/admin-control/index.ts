@@ -1,0 +1,11 @@
+export { default as AdminControlHeader } from "./AdminControlHeader";
+export { default as AdminControlStats } from "./AdminControlStats";
+export { default as TenantOperations } from "./TenantOperations";
+export { default as FeatureFlagConsole } from "./FeatureFlagConsole";
+export { default as PolicyManagement } from "./PolicyManagement";
+export { default as AuditEvidenceCenter } from "./AuditEvidenceCenter";
+export { default as CompliancePrograms } from "./CompliancePrograms";
+export { default as PrivilegedAccessReview } from "./PrivilegedAccessReview";
+export { default as DataGovernanceCenter } from "./DataGovernanceCenter";
+export { default as ServiceControlCenter } from "./ServiceControlCenter";
+export { default as AdminControlAI } from "./AdminControlAI";

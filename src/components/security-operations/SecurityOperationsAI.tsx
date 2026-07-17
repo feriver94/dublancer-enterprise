@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Correlate identity, API, AI, payment, and workflow detections into one incident graph.","Use automated containment with human approval for disruptive actions.","Every incident needs a timeline, affected tenants, evidence, owners, severity, and post-incident review.","Device trust, session risk, role changes, and service-account behavior should feed access decisions.","Production requires SIEM, endpoint telemetry, threat feeds, SOAR workflows, secrets rotation, and tested playbooks."];
+export default function SecurityOperationsAI(){return <Card variant="glass"><Badge variant="success">Security Operations AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>AI security operations recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

@@ -1,0 +1,5 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const insights=["Critical security and payment messages need isolated queues and stricter SLAs.","Every message needs tenant, recipient, template version, consent state, correlation ID, and audit metadata.","Provider fallback must preserve idempotency to prevent duplicate messages.","Preference changes should propagate immediately across queued deliveries.","Production requires real providers, secrets management, signed webhooks, and regional compliance controls."];
+export default function MessagingRuntimeAI(){return <Card variant="glass"><Badge variant="success">Messaging Runtime AI</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18}}>Intelligent delivery recommendations</h2><div style={{display:"grid",gap:12,marginTop:20}}>{insights.map(i=><div key={i} style={{padding:14,border:`1px solid ${brand.colors.border}`,borderRadius:brand.radius.md}}>{i}</div>)}</div></Card>}

@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { BackendHeader, BackendStats, DatabaseArchitecture, APIGatewayPlan, EventBusPlan, WorkerQueuePlan, StorageCachePlan, ObservabilityPlan, DeploymentPlan, BackendAI } from "@/components/backend";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><EventBusPlan/></main></Container><Footer/></>}

@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { AIInfrastructureHeader, AIInfrastructureStats, ModelRouterPanel, RAGPipelinePanel, VectorDatabasePanel, MemoryLifecyclePanel, EvaluationCenter, SafetyScoringPanel, CostGovernancePanel, AIInfrastructureArchitect } from "@/components/ai-infrastructure";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><RAGPipelinePanel/><AIInfrastructureArchitect/></section></main></Container><Footer/></>}

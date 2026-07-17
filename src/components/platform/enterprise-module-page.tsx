@@ -1,0 +1,1 @@
+import{Navbar,Footer,Container}from"@/components/layout";import{EnterprisePlatformConsole,type EnterpriseModule}from"./enterprise-platform-console";export function EnterpriseModulePage({module}:{module:EnterpriseModule}){return<><Navbar/><Container><main style={{padding:"48px 0 96px"}}><EnterprisePlatformConsole initialModule={module}/></main></Container><Footer/></>}

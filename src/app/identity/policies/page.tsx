@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { IdentityHeader, IdentityStats, OrganizationDirectory, UserDirectory, RolePermissionMatrix, SSOMFAPanel, SessionDeviceMonitor, AccessReviewCenter, APIKeysServiceAccounts, IdentityAuditTrail, IdentityAI } from "@/components/identity";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><SSOMFAPanel/><APIKeysServiceAccounts/></section></main></Container><Footer/></>}

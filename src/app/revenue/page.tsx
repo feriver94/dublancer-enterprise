@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { RevenueHeader, RevenueStats, BillingOverview, SubscriptionPlans, InvoiceCenter, UsageMetering, RevenueForecast, CollectionsQueue, RevenueAI } from "@/components/revenue";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><RevenueHeader/><RevenueStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><BillingOverview/><InvoiceCenter/><UsageMetering/><RevenueForecast/></div><aside style={{display:"grid",gap:24}}><RevenueAI/><SubscriptionPlans/><CollectionsQueue/></aside></section></main></Container><Footer/></>}

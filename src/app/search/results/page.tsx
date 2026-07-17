@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { SearchHeader, SearchStats, CommandPalette, SearchResults, SearchFilters, RecentCommands, IndexHealth, PermissionGuard, SearchAI } from "@/components/search";
+export default function ResultsPage(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><SearchResults/><SearchFilters/></section></main></Container><Footer/></>}

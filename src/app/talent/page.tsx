@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { TalentHeader, TalentStats, JobPipeline, CandidateBoard, InterviewScheduler, FreelancerCloud, SkillsIntelligence, PerformanceReviews, TalentAI } from "@/components/talent";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><TalentHeader/><TalentStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><JobPipeline/><CandidateBoard/><InterviewScheduler/><FreelancerCloud/></div><aside style={{display:"grid",gap:24}}><TalentAI/><SkillsIntelligence/><PerformanceReviews/></aside></section></main></Container><Footer/></>}

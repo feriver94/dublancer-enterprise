@@ -1,0 +1,1 @@
+import{getAuthenticatedContext}from"@/lib/auth/session";import{apiError,apiSuccess}from"@/lib/http/api-response";import{BillingAdministrationService}from"@/lib/services/commercial-platform.service";const s=new BillingAdministrationService();export async function GET(){try{return apiSuccess(await s.summary(await getAuthenticatedContext()))}catch(e){return apiError(e)}}

@@ -1,0 +1,7 @@
+import { Card, Badge, Button } from "@/components/ui";
+import { brand } from "@/constants/design";
+
+const signals=[["Backend capacity risk","Engineering sprint load is rising","Medium"],["Payment follow-up","Invoice INV-1001 pending client response","Low"],["Security review","SSO provider not connected yet","Medium"],["Client expansion","Horizon Digital ready for enterprise upsell","Opportunity"]];
+export default function RiskSignals(){
+ return <Card variant="glass" style={{background:"linear-gradient(135deg,rgba(255,255,255,.96),rgba(248,250,252,.82))"}}><Badge variant="success">AI Risk Signals</Badge><h2 style={{color:brand.colors.navy,fontSize:brand.typography.heading.h3,fontWeight:brand.typography.weight.bold,marginTop:18,marginBottom:12}}>Predictive operations</h2><p style={{color:brand.colors.muted,lineHeight:1.7,marginBottom:22}}>AI surfaces risks, bottlenecks, security signals, and revenue opportunities.</p><div style={{display:"grid",gap:12}}>{signals.map(([t,d,l])=><div key={t} style={{padding:14,borderRadius:brand.radius.md,background:brand.colors.white,border:`1px solid ${brand.colors.border}`}}><div style={{display:"flex",justifyContent:"space-between",gap:14}}><strong style={{color:brand.colors.navy}}>{t}</strong><Badge variant={l==="Opportunity"?"success":"info"}>{l}</Badge></div><p style={{color:brand.colors.muted,lineHeight:1.6,margin:"8px 0 0"}}>{d}</p></div>)}</div></Card>
+}

@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { ExecutiveAIHeader, ExecutiveStats, AICEO, AICOO, AICFO, AICTO, BoardMemo, DecisionQueue, ExecutiveAIInsights } from "@/components/executive-ai";
+export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><ExecutiveAIHeader/><ExecutiveStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><AICEO/><AICOO/><AICFO/><AICTO/></div><aside style={{display:"grid",gap:24}}><ExecutiveAIInsights/><DecisionQueue/><BoardMemo/></aside></section></main></Container><Footer/></>}

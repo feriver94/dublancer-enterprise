@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { AgentCommandCenter, AgentFleetOverview, LiveAgentMonitor, AgentExecutionQueue, ModelRouter, MemoryStore, ToolRegistry, HumanApprovalQueue, GovernancePolicies, ObservabilityConsole } from "@/components/agents";
+export default function AgentTasksPage(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><AgentExecutionQueue/><HumanApprovalQueue/></section></main></Container><Footer/></>}

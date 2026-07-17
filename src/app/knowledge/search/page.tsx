@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { KnowledgeHeader, KnowledgeStats, KnowledgeSources, MemoryGraph, SemanticSearchPanel, RetrievalPipeline, KnowledgeGovernance, MemoryAuditTrail, KnowledgeAI } from "@/components/knowledge";
+export default function KnowledgeSearchPage(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><SemanticSearchPanel/><RetrievalPipeline/></div><KnowledgeAI/></section></main></Container><Footer/></>}

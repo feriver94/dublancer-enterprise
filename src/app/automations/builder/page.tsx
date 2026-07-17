@@ -1,0 +1,3 @@
+import { Navbar, Footer, Container } from "@/components/layout";
+import { AutomationHeader, AutomationStats, WorkflowLibrary, AutomationBuilder, AgentRegistry, RunHistory, GovernancePanel, IntegrationMap } from "@/components/automations";
+export default function AutomationBuilderPage(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><AutomationBuilder/><aside style={{display:"grid",gap:24}}><GovernancePanel/><IntegrationMap/></aside></section></main></Container><Footer/></>}

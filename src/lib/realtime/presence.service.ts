@@ -1,0 +1,131 @@
+import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/database/prisma";
+import type { TenantContext } from "@/lib/tenancy/context";
+import { requireProjectAccess } from "@/lib/authorization/project-access";
+import { enqueueRealtimeEvent } from "./event-store";
+import { REALTIME_EVENTS, REALTIME_TOPICS } from "./topics";
+
+const PRESENCE_TTL_MS = 90_000;
+
+export class PresenceService {
+  async heartbeat(
+    context: TenantContext,
+    input: {
+      connectionId?: string;
+      projectId?: string;
+      resourceType?: string;
+      resourceId?: string;
+      status: "ONLINE" | "AWAY";
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    if (input.projectId) {
+      await requireProjectAccess(
+        context,
+        input.projectId,
+        ["OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER"],
+      );
+    }
+
+    const connectionId =
+      input.connectionId ?? randomUUID();
+
+    const presence = await prisma.presenceSession.upsert({
+      where: {
+        userId_connectionId: {
+          userId: context.userId,
+          connectionId,
+        },
+      },
+      create: {
+        userId: context.userId,
+        organizationId: context.organizationId,
+        projectId: input.projectId,
+        connectionId,
+        status: input.status,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        metadata: input.metadata as Prisma.InputJsonValue | undefined,
+        expiresAt: new Date(Date.now() + PRESENCE_TTL_MS),
+      },
+      update: {
+        projectId: input.projectId,
+        status: input.status,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        metadata: input.metadata as Prisma.InputJsonValue | undefined,
+        expiresAt: new Date(Date.now() + PRESENCE_TTL_MS),
+      },
+    });
+
+    await enqueueRealtimeEvent({
+      organizationId: context.organizationId,
+      projectId: input.projectId,
+      topic: input.projectId
+        ? REALTIME_TOPICS.project(input.projectId)
+        : REALTIME_TOPICS.organization(
+            context.organizationId,
+          ),
+      eventType: REALTIME_EVENTS.PRESENCE_UPDATED,
+      aggregateType: "PresenceSession",
+      aggregateId: presence.id,
+      actorUserId: context.userId,
+      payload: {
+        userId: context.userId,
+        connectionId,
+        status: presence.status,
+        resourceType: presence.resourceType,
+        resourceId: presence.resourceId,
+        expiresAt: presence.expiresAt.toISOString(),
+      },
+    });
+
+    return presence;
+  }
+
+  async listProjectPresence(
+    context: TenantContext,
+    projectId: string,
+  ) {
+    await requireProjectAccess(
+      context,
+      projectId,
+      ["OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER"],
+    );
+
+    return prisma.presenceSession.findMany({
+      where: {
+        projectId,
+        status: { in: ["ONLINE", "AWAY"] },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            preferredLocale: true,
+          },
+        },
+      },
+    });
+  }
+
+  async disconnect(
+    context: TenantContext,
+    connectionId: string,
+  ) {
+    return prisma.presenceSession.updateMany({
+      where: {
+        userId: context.userId,
+        connectionId,
+      },
+      data: {
+        status: "OFFLINE",
+        expiresAt: new Date(),
+      },
+    });
+  }
+}
