@@ -1,113 +1,61 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Button } from "@/components/ui";
 import { brand } from "@/constants/design";
 import Container from "./Container";
 
 const navItems = [
-  { label: "AI Copilot", href: "/ai-copilot" },
-  { label: "Marketplace", href: "/marketplace" },
-  { label: "Workspace", href: "/workspace" },
+  { label: "Dashboard", href: "/dashboard", authenticated: true },
+  { label: "AI Copilot", href: "/ai-copilot", permission: "ai.use" },
+  { label: "Marketplace", href: "/marketplace", permission: "marketplace.listing.read" },
+  { label: "Workspace", href: "/workspace", permission: "project.read" },
+  { label: "Contracts", href: "/contracts", permission: "marketplace.contract.manage" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Enterprise", href: "/enterprise" },
+  { label: "Enterprise", href: "/enterprise", permission: "organization.read" },
 ];
 
-export default function Navbar() {
-  return (
-    <header
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-        borderBottom: `1px solid ${brand.colors.border}`,
-        background: "rgba(255, 255, 255, 0.96)",
-        backdropFilter: "blur(12px)",
-      }}
-    >
-      <Container>
-        <nav
-          style={{
-            minHeight: "96px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "32px",
-          }}
-        >
-          <Link
-            href="/"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              textDecoration: "none",
-              flexShrink: 0,
-            }}
-          >
-            <Image
-            src="/images/Logo.jpg"
-            alt="Dublancer"
-            width={300}
-            height={95}
-            priority
-            sizes="300px"
-            style={{
-             width: "300px",
-             height: "95px",
-             objectFit: "contain",
-             display: "block",
-             }}
-            />
-          </Link>
+export default function Navbar({
+  authenticated = false,
+  permissions = [],
+}: {
+  authenticated?: boolean;
+  permissions?: string[];
+}) {
+  const can = (permission?: string) =>
+    !permission || permissions.includes("*") || permissions.includes(permission);
+  const visibleItems = navItems.filter(
+    (item) =>
+      (!item.authenticated || authenticated) &&
+      (!authenticated || can(item.permission)),
+  );
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "36px",
-              color: brand.colors.navy,
-              fontSize: "16px",
-              fontWeight: 700,
-              flex: 1,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{
-                  color: brand.colors.navy,
-                  textDecoration: "none",
-                  transition: brand.transition.default,
-                }}
-              >
+  return (
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+      <Container>
+        <nav className="flex min-h-24 flex-wrap items-center justify-between gap-5 py-3" aria-label="Primary navigation">
+          <Link href={authenticated ? "/dashboard" : "/"} className="shrink-0" aria-label="Dublancer home">
+            <Image src="/images/Logo.jpg" alt="Dublancer" width={230} height={74} priority className="h-auto w-[190px] object-contain lg:w-[230px]" />
+          </Link>
+          <div className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-bold text-[#0F4C5C] lg:order-none lg:w-auto lg:flex-1 lg:justify-center" aria-label="Product modules">
+            {visibleItems.map((item) => (
+              <Link key={item.href} href={item.href} className="whitespace-nowrap hover:text-[#009A44]">
                 {item.label}
               </Link>
             ))}
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "24px",
-              flexShrink: 0,
-            }}
-          >
-            <Link
-              href="/login"
-              style={{
-                color: brand.colors.navy,
-                textDecoration: "none",
-                fontSize: "16px",
-                fontWeight: 700,
-              }}
-            >
-              Login
-            </Link>
-
-            <Button variant="primary">Start Free</Button>
+          <div className="flex shrink-0 items-center gap-3">
+            {authenticated ? (
+              <>
+                {can("organization.read") ? <Link href="/organization" className="font-bold text-[#0F4C5C]">Organization</Link> : null}
+                <Link href={can("project.read") ? "/workspace" : "/dashboard"} className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">
+                  {can("project.read") ? "Open Workspace" : "Dashboard"}
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="font-bold text-[#0F4C5C]">Login</Link>
+                <Link href="/register" className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">Start Free</Link>
+              </>
+            )}
           </div>
         </nav>
       </Container>

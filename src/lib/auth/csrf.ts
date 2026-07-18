@@ -38,3 +38,22 @@ export async function requireCsrfToken(
     );
   }
 }
+
+export function requireSameOrigin(request: Request): void {
+  const origin = request.headers.get("origin");
+  const requestOrigin = new URL(request.url).origin;
+  const configuredOrigin = process.env.APP_BASE_URL
+    ? new URL(process.env.APP_BASE_URL).origin
+    : null;
+
+  if (
+    !origin ||
+    (origin !== requestOrigin && origin !== configuredOrigin)
+  ) {
+    throw new AppError(
+      "FORBIDDEN",
+      "Cross-origin authentication requests are not permitted.",
+      403,
+    );
+  }
+}

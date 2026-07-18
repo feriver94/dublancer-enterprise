@@ -9,6 +9,8 @@ import {
   type UpdateProjectInput,
 } from "@/lib/repositories/project.repository";
 import { AuditRepository } from "@/lib/repositories/audit.repository";
+import { requirePermission } from "@/lib/authorization/permission-resolver";
+import { requireProjectAccess } from "@/lib/authorization/project-access";
 
 export class ProjectService {
   async list(
@@ -20,6 +22,7 @@ export class ProjectService {
     },
   ) {
     await assertOrganizationMembership(context);
+    await requirePermission(context, "project.read");
 
     const repository = new ProjectRepository();
 
@@ -33,6 +36,13 @@ export class ProjectService {
 
   async get(context: TenantContext, projectId: string) {
     await assertOrganizationMembership(context);
+    await requirePermission(context, "project.read");
+    await requireProjectAccess(context, projectId, [
+      "OWNER",
+      "MANAGER",
+      "CONTRIBUTOR",
+      "VIEWER",
+    ]);
 
     const repository = new ProjectRepository();
     const project = await repository.findById(
@@ -52,6 +62,7 @@ export class ProjectService {
     input: Omit<CreateProjectInput, "organizationId" | "ownerId">,
   ) {
     await assertOrganizationMembership(context);
+    await requirePermission(context, "project.create");
 
     try {
       return await withTransaction(async (tx) => {
@@ -114,6 +125,8 @@ export class ProjectService {
     input: UpdateProjectInput,
   ) {
     await assertOrganizationMembership(context);
+    await requirePermission(context, "project.update");
+    await requireProjectAccess(context, projectId, ["OWNER", "MANAGER"]);
 
     return withTransaction(async (tx) => {
       const projects = new ProjectRepository(tx);
@@ -167,6 +180,8 @@ export class ProjectService {
 
   async delete(context: TenantContext, projectId: string) {
     await assertOrganizationMembership(context);
+    await requirePermission(context, "project.delete");
+    await requireProjectAccess(context, projectId, ["OWNER"]);
 
     return withTransaction(async (tx) => {
       const projects = new ProjectRepository(tx);

@@ -1,1 +1,1 @@
-import{EnterpriseModulePage}from"@/components/platform/enterprise-module-page";export default function Page(){return<EnterpriseModulePage module="marketplace"/>}
+import { AuthenticatedShell,Container } from "@/components/layout";import MarketplaceClient from "@/components/marketplace/MarketplaceClient";export default function MarketplacePage(){return <AuthenticatedShell returnTo="/marketplace"><Container><MarketplaceClient/></Container></AuthenticatedShell>}

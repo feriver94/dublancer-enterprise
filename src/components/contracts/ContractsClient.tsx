@@ -1,0 +1,9 @@
+"use client";
+
+import Link from "next/link";
+import { Badge, Card } from "@/components/ui";
+import { useApiResource } from "@/lib/client/use-api-resource";
+
+type Contract={id:string;title:string;status:string;valueMinor:string;currency:string;updatedAt:string;project?:{id:string;title:string}|null;milestones:Array<{id:string}>};
+const money=(minor:string,currency:string)=>new Intl.NumberFormat("en-AE",{style:"currency",currency}).format(Number(minor)/100);
+export default function ContractsClient(){const contracts=useApiResource<Contract[]>("/api/contracts");return <main className="py-16"><div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="font-bold uppercase tracking-widest text-[#009A44]">Governed agreements</p><h1 className="text-4xl font-bold text-[#0F4C5C]">Contracts</h1></div><button type="button" onClick={()=>void contracts.refresh()} className="rounded-full border px-5 py-2 font-bold">Refresh</button></div><Card variant="elevated">{contracts.error?<p className="enterprise-error">{contracts.error}</p>:null}{contracts.loading?<p className="enterprise-loading">Loading contracts…</p>:contracts.data?.length?<div className="grid gap-4">{contracts.data.map((contract)=><Link key={contract.id} href={`/contracts/${contract.id}`} className="rounded-2xl border border-slate-200 p-5 hover:border-[#009A44]"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-[#0F4C5C]">{contract.title}</h2><p className="text-sm text-slate-500">{contract.project?.title??"Standalone contract"} · {contract.milestones.length} milestones</p></div><Badge variant={contract.status==="ACTIVE"?"success":"info"}>{contract.status.replaceAll("_"," ")}</Badge></div><p className="mt-4 font-bold text-[#009A44]">{money(contract.valueMinor,contract.currency)}</p></Link>)}</div>:<p className="enterprise-empty">No contracts are available for this organization.</p>}</Card></main>}

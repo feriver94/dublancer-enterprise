@@ -1,22 +1,16 @@
 import { apiError, apiSuccess } from "@/lib/http/api-response";
 import { publishPendingRealtimeEvents } from "@/lib/realtime/publisher";
+import { requireInternalHeader } from "@/lib/security/internal-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get(
+    requireInternalHeader(
+      request,
       "x-internal-publisher-secret",
+      "INTERNAL_PUBLISHER_SECRET",
     );
-
-    if (
-      !process.env.INTERNAL_PUBLISHER_SECRET ||
-      secret !== process.env.INTERNAL_PUBLISHER_SECRET
-    ) {
-      return new Response("Unauthorized", {
-        status: 401,
-      });
-    }
 
     return apiSuccess(
       await publishPendingRealtimeEvents(),

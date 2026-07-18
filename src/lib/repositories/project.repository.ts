@@ -80,11 +80,40 @@ export class ProjectRepository {
   async findById(
     organizationId: string,
     projectId: string,
-  ): Promise<Project | null> {
+  ) {
     return this.db.project.findFirst({
       where: {
         id: projectId,
         organizationId,
+      },
+      include: {
+        milestones: { orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }] },
+        tasks: {
+          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+          include: {
+            assignee: { select: { id: true, displayName: true, email: true } },
+            creator: { select: { id: true, displayName: true } },
+          },
+        },
+        comments: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            author: { select: { id: true, displayName: true, email: true } },
+          },
+        },
+        memberships: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            user: { select: { id: true, displayName: true, email: true } },
+          },
+        },
+        attachments: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            uploadedBy: { select: { id: true, displayName: true } },
+          },
+        },
+        activities: { orderBy: { createdAt: "desc" }, take: 100 },
       },
     });
   }

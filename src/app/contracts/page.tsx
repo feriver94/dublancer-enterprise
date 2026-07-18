@@ -1,1 +1,1 @@
-import{EnterpriseModulePage}from"@/components/platform/enterprise-module-page";export default function Page(){return<EnterpriseModulePage module="contracts"/>}
+import { AuthenticatedShell,Container } from "@/components/layout";import ContractsClient from "@/components/contracts/ContractsClient";export default function ContractsPage(){return <AuthenticatedShell returnTo="/contracts"><Container><ContractsClient/></Container></AuthenticatedShell>}

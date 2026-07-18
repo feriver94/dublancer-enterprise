@@ -49,6 +49,19 @@ export class AuthService {
       await prisma.loginEvent.create({data:{email:input.email,outcome:"FAILED",reason:"INVALID_CREDENTIALS",ipAddress:meta.ipAddress,userAgent:meta.userAgent}});
       throw new AppError("UNAUTHORIZED","Invalid email or password.",401);
     }
+    if (
+      input.organizationId &&
+      !user.isPlatformAdmin &&
+      !user.memberships.some(
+        (membership) => membership.organizationId === input.organizationId,
+      )
+    ) {
+      throw new AppError(
+        "FORBIDDEN",
+        "An active membership is required for the selected organization.",
+        403,
+      );
+    }
     const organizationId = input.organizationId ?? user.memberships[0]?.organizationId ?? null;
     const refreshToken = createRefreshToken();
     const session = await prisma.authSession.create({
@@ -66,21 +79,101 @@ export class AuthService {
   }
 
   async refresh(raw:string, organizationId?:string) {
-    const current = await prisma.authSession.findFirst({
-      where:{refreshTokenHash:hashRefreshToken(raw),status:"ACTIVE",expiresAt:{gt:new Date()}},
+    const refreshTokenHash = hashRefreshToken(raw);
+    const current = await prisma.authSession.findUnique({
+      where:{refreshTokenHash},
       include:{user:{select:{isPlatformAdmin:true}}},
     });
-    if (!current) throw new AppError("UNAUTHORIZED","Refresh token is invalid or expired.",401);
+
+    if (!current) {
+      throw new AppError("UNAUTHORIZED","Refresh token is invalid or expired.",401);
+    }
+
+    const revokeActiveSessions = async () => {
+      await prisma.authSession.updateMany({
+        where: { userId: current.userId, status: "ACTIVE" },
+        data: { status: "REVOKED", revokedAt: new Date() },
+      });
+    };
+
+    if (current.status !== "ACTIVE" || current.expiresAt <= new Date()) {
+      await revokeActiveSessions();
+      throw new AppError(
+        "UNAUTHORIZED",
+        "Refresh token replay was detected. Active sessions were revoked.",
+        401,
+      );
+    }
+
+    const nextOrganizationId = organizationId ?? current.organizationId;
+
+    if (!current.user.isPlatformAdmin) {
+      if (!nextOrganizationId) {
+        throw new AppError(
+          "FORBIDDEN",
+          "An active organization membership is required.",
+          403,
+        );
+      }
+
+      const membership = await prisma.membership.findFirst({
+        where: {
+          organizationId: nextOrganizationId,
+          userId: current.userId,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+
+      if (!membership) {
+        throw new AppError(
+          "FORBIDDEN",
+          "An active membership is required for the selected organization.",
+          403,
+        );
+      }
+    }
+
     const nextRaw = createRefreshToken();
-    const next = await prisma.$transaction(async tx => {
-      await tx.authSession.update({where:{id:current.id},data:{status:"REVOKED",revokedAt:new Date()}});
-      return tx.authSession.create({data:{
-        userId:current.userId, organizationId:organizationId??current.organizationId,
-        refreshTokenHash:hashRefreshToken(nextRaw), userAgent:current.userAgent, ipAddress:current.ipAddress,
-        deviceLabel:current.deviceLabel, rotatedFromSessionId:current.id,
-        expiresAt:new Date(Date.now()+AUTH_CONFIG.refreshTokenTtlSeconds*1000),
-      }});
-    });
+    let next: { id: string; organizationId: string | null };
+
+    try {
+      next = await prisma.$transaction(async tx => {
+        const rotated = await tx.authSession.updateMany({
+          where: {
+            id: current.id,
+            refreshTokenHash,
+            status: "ACTIVE",
+            expiresAt: { gt: new Date() },
+          },
+          data: { status: "REVOKED", revokedAt: new Date() },
+        });
+
+        if (rotated.count !== 1) {
+          throw new AppError(
+            "UNAUTHORIZED",
+            "Refresh token replay was detected.",
+            401,
+          );
+        }
+
+        return tx.authSession.create({data:{
+          userId:current.userId, organizationId:nextOrganizationId,
+          refreshTokenHash:hashRefreshToken(nextRaw), userAgent:current.userAgent, ipAddress:current.ipAddress,
+          deviceLabel:current.deviceLabel, rotatedFromSessionId:current.id,
+          expiresAt:new Date(Date.now()+AUTH_CONFIG.refreshTokenTtlSeconds*1000),
+        }});
+      });
+    } catch (error) {
+      if (
+        error instanceof AppError &&
+        error.message.includes("replay")
+      ) {
+        await revokeActiveSessions();
+      }
+      throw error;
+    }
+
     const accessToken = await signAccessToken({sub:current.userId,sessionId:next.id,organizationId:next.organizationId,isPlatformAdmin:current.user.isPlatformAdmin});
     return {accessToken,refreshToken:nextRaw,sessionId:next.id,organizationId:next.organizationId};
   }

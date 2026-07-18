@@ -18,10 +18,45 @@ export async function getAuthenticatedContext() {
   });
   if (!session) throw new AppError("UNAUTHORIZED", "Session is no longer active.", 401);
 
+  if (claims.organizationId !== session.organizationId) {
+    throw new AppError(
+      "UNAUTHORIZED",
+      "Session organization context is invalid.",
+      401,
+    );
+  }
+
+  if (!session.user.isPlatformAdmin) {
+    if (!session.organizationId) {
+      throw new AppError(
+        "FORBIDDEN",
+        "An active organization membership is required.",
+        403,
+      );
+    }
+
+    const membership = await prisma.membership.findFirst({
+      where: {
+        organizationId: session.organizationId,
+        userId: session.userId,
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      throw new AppError(
+        "FORBIDDEN",
+        "The session organization membership is no longer active.",
+        403,
+      );
+    }
+  }
+
   return {
     sessionId: session.id,
     userId: claims.sub,
-    organizationId: claims.organizationId ?? session.organizationId ?? "",
+    organizationId: session.organizationId ?? "",
     isPlatformAdmin: session.user.isPlatformAdmin,
   };
 }

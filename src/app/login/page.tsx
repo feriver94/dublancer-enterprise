@@ -2,7 +2,12 @@ import { Navbar, Footer, Container } from "@/components/layout";
 import { LoginForm } from "@/components/auth";
 import { brand } from "@/constants/design";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string }>;
+}) {
+  const { returnTo } = await searchParams;
   return (
     <>
       <Navbar />
@@ -17,7 +22,7 @@ export default function LoginPage() {
             background: brand.colors.white,
           }}
         >
-          <LoginForm />
+          <LoginForm returnTo={returnTo} />
         </main>
       </Container>
       <Footer />

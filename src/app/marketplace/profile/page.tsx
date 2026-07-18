@@ -1,0 +1,1 @@
+import { AuthenticatedShell,Container } from "@/components/layout";import MarketplaceClient from "@/components/marketplace/MarketplaceClient";export default function MarketplaceProfilePage(){return <AuthenticatedShell returnTo="/marketplace/profile"><Container><MarketplaceClient profile/></Container></AuthenticatedShell>}

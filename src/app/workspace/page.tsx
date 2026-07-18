@@ -1,1 +1,3 @@
-import{EnterpriseModulePage}from"@/components/platform/enterprise-module-page";export default function Page(){return<EnterpriseModulePage module="workspace"/>}
+import { AuthenticatedShell, Container } from "@/components/layout";
+import WorkspaceClient from "@/components/workspace/WorkspaceClient";
+export default function WorkspacePage(){return <AuthenticatedShell returnTo="/workspace"><Container><WorkspaceClient /></Container></AuthenticatedShell>}
