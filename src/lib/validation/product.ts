@@ -61,7 +61,22 @@ export const createProposalSchema = z.object({
 });
 
 export const proposalDecisionSchema = z.object({
-  status: z.enum(["SHORTLISTED", "ACCEPTED", "REJECTED", "WITHDRAWN"]),
+  status: z.enum(["SHORTLISTED", "REJECTED", "WITHDRAWN"]),
+  expectedVersion: z.number().int().positive(),
+  note: z.string().trim().max(2000).optional(),
+});
+
+export const awardProposalSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(128),
+  expectedListingVersion: z.number().int().positive(),
+  expectedProposalVersion: z.number().int().positive(),
+  projectId: id.optional(),
+  title: z.string().trim().min(3).max(200),
+  taxRateBasisPoints: z.number().int().min(0).max(10_000).default(0),
+  platformFeeBasisPoints: z.number().int().min(0).max(10_000).default(0),
+  terms: jsonObject,
+  startsAt: optionalDate,
+  endsAt: optionalDate,
 });
 
 export const createContractSchema = z.object({
@@ -128,15 +143,45 @@ export const aiDecisionSchema = z.object({
 export const createInvoiceSchema = z.object({
   number: z.string().trim().min(1).max(100),
   contractId: id.optional(),
+  contractMilestoneId: id.optional(),
   billToOrganizationId: id.optional(),
   currency,
   dueAt: optionalDate,
   lines: z.array(z.object({ description: z.string().trim().min(1).max(1000), quantity: z.number().int().positive().max(1_000_000).default(1), unitAmountMinor: minorAmount, taxRateBasisPoints: z.number().int().min(0).max(10_000).default(0), metadata: jsonObject.optional() })).min(1).max(500),
+}).superRefine((value, ctx) => {
+  if (value.contractMilestoneId && !value.contractId) {
+    ctx.addIssue({ code: "custom", path: ["contractId"], message: "A contract is required for a milestone invoice." });
+  }
+});
+
+export const invoiceTransitionSchema = z.object({
+  action: z.enum(["ISSUE", "MARK_OVERDUE", "VOID"]),
+  expectedVersion: z.number().int().positive(),
+  dueAt: z.coerce.date().optional(),
+  reason: z.string().trim().min(3).max(2000).optional(),
 });
 
 export const createChargeSchema = z.object({
   invoiceId: id,
   idempotencyKey: z.string().trim().min(8).max(128),
+});
+
+export const createRefundSchema = z.object({
+  transactionId: id,
+  amountMinor: z.coerce.bigint().positive(),
+  reason: z.string().trim().min(3).max(2000),
+  idempotencyKey: z.string().trim().min(8).max(128),
+});
+
+export const paymentWebhookSchema = z.object({
+  type: z.enum(["charge.succeeded", "charge.failed", "refund.succeeded", "refund.failed"]),
+  organizationId: id.optional(),
+  providerReference: z.string().trim().min(1).max(255),
+  amountMinor: z.coerce.bigint().positive(),
+  currency,
+  failureCode: z.string().trim().max(100).optional(),
+  failureMessage: z.string().trim().max(2000).optional(),
+  occurredAt: z.coerce.date().optional(),
 });
 
 export const searchSchema = z.object({

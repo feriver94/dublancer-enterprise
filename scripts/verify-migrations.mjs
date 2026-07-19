@@ -14,9 +14,14 @@ for (const name of entries) {
   if (!sql.trim()) throw new Error(`Empty migration: ${name}`);
 }
 
-const finalSql = await readFile(new URL(`${entries.at(-1)}/migration.sql`, migrationsRoot), "utf8");
+const migrationSql = await Promise.all(entries.map((name) => readFile(new URL(`${name}/migration.sql`, migrationsRoot), "utf8")));
+const completeSql = migrationSql.join("\n");
+const finalSql = migrationSql.at(-1);
 for (const table of ["WorkGraphNode", "WorkflowDefinition", "WorkflowRun", "WorkflowApproval", "TalentMatch", "RateLimitBucket"]) {
-  if (!finalSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Final migration is missing ${table}.`);
+  if (!completeSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Migration history is missing ${table}.`);
+}
+for (const table of ["ContractAcceptance", "WorkSubmissionDecision"]) {
+  if (!finalSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Latest commercial migration is missing ${table}.`);
 }
 if (/\bDROP\s+(TABLE|COLUMN|TYPE)\b/i.test(finalSql)) throw new Error("Final migration contains a destructive DROP statement.");
-console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive final migration).`);
+console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial migration).`);

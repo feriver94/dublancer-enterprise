@@ -1,1 +1,6 @@
-import{EnterpriseModulePage}from"@/components/platform/enterprise-module-page";export default function Page(){return<EnterpriseModulePage module="finance"/>}
+import { AuthenticatedShell, Container } from "@/components/layout";
+import PaymentsClient from "@/components/payments/PaymentsClient";
+
+export default function PaymentsPage() {
+  return <AuthenticatedShell returnTo="/payments"><Container><PaymentsClient /></Container></AuthenticatedShell>;
+}

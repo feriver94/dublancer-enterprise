@@ -96,11 +96,14 @@ model User {
   createdListings            MarketplaceListing[]     @relation("ListingCreator")
   savedListings              SavedListing[]
   submittedProposals         Proposal[]               @relation("ProposalSubmitter")
+  decidedProposals           Proposal[]               @relation("ProposalDecider")
   proposalRevisions          ProposalRevision[]       @relation("ProposalRevisionCreator")
   createdContracts           Contract[]               @relation("ContractCreator")
   providerContracts          Contract[]               @relation("ContractProviderUser")
+  contractAcceptances        ContractAcceptance[]
   proposedAmendments         ContractAmendment[]      @relation("AmendmentProposer")
   workSubmissions            WorkSubmission[]
+  workSubmissionDecisions    WorkSubmissionDecision[]
   reviewsWritten             Review[]                 @relation("ReviewAuthor")
   reviewsReceived            Review[]                 @relation("ReviewSubjectUser")
   disputesOpened             Dispute[]                @relation("DisputeOpener")
@@ -169,6 +172,8 @@ model Organization {
   vendorRegistrations      VendorOnboarding[]        @relation("VendorOrganization")
   clientContracts          Contract[]                @relation("ContractClientOrganization")
   providerContracts        Contract[]                @relation("ContractProviderOrganization")
+  contractAcceptances      ContractAcceptance[]
+  submittedProposals       Proposal[]                @relation("ProposalProviderOrganization")
   reviewSubjects           Review[]                  @relation("ReviewSubjectOrganization")
   fileNodes                FileNode[]
   aiConfig                 AiTenantConfig?
@@ -183,6 +188,7 @@ model Organization {
   invoices                 Invoice[]
   billedInvoices           Invoice[]                 @relation("InvoiceBillToOrganization")
   financialTransactions    FinancialTransaction[]
+  refunds                  Refund[]
   subscription             OrganizationSubscription?
   usageRecords             UsageRecord[]
   creditEntries            CreditLedgerEntry[]
@@ -775,6 +781,22 @@ enum SubmissionStatus {
   REJECTED
 }
 
+enum ContractAcceptanceParty {
+  CLIENT
+  PROVIDER
+}
+
+enum ContractAcceptanceMethod {
+  CLICKWRAP
+  ELECTRONIC_SIGNATURE
+}
+
+enum SubmissionDecisionType {
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
 enum ReviewStatus {
   PENDING
   PUBLISHED
@@ -1014,6 +1036,13 @@ enum RefundStatus {
   COMPLETED
   REJECTED
   FAILED
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
 }
 
 enum SubscriptionStatus {
@@ -1480,7 +1509,9 @@ model MarketplaceListing {
   applicationDeadline DateTime?
   procurementMetadata Json?
   publishedAt         DateTime?
+  awardedAt           DateTime?
   closedAt            DateTime?
+  version             Int                      @default(1)
   organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   postedBy            User                     @relation("ListingCreator", fields: [postedById], references: [id], onDelete: Restrict)
   workspaceProject    Project?                 @relation(fields: [workspaceProjectId], references: [id], onDelete: SetNull)
@@ -1521,29 +1552,37 @@ model SavedListing {
 }
 
 model Proposal {
-  id                  String             @id @default(cuid())
-  listingId           String
-  freelancerProfileId String
-  submittedById       String
-  status              ProposalStatus     @default(DRAFT)
-  coverLetter         String
-  bidMinor            BigInt
-  currency            String             @default("AED")
-  estimatedDays       Int?
-  currentRevision     Int                @default(1)
-  metadata            Json?
-  submittedAt         DateTime?
-  listing             MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  freelancerProfile   FreelancerProfile  @relation(fields: [freelancerProfileId], references: [id], onDelete: Restrict)
-  submittedBy         User               @relation("ProposalSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
-  revisions           ProposalRevision[]
-  contract            Contract?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                     String             @id @default(cuid())
+  listingId              String
+  freelancerProfileId    String
+  submittedById          String
+  providerOrganizationId String?
+  status                 ProposalStatus     @default(DRAFT)
+  coverLetter            String
+  bidMinor               BigInt
+  currency               String             @default("AED")
+  estimatedDays          Int?
+  currentRevision        Int                @default(1)
+  metadata               Json?
+  submittedAt            DateTime?
+  decidedAt              DateTime?
+  decidedById            String?
+  version                Int                @default(1)
+  listing                MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  freelancerProfile      FreelancerProfile  @relation(fields: [freelancerProfileId], references: [id], onDelete: Restrict)
+  submittedBy            User               @relation("ProposalSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  providerOrganization   Organization?      @relation("ProposalProviderOrganization", fields: [providerOrganizationId], references: [id], onDelete: SetNull)
+  decidedBy              User?              @relation("ProposalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  revisions              ProposalRevision[]
+  contract               Contract?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   @@unique([listingId, freelancerProfileId])
   @@index([listingId, status, updatedAt])
   @@index([freelancerProfileId, status, updatedAt])
+  @@index([providerOrganizationId, status, updatedAt])
+  @@index([decidedById, decidedAt])
 }
 
 model ProposalRevision {
@@ -1616,7 +1655,7 @@ model Contract {
   organizationId         String
   providerOrganizationId String?
   providerUserId         String?
-  listingId              String?
+  listingId              String?                @unique
   proposalId             String?                @unique
   projectId              String?
   createdById            String
@@ -1631,6 +1670,7 @@ model Contract {
   endsAt                 DateTime?
   signedAt               DateTime?
   completedAt            DateTime?
+  version                Int                    @default(1)
   organization           Organization           @relation("ContractClientOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
   providerOrganization   Organization?          @relation("ContractProviderOrganization", fields: [providerOrganizationId], references: [id], onDelete: Restrict)
   providerUser           User?                  @relation("ContractProviderUser", fields: [providerUserId], references: [id], onDelete: Restrict)
@@ -1640,6 +1680,7 @@ model Contract {
   createdBy              User                   @relation("ContractCreator", fields: [createdById], references: [id], onDelete: Restrict)
   amendments             ContractAmendment[]
   milestones             ContractMilestone[]
+  acceptances            ContractAcceptance[]
   reviews                Review[]
   disputes               Dispute[]
   invoices               Invoice[]
@@ -1651,6 +1692,26 @@ model Contract {
   @@index([providerOrganizationId, status])
   @@index([providerUserId, status])
   @@index([projectId, status])
+}
+
+model ContractAcceptance {
+  id             String                   @id @default(cuid())
+  contractId     String
+  party          ContractAcceptanceParty
+  acceptedById   String
+  organizationId String?
+  termsHash      String
+  method         ContractAcceptanceMethod @default(CLICKWRAP)
+  ipAddress      String?
+  userAgent      String?
+  acceptedAt     DateTime                 @default(now())
+  contract       Contract                 @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  acceptedBy     User                     @relation(fields: [acceptedById], references: [id], onDelete: Restrict)
+  organization   Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@unique([contractId, party])
+  @@index([acceptedById, acceptedAt])
+  @@index([organizationId, acceptedAt])
 }
 
 model ContractAmendment {
@@ -1683,6 +1744,7 @@ model ContractMilestone {
   dueAt              DateTime?
   acceptedAt         DateTime?
   releasedAt         DateTime?
+  version            Int                     @default(1)
   contract           Contract                @relation(fields: [contractId], references: [id], onDelete: Cascade)
   projectMilestone   ProjectMilestone?       @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
   submissions        WorkSubmission[]
@@ -1695,22 +1757,42 @@ model ContractMilestone {
 }
 
 model WorkSubmission {
-  id                  String               @id @default(cuid())
+  id                  String                   @id @default(cuid())
   contractMilestoneId String
   submittedById       String
-  status              SubmissionStatus     @default(DRAFT)
+  status              SubmissionStatus         @default(DRAFT)
   note                String?
   submittedAt         DateTime?
   decidedAt           DateTime?
   decisionNote        String?
-  contractMilestone   ContractMilestone    @relation(fields: [contractMilestoneId], references: [id], onDelete: Cascade)
-  submittedBy         User                 @relation(fields: [submittedById], references: [id], onDelete: Restrict)
+  revision            Int                      @default(1)
+  version             Int                      @default(1)
+  contractMilestone   ContractMilestone        @relation(fields: [contractMilestoneId], references: [id], onDelete: Cascade)
+  submittedBy         User                     @relation(fields: [submittedById], references: [id], onDelete: Restrict)
   files               WorkSubmissionFile[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  decisions           WorkSubmissionDecision[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
+  @@unique([contractMilestoneId, revision])
   @@index([contractMilestoneId, status, createdAt])
   @@index([submittedById, status])
+}
+
+model WorkSubmissionDecision {
+  id              String                 @id @default(cuid())
+  submissionId    String
+  decision        SubmissionDecisionType
+  decidedById     String
+  note            String?
+  previousStatus  SubmissionStatus
+  resultingStatus SubmissionStatus
+  createdAt       DateTime               @default(now())
+  submission      WorkSubmission         @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  decidedBy       User                   @relation(fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@unique([submissionId])
+  @@index([decidedById, createdAt])
 }
 
 model Review {
@@ -2345,6 +2427,8 @@ model Invoice {
   issuedAt             DateTime?
   dueAt                DateTime?
   paidAt               DateTime?
+  voidedAt             DateTime?
+  version              Int                    @default(1)
   metadata             Json?
   organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   billToOrganization   Organization?          @relation("InvoiceBillToOrganization", fields: [billToOrganizationId], references: [id], onDelete: SetNull)
@@ -2380,7 +2464,7 @@ model InvoiceLine {
 model PaymentSchedule {
   id                  String                  @id @default(cuid())
   invoiceId           String?
-  contractMilestoneId String?
+  contractMilestoneId String?                 @unique
   dueAt               DateTime
   amountMinor         BigInt
   currency            String                  @default("AED")
@@ -2396,48 +2480,63 @@ model PaymentSchedule {
 }
 
 model FinancialTransaction {
-  id             String                     @id @default(cuid())
-  organizationId String
-  contractId     String?
-  invoiceId      String?
-  type           FinancialTransactionType
-  status         FinancialTransactionStatus @default(PENDING)
-  amountMinor    BigInt
-  currency       String                     @default("AED")
-  idempotencyKey String
-  providerKey    String?
-  providerRef    String?
-  metadata       Json?
-  occurredAt     DateTime                   @default(now())
-  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  contract       Contract?                  @relation(fields: [contractId], references: [id], onDelete: SetNull)
-  invoice        Invoice?                   @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  refunds        Refund[]
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
+  id              String                     @id @default(cuid())
+  organizationId  String
+  contractId      String?
+  invoiceId       String?
+  type            FinancialTransactionType
+  status          FinancialTransactionStatus @default(PENDING)
+  amountMinor     BigInt
+  currency        String                     @default("AED")
+  idempotencyKey  String
+  providerKey     String?
+  providerRef     String?
+  failureCode     String?
+  failureMessage  String?
+  processedAt     DateTime?
+  version         Int                        @default(1)
+  metadata        Json?
+  occurredAt      DateTime                   @default(now())
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  contract        Contract?                  @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  invoice         Invoice?                   @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  refunds         Refund[]                   @relation("OriginalTransactionRefunds")
+  refundRecord    Refund?                    @relation("RefundTransaction")
+  webhookReceipts WebhookReceipt[]
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
 
   @@unique([organizationId, idempotencyKey])
+  @@unique([providerKey, providerRef])
   @@index([organizationId, status, occurredAt])
-  @@index([providerKey, providerRef])
   @@index([contractId, type])
   @@index([invoiceId, type])
 }
 
 model Refund {
-  id            String               @id @default(cuid())
-  transactionId String
-  requestedById String
-  status        RefundStatus         @default(REQUESTED)
-  amountMinor   BigInt
-  reason        String
-  providerRef   String?
-  processedAt   DateTime?
-  transaction   FinancialTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  requestedBy   User                 @relation(fields: [requestedById], references: [id], onDelete: Restrict)
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  id                  String                @id @default(cuid())
+  organizationId      String
+  transactionId       String
+  refundTransactionId String?               @unique
+  requestedById       String
+  idempotencyKey      String
+  status              RefundStatus          @default(REQUESTED)
+  amountMinor         BigInt
+  reason              String
+  providerRef         String?
+  processedAt         DateTime?
+  version             Int                   @default(1)
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transaction         FinancialTransaction  @relation("OriginalTransactionRefunds", fields: [transactionId], references: [id], onDelete: Restrict)
+  refundTransaction   FinancialTransaction? @relation("RefundTransaction", fields: [refundTransactionId], references: [id], onDelete: SetNull)
+  requestedBy         User                  @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  webhookReceipts     WebhookReceipt[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
+  @@unique([organizationId, idempotencyKey])
   @@index([transactionId, status])
+  @@index([organizationId, status, createdAt])
   @@index([requestedById, createdAt])
 }
 
@@ -2518,40 +2617,51 @@ model CreditLedgerEntry {
 }
 
 model ReconciliationRecord {
-  id              String       @id @default(cuid())
-  organizationId  String
-  providerKey     String
-  periodStart     DateTime
-  periodEnd       DateTime
-  expectedMinor   BigInt
-  actualMinor     BigInt
-  differenceMinor BigInt
-  currency        String       @default("AED")
-  status          String
-  evidence        Json?
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  organizationId   String
+  providerKey      String
+  periodStart      DateTime
+  periodEnd        DateTime
+  expectedMinor    BigInt
+  actualMinor      BigInt
+  differenceMinor  BigInt
+  currency         String       @default("AED")
+  status           String
+  evidence         Json?
+  eventCount       Int          @default(0)
+  lastReconciledAt DateTime?
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@unique([organizationId, providerKey, periodStart, periodEnd])
   @@index([organizationId, status, periodEnd])
 }
 
 model WebhookReceipt {
-  id                String        @id @default(cuid())
+  id                String                  @id @default(cuid())
   organizationId    String?
   providerKey       String
   eventId           String
+  eventType         String?
+  providerRef       String?
+  transactionId     String?
+  refundId          String?
   payloadHash       String
-  signatureVerified Boolean       @default(false)
-  receivedAt        DateTime      @default(now())
+  signatureVerified Boolean                 @default(false)
+  processingStatus  WebhookProcessingStatus @default(RECEIVED)
+  receivedAt        DateTime                @default(now())
   processedAt       DateTime?
   failureReason     String?
-  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organization      Organization?           @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  transaction       FinancialTransaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  refund            Refund?                 @relation(fields: [refundId], references: [id], onDelete: SetNull)
 
   @@unique([providerKey, eventId])
   @@index([organizationId, receivedAt])
   @@index([processedAt, receivedAt])
+  @@index([providerKey, providerRef])
+  @@index([processingStatus, receivedAt])
 }
 
 model FeatureFlag {

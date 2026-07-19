@@ -48,10 +48,38 @@ export type PaymentOperation = {
   raw: unknown;
 };
 
+function paymentOperation(value: unknown): PaymentOperation {
+  if (!value || typeof value !== "object") {
+    throw new AppError("SERVICE_UNAVAILABLE", "Payment provider returned an invalid operation.", 503);
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.providerReference !== "string" ||
+    candidate.providerReference.length < 1 ||
+    candidate.providerReference.length > 255 ||
+    !["PROCESSING", "SUCCEEDED"].includes(String(candidate.status))
+  ) {
+    throw new AppError("SERVICE_UNAVAILABLE", "Payment provider returned an invalid operation.", 503);
+  }
+  return {
+    providerReference: candidate.providerReference,
+    status: candidate.status as PaymentOperation["status"],
+    raw: candidate.raw ?? value,
+  };
+}
+
 export interface PaymentProvider {
   readonly key: string;
   createCharge(input: {
     organizationId: string;
+    amountMinor: string;
+    currency: string;
+    idempotencyKey: string;
+    metadata: Record<string, string>;
+  }): Promise<PaymentOperation>;
+  createRefund(input: {
+    organizationId: string;
+    originalProviderReference: string;
     amountMinor: string;
     currency: string;
     idempotencyKey: string;
@@ -198,12 +226,22 @@ class HttpPaymentProvider implements PaymentProvider {
 
   async createCharge(input: Parameters<PaymentProvider["createCharge"]>[0]) {
     const config = this.config();
-    return postJson<PaymentOperation>(
+    return paymentOperation(await postJson<unknown>(
       `${config.endpoint}/v1/charges`,
       config.apiKey,
       input,
       input.idempotencyKey,
-    );
+    ));
+  }
+
+  async createRefund(input: Parameters<PaymentProvider["createRefund"]>[0]) {
+    const config = this.config();
+    return paymentOperation(await postJson<unknown>(
+      `${config.endpoint}/v1/refunds`,
+      config.apiKey,
+      input,
+      input.idempotencyKey,
+    ));
   }
 
   verifyWebhook(rawBody: string, signature: string) {

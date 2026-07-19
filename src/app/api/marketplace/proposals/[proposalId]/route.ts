@@ -13,6 +13,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const context = await getAuthenticatedContext();
     const input = proposalDecisionSchema.parse(await request.json());
     await requirePermission(context, input.status === "WITHDRAWN" ? "marketplace.proposal.manage" : "marketplace.proposal.review");
-    return apiSuccess(await service.decideProposal(context, (await params).proposalId, input.status));
+    return apiSuccess(await service.decideProposal(context, (await params).proposalId, input));
   } catch (error) { return apiError(error); }
 }

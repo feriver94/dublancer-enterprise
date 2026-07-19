@@ -9,6 +9,7 @@
     "lint": "eslint --quiet",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
+    "test:commercial": "node scripts/verify-commercial-flow.mjs",
     "verify:locales": "node scripts/verify-locales.mjs",
     "verify:security": "node scripts/verify-security.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",

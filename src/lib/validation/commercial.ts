@@ -1,9 +1,12 @@
 import { z } from "zod";
 const id=z.string().trim().min(1).max(191);const minor=z.coerce.bigint().nonnegative();
 export const updateListingSchema=z.object({title:z.string().trim().min(5).max(200).optional(),description:z.string().trim().min(20).max(20000).optional(),status:z.enum(["DRAFT","PUBLISHED","PAUSED","AWARDED","CLOSED","CANCELLED"]).optional(),applicationDeadline:z.coerce.date().nullable().optional()}).refine(v=>Object.keys(v).length>0);
-export const contractTransitionSchema=z.object({status:z.enum(["DRAFT","PENDING_SIGNATURES","ACTIVE","PAUSED","COMPLETED","TERMINATED","DISPUTED"])});
+export const contractTransitionSchema=z.object({status:z.enum(["PENDING_SIGNATURES","ACTIVE","PAUSED","COMPLETED","TERMINATED","DISPUTED"]),expectedVersion:z.number().int().positive()});
+export const contractAcceptanceSchema=z.object({expectedVersion:z.number().int().positive(),party:z.enum(["CLIENT","PROVIDER"]),method:z.enum(["CLICKWRAP","ELECTRONIC_SIGNATURE"]).default("CLICKWRAP"),termsHash:z.string().regex(/^[a-f0-9]{64}$/i)});
 export const amendmentSchema=z.object({summary:z.string().trim().min(3).max(1000),changes:z.record(z.string(),z.unknown()),submit:z.boolean().default(true)});
 export const contractMilestoneSchema=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).optional(),amountMinor:minor,currency:z.string().regex(/^[A-Z]{3}$/).default("AED"),dueAt:z.coerce.date().optional()});
+export const milestoneSubmissionSchema=z.object({note:z.string().trim().min(3).max(10000),expectedMilestoneVersion:z.number().int().positive()});
+export const milestoneDecisionSchema=z.object({submissionId:id,decision:z.enum(["APPROVED","REJECTED","REVISION_REQUESTED"]),note:z.string().trim().min(3).max(5000),expectedMilestoneVersion:z.number().int().positive(),expectedSubmissionVersion:z.number().int().positive()});
 export const disputeSchema=z.object({category:z.string().trim().min(2).max(100),reason:z.string().trim().min(10).max(10000),againstUserId:id.optional(),evidence:z.record(z.string(),z.unknown()).optional()});
 export const updateFileSchema=z.object({name:z.string().trim().min(1).max(255).optional(),retentionUntil:z.coerce.date().nullable().optional(),legalHold:z.boolean().optional(),deleted:z.boolean().optional()}).refine(v=>Object.keys(v).length>0);
 export const lockFileSchema=z.object({expiresInMinutes:z.number().int().min(1).max(1440).default(30)});

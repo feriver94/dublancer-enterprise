@@ -8,7 +8,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const rawBody = await request.text();
     const signature = request.headers.get("x-provider-signature") ?? "";
     const eventId = request.headers.get("x-provider-event-id") ?? "";
-    if (!eventId) throw new AppError("BAD_REQUEST", "Missing provider event id.", 400);
+    if (!eventId || eventId.length > 255) throw new AppError("BAD_REQUEST", "Missing or invalid provider event id.", 400);
     return apiSuccess(await service.acceptWebhook((await params).providerKey, eventId, rawBody, signature), 202);
   } catch (error) { return apiError(error); }
 }
