@@ -1,5 +1,6 @@
-import { redis } from "@/lib/realtime/redis";
+import { redis, runRedisOperation } from "@/lib/realtime/redis";
 import { AppError } from "@/lib/errors/app-error";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 const RATE_LIMIT_SCRIPT = `
 local current = redis.call('INCR', KEYS[1])
@@ -18,12 +19,28 @@ export async function enforceChatRateLimit(input: {
   windowMs: number;
 }) {
   const key = `ratelimit:chat:${input.scope}:${input.channelId}:${input.userId}`;
-  const result = (await redis.eval(
-    RATE_LIMIT_SCRIPT,
-    1,
-    key,
-    input.windowMs,
-  )) as [number, number];
+  let result: [number, number];
+  try {
+    result = (await runRedisOperation(redis, () => redis.eval(
+      RATE_LIMIT_SCRIPT,
+      1,
+      key,
+      input.windowMs,
+    ))) as [number, number];
+  } catch {
+    const fallback = await enforceRateLimit({
+      scope: `chat.${input.scope}`,
+      identifier: `${input.channelId}:${input.userId}`,
+      limit: input.limit,
+      windowMs: input.windowMs,
+    });
+    return {
+      limit: input.limit,
+      remaining: fallback.remaining,
+      resetAfterMs: Math.max(fallback.expiresAt.getTime() - Date.now(), 0),
+      backend: "database" as const,
+    };
+  }
 
   const [count, ttl] = result;
   if (count > input.limit) {
@@ -39,5 +56,6 @@ export async function enforceChatRateLimit(input: {
     limit: input.limit,
     remaining: Math.max(input.limit - count, 0),
     resetAfterMs: Math.max(ttl, 0),
+    backend: "redis" as const,
   };
 }

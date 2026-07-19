@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireCsrfToken(request);
     const context = await getAuthenticatedContext();
-    return apiSuccess(await service.markAllRead(context.userId));
+    return apiSuccess(await service.markAllRead(context));
   } catch (error) {
     return apiError(error);
   }

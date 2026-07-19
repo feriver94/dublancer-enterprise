@@ -1,14 +1,30 @@
-import { redisSubscriber } from "./redis";
+import { AppError } from "@/lib/errors/app-error";
+import { redisSubscriber, runRedisOperation } from "./redis";
 
-export function createSseResponse(
+export async function createSseResponse(
   topics: string[],
   signal: AbortSignal,
 ) {
   const encoder = new TextEncoder();
+  const subscriber = redisSubscriber.duplicate();
+
+  try {
+    await runRedisOperation(subscriber, async () => {
+      await subscriber.subscribe(...topics);
+      return true;
+    });
+  } catch {
+    subscriber.disconnect(false);
+    throw new AppError(
+      "SERVICE_UNAVAILABLE",
+      "Realtime updates are temporarily unavailable. The application remains usable and will reconnect automatically.",
+      503,
+      { retryable: true },
+    );
+  }
 
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const subscriber = redisSubscriber.duplicate();
+    start(controller) {
       let closed = false;
 
       const send = (
@@ -24,9 +40,6 @@ export function createSseResponse(
         );
       };
 
-      await subscriber.connect();
-      await subscriber.subscribe(...topics);
-
       subscriber.on("message", (channel, message) => {
         try {
           send("message", {
@@ -41,6 +54,14 @@ export function createSseResponse(
         }
       });
 
+      subscriber.on("end", () => {
+        send("realtime-unavailable", {
+          retryable: true,
+          at: new Date().toISOString(),
+        });
+        void close();
+      });
+
       const heartbeat = setInterval(() => {
         send("heartbeat", {
           at: new Date().toISOString(),
@@ -53,8 +74,12 @@ export function createSseResponse(
         clearInterval(heartbeat);
 
         try {
-          await subscriber.unsubscribe(...topics);
-          await subscriber.quit();
+          if (["ready", "connect"].includes(subscriber.status)) {
+            await subscriber.unsubscribe(...topics);
+            await subscriber.quit();
+          } else {
+            subscriber.disconnect(false);
+          }
         } finally {
           controller.close();
         }
@@ -68,6 +93,9 @@ export function createSseResponse(
         topics,
         connectedAt: new Date().toISOString(),
       });
+    },
+    cancel() {
+      subscriber.disconnect(false);
     },
   });
 

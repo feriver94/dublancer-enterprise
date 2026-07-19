@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
-import { REALTIME_TOPICS } from "@/lib/realtime/topics";
+import { REALTIME_EVENTS, REALTIME_TOPICS } from "@/lib/realtime/topics";
+import type { TenantContext } from "@/lib/tenancy/context";
 
 export type NotificationChannelInput =
   | "IN_APP"
@@ -130,13 +131,23 @@ export class NotificationService {
     });
   }
 
-  async list(userId: string, input: ListNotificationsInput) {
+  async list(context: TenantContext, input: ListNotificationsInput) {
     const rows = await prisma.userNotification.findMany({
       where: {
-        userId,
+        userId: context.userId,
+        OR: [
+          { organizationId: context.organizationId },
+          { organizationId: null },
+        ],
         ...(input.status ? { status: input.status } : {}),
         ...(input.category ? { category: input.category } : {}),
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
+      },
+      include: {
+        deliveries: {
+          select: { channel: true, status: true, attempts: true, deliveredAt: true, lastError: true },
+          orderBy: { channel: "asc" },
+        },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: input.take + 1,
@@ -156,64 +167,67 @@ export class NotificationService {
     };
   }
 
-  async markRead(userId: string, notificationId: string) {
-    const notification = await prisma.userNotification.findFirst({
-      where: { id: notificationId, userId },
-      select: { id: true, readAt: true },
-    });
-
-    if (!notification) {
-      throw new AppError(
-        "NOT_FOUND",
-        "Notification not found.",
-        404,
-      );
-    }
-
-    return prisma.userNotification.update({
-      where: { id: notification.id },
-      data: {
-        status: "READ",
-        readAt: notification.readAt ?? new Date(),
-      },
-    });
+  async markRead(context: TenantContext, notificationId: string) {
+    return this.setStatus(context, notificationId, "READ");
   }
 
-  async markAllRead(userId: string) {
-    const result = await prisma.userNotification.updateMany({
-      where: { userId, status: "UNREAD" },
-      data: { status: "READ", readAt: new Date() },
+  async markAllRead(context: TenantContext) {
+    const now = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.userNotification.updateMany({
+        where: {
+          userId: context.userId,
+          status: "UNREAD",
+          OR: [
+            { organizationId: context.organizationId },
+            { organizationId: null },
+          ],
+        },
+        data: { status: "READ", readAt: now },
+      });
+      if (updated.count > 0) {
+        await tx.auditEvent.create({
+          data: {
+            organizationId: context.organizationId,
+            actorUserId: context.userId,
+            action: "notification.read_all",
+            resourceType: "UserNotification",
+            outcome: "SUCCESS",
+            metadata: { count: updated.count },
+          },
+        });
+        await tx.realtimeEvent.create({
+          data: {
+            organizationId: context.organizationId,
+            topic: REALTIME_TOPICS.user(context.userId),
+            eventType: REALTIME_EVENTS.NOTIFICATION_UPDATED,
+            aggregateType: "UserNotification",
+            actorUserId: context.userId,
+            payload: { action: "read_all", count: updated.count, status: "READ", updatedAt: now.toISOString() },
+          },
+        });
+      }
+      return updated;
     });
 
     return { updated: result.count };
   }
 
-  async archive(userId: string, notificationId: string) {
-    const result = await prisma.userNotification.updateMany({
-      where: { id: notificationId, userId },
-      data: {
-        status: "ARCHIVED",
-        archivedAt: new Date(),
-      },
-    });
-
-    if (result.count === 0) {
-      throw new AppError(
-        "NOT_FOUND",
-        "Notification not found.",
-        404,
-      );
-    }
-
+  async archive(context: TenantContext, notificationId: string) {
+    await this.setStatus(context, notificationId, "ARCHIVED");
     return { archived: true };
   }
 
-  async unreadCount(userId: string) {
+  async unreadCount(context: TenantContext) {
     const count = await prisma.userNotification.count({
       where: {
-        userId,
+        userId: context.userId,
         status: "UNREAD",
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        OR: [
+          { organizationId: context.organizationId },
+          { organizationId: null },
+        ],
+        AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
       },
     });
 
@@ -221,24 +235,56 @@ export class NotificationService {
   }
 
   async setStatus(
-    userId: string,
+    context: TenantContext,
     notificationId: string,
     status: "UNREAD" | "READ" | "ARCHIVED",
   ) {
     const notification = await prisma.userNotification.findFirst({
-      where: { id: notificationId, userId },
-      select: { id: true },
+      where: {
+        id: notificationId,
+        userId: context.userId,
+        OR: [
+          { organizationId: context.organizationId },
+          { organizationId: null },
+        ],
+      },
+      select: { id: true, readAt: true },
     });
     if (!notification) {
       throw new AppError("NOT_FOUND", "Notification not found.", 404);
     }
-    return prisma.userNotification.update({
-      where: { id: notificationId },
-      data: {
-        status,
-        readAt: status === "READ" ? new Date() : status === "UNREAD" ? null : undefined,
-        archivedAt: status === "ARCHIVED" ? new Date() : null,
-      },
+    const now = new Date();
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.userNotification.update({
+        where: { id: notificationId },
+        data: {
+          status,
+          readAt: status === "READ" ? notification.readAt ?? now : status === "UNREAD" ? null : undefined,
+          archivedAt: status === "ARCHIVED" ? now : null,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          action: `notification.${status.toLowerCase()}`,
+          resourceType: "UserNotification",
+          resourceId: notificationId,
+          outcome: "SUCCESS",
+        },
+      });
+      await tx.realtimeEvent.create({
+        data: {
+          organizationId: context.organizationId,
+          topic: REALTIME_TOPICS.user(context.userId),
+          eventType: REALTIME_EVENTS.NOTIFICATION_UPDATED,
+          aggregateType: "UserNotification",
+          aggregateId: notificationId,
+          actorUserId: context.userId,
+          payload: { notificationId, status, updatedAt: now.toISOString() },
+        },
+      });
+      return updated;
     });
   }
 }
@@ -255,28 +301,28 @@ export const createNotification = (
 ) => notificationService.create(input);
 
 export const listNotifications = (
-  userId: string,
+  context: TenantContext,
   input: ListNotificationsInput,
-) => notificationService.list(userId, input);
+) => notificationService.list(context, input);
 
 export const markNotificationRead = (
-  userId: string,
+  context: TenantContext,
   notificationId: string,
-) => notificationService.markRead(userId, notificationId);
+) => notificationService.markRead(context, notificationId);
 
-export const markAllNotificationsRead = (userId: string) =>
-  notificationService.markAllRead(userId);
+export const markAllNotificationsRead = (context: TenantContext) =>
+  notificationService.markAllRead(context);
 
 export const archiveNotification = (
-  userId: string,
+  context: TenantContext,
   notificationId: string,
-) => notificationService.archive(userId, notificationId);
+) => notificationService.archive(context, notificationId);
 
-export const getUnreadNotificationCount = (userId: string) =>
-  notificationService.unreadCount(userId);
+export const getUnreadNotificationCount = (context: TenantContext) =>
+  notificationService.unreadCount(context);
 
 export const setNotificationStatus = (
-  userId: string,
+  context: TenantContext,
   notificationId: string,
   status: "UNREAD" | "READ" | "ARCHIVED",
-) => notificationService.setStatus(userId, notificationId, status);
+) => notificationService.setStatus(context, notificationId, status);

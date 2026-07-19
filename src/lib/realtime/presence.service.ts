@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/database/prisma";
+import { AppError } from "@/lib/errors/app-error";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { requireProjectAccess } from "@/lib/authorization/project-access";
+import { requireChatChannelAccess } from "@/lib/chat/access";
 import { enqueueRealtimeEvent } from "./event-store";
 import { REALTIME_EVENTS, REALTIME_TOPICS } from "./topics";
 
@@ -26,6 +28,16 @@ export class PresenceService {
         input.projectId,
         ["OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER"],
       );
+    }
+    if (input.resourceType === "CHAT_CHANNEL") {
+      if (!input.resourceId) {
+        throw new AppError(
+          "VALIDATION_ERROR",
+          "Chat presence requires a channel resource ID.",
+          422,
+        );
+      }
+      await requireChatChannelAccess(context, input.resourceId, "READ");
     }
 
     const connectionId =
@@ -94,7 +106,7 @@ export class PresenceService {
       ["OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER"],
     );
 
-    return prisma.presenceSession.findMany({
+    const rows = await prisma.presenceSession.findMany({
       where: {
         projectId,
         status: { in: ["ONLINE", "AWAY"] },
@@ -111,6 +123,33 @@ export class PresenceService {
         },
       },
     });
+    return rows;
+  }
+
+  async listChatPresence(
+    context: TenantContext,
+    channelId: string,
+  ) {
+    await requireChatChannelAccess(context, channelId, "READ");
+
+    const rows = await prisma.presenceSession.findMany({
+      where: {
+        organizationId: context.organizationId,
+        resourceType: "CHAT_CHANNEL",
+        resourceId: channelId,
+        status: { in: ["ONLINE", "AWAY"] },
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        userId: true,
+        status: true,
+        expiresAt: true,
+        updatedAt: true,
+        user: { select: { displayName: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    return [...new Map(rows.map((row) => [row.userId, row])).values()];
   }
 
   async disconnect(

@@ -1,4 +1,5 @@
 export { default as NotificationCenter } from "./NotificationCenter";
+export { default as NotificationInboxClient } from "./NotificationInboxClient";
 export { default as NotificationHeader } from "./NotificationHeader";
 export { default as NotificationStats } from "./NotificationStats";
 export { default as NotificationInbox } from "./NotificationInbox";

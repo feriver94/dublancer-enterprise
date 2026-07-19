@@ -11,10 +11,7 @@ export async function GET() {
   try {
     const context = await getAuthenticatedContext();
     return apiSuccess(
-      await service.list(
-        context.userId,
-        context.organizationId,
-      ),
+      await service.list(context),
     );
   } catch (error) {
     return apiError(error);
@@ -31,11 +28,7 @@ export async function PUT(request: NextRequest) {
       );
 
     return apiSuccess(
-      await service.upsert(
-        context.userId,
-        context.organizationId,
-        input,
-      ),
+      await service.upsert(context, input),
     );
   } catch (error) {
     return apiError(error);

@@ -12,14 +12,50 @@ function createRedisClient() {
     throw new Error("REDIS_URL environment variable is not configured.");
   }
 
-  return new Redis(url, {
-    maxRetriesPerRequest: 3,
+  const client = new Redis(url, {
+    maxRetriesPerRequest: 1,
     enableReadyCheck: true,
     lazyConnect: true,
+    connectTimeout: 1_000,
+    commandTimeout: 1_200,
     retryStrategy(times) {
-      return Math.min(times * 100, 3000);
+      return times <= 2 ? Math.min(times * 100, 250) : null;
     },
   });
+  // ioredis treats an unobserved error event as an application-level warning.
+  // Callers receive failures through their awaited commands and apply bounded
+  // fallbacks, so the shared client observes the event without duplicating it.
+  client.on("error", () => undefined);
+  return client;
+}
+
+export async function runRedisOperation<T>(
+  client: Redis,
+  operation: () => Promise<T>,
+  timeoutMs = 1_500,
+): Promise<T> {
+  const bounded = <Value>(promise: Promise<Value>) =>
+    new Promise<Value>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("Redis operation timed out.")),
+        timeoutMs,
+      );
+      promise.then(resolve, reject).finally(() => clearTimeout(timer));
+    });
+
+  if (client.status === "wait" || client.status === "end") {
+    await bounded(client.connect());
+  }
+
+  return bounded(operation());
+}
+
+export async function pingRedis(): Promise<boolean> {
+  try {
+    return await runRedisOperation(redis, () => redis.ping()) === "PONG";
+  } catch {
+    return false;
+  }
 }
 
 export const redis =

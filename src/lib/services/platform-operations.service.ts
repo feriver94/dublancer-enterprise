@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/database/prisma";
-import { redis } from "@/lib/realtime/redis";
+import { pingRedis } from "@/lib/realtime/redis";
 import { requirePermission } from "@/lib/authorization/permission-resolver";
 import type { TenantContext } from "@/lib/tenancy/context";
 
 async function databaseReady() { try { await prisma.$queryRaw`SELECT 1`; return true; } catch { return false; } }
-async function redisReady() { try { if (redis.status === "wait") await redis.connect(); return (await redis.ping()) === "PONG"; } catch { return false; } }
+async function redisReady() { return pingRedis(); }
 const configured = (...keys: string[]) => keys.every((key) => Boolean(process.env[key]));
 
 export async function platformReadiness() {

@@ -61,11 +61,42 @@ async function parse<T>(response: Response): Promise<T> {
   return body.data as T;
 }
 
+async function parseWithMeta<T>(response: Response): Promise<{
+  data: T;
+  meta: Record<string, unknown>;
+}> {
+  const body = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
+  if (!response.ok) {
+    throw new ApiClientError(
+      body.error?.message ?? `Request failed with status ${response.status}.`,
+      response.status,
+      body.error?.code,
+      body.error?.details,
+    );
+  }
+  return { data: body.data as T, meta: body.meta ?? {} };
+}
+
 export async function apiGet<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
   return parse<T>(
+    await fetch(path, {
+      ...init,
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { accept: "application/json", ...init.headers },
+    }),
+  );
+}
+
+export async function apiGetWithMeta<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ data: T; meta: Record<string, unknown> }> {
+  return parseWithMeta<T>(
     await fetch(path, {
       ...init,
       method: "GET",

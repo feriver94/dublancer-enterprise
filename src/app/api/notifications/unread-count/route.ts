@@ -7,7 +7,7 @@ const service = new NotificationService();
 export async function GET() {
   try {
     const context = await getAuthenticatedContext();
-    return apiSuccess(await service.unreadCount(context.userId));
+    return apiSuccess(await service.unreadCount(context));
   } catch (error) {
     return apiError(error);
   }

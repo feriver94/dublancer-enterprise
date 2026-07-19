@@ -1,1 +1,12 @@
-import{EnterpriseModulePage}from"@/components/platform/enterprise-module-page";export default function Page(){return<EnterpriseModulePage module="notifications"/>}
+import { AuthenticatedShell, Container } from "@/components/layout";
+import NotificationInboxClient from "@/components/notifications/NotificationInboxClient";
+
+export default function NotificationsPage() {
+  return (
+    <AuthenticatedShell returnTo="/notifications">
+      <Container>
+        <NotificationInboxClient />
+      </Container>
+    </AuthenticatedShell>
+  );
+}

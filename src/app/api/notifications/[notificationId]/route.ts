@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ n
     const { notificationId } = await context.params;
     const input = updateNotificationSchema.parse(await request.json());
     const status = input.action === "read" ? "READ" : input.action === "unread" ? "UNREAD" : "ARCHIVED";
-    const notification = await setNotificationStatus(session.userId, notificationId, status);
+    const notification = await setNotificationStatus(session, notificationId, status);
     return apiSuccess(notification);
   } catch (error) {
     return apiError(error);

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, route: Context) {
     const context = await getAuthenticatedContext();
     const { notificationId } = await route.params;
     return apiSuccess(
-      await service.markRead(context.userId, notificationId),
+      await service.markRead(context, notificationId),
     );
   } catch (error) {
     return apiError(error);

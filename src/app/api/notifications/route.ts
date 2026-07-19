@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       take: request.nextUrl.searchParams.get("take") ?? undefined,
     });
 
-    const result = await service.list(context.userId, input);
+    const result = await service.list(context, input);
     return apiSuccess(result.items, 200, {
       nextCursor: result.nextCursor,
     });

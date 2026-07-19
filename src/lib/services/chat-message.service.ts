@@ -3,7 +3,7 @@ import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import { requireChatChannelAccess } from "@/lib/chat/access";
 import { enforceChatRateLimit } from "@/lib/chat/rate-limit";
-import { redis } from "@/lib/realtime/redis";
+import { redis, runRedisOperation } from "@/lib/realtime/redis";
 import { REALTIME_EVENTS, REALTIME_TOPICS } from "@/lib/realtime/topics";
 import type { TenantContext } from "@/lib/tenancy/context";
 import type {
@@ -691,7 +691,19 @@ export class ChatMessageService {
       },
       createdAt: new Date().toISOString(),
     };
-    await redis.publish(REALTIME_TOPICS.chatChannel(channelId), JSON.stringify(payload));
-    return { accepted: true, expiresAt: payload.payload.expiresAt };
+    try {
+      await runRedisOperation(
+        redis,
+        () => redis.publish(REALTIME_TOPICS.chatChannel(channelId), JSON.stringify(payload)),
+      );
+      return { accepted: true, realtimeAvailable: true, expiresAt: payload.payload.expiresAt };
+    } catch {
+      return {
+        accepted: false,
+        realtimeAvailable: false,
+        retryable: true,
+        expiresAt: payload.payload.expiresAt,
+      };
+    }
   }
 }

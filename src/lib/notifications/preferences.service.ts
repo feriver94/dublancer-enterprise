@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/database/prisma";
+import { REALTIME_EVENTS, REALTIME_TOPICS } from "@/lib/realtime/topics";
+import type { TenantContext } from "@/lib/tenancy/context";
 
 type PreferenceInput = {
   category: string;
@@ -10,12 +12,12 @@ type PreferenceInput = {
 };
 
 export class NotificationPreferenceService {
-  async list(userId: string, organizationId?: string) {
+  async list(context: TenantContext) {
     return prisma.notificationPreference.findMany({
       where: {
-        userId,
+        userId: context.userId,
         OR: [
-          { organizationId: organizationId ?? null },
+          { organizationId: context.organizationId },
           { organizationId: null },
         ],
       },
@@ -24,42 +26,64 @@ export class NotificationPreferenceService {
   }
 
   async upsert(
-    userId: string,
-    organizationId: string | undefined,
+    context: TenantContext,
     input: PreferenceInput,
   ) {
     const existing =
       await prisma.notificationPreference.findFirst({
         where: {
-          userId,
-          organizationId: organizationId ?? null,
+          userId: context.userId,
+          organizationId: context.organizationId,
           category: input.category,
           channel: input.channel,
         },
         select: { id: true },
       });
 
-    if (existing) {
-      return prisma.notificationPreference.update({
-        where: { id: existing.id },
+    return prisma.$transaction(async (tx) => {
+      const preference = existing
+        ? await tx.notificationPreference.update({
+            where: { id: existing.id },
+            data: {
+              enabled: input.enabled,
+              quietHours: input.quietHours as Prisma.InputJsonValue | undefined,
+              locale: input.locale,
+            },
+          })
+        : await tx.notificationPreference.create({
+            data: {
+              userId: context.userId,
+              organizationId: context.organizationId,
+              category: input.category,
+              channel: input.channel,
+              enabled: input.enabled,
+              quietHours: input.quietHours as Prisma.InputJsonValue | undefined,
+              locale: input.locale,
+            },
+          });
+      await tx.auditEvent.create({
         data: {
-          enabled: input.enabled,
-          quietHours: input.quietHours as Prisma.InputJsonValue | undefined,
-          locale: input.locale,
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          action: "notification.preference.update",
+          resourceType: "NotificationPreference",
+          resourceId: preference.id,
+          outcome: "SUCCESS",
+          metadata: { category: preference.category, channel: preference.channel, enabled: preference.enabled },
         },
       });
-    }
-
-    return prisma.notificationPreference.create({
-      data: {
-        userId,
-        organizationId,
-        category: input.category,
-        channel: input.channel,
-        enabled: input.enabled,
-        quietHours: input.quietHours as Prisma.InputJsonValue | undefined,
-        locale: input.locale,
-      },
+      await tx.realtimeEvent.create({
+        data: {
+          organizationId: context.organizationId,
+          topic: REALTIME_TOPICS.user(context.userId),
+          eventType: REALTIME_EVENTS.NOTIFICATION_PREFERENCES_UPDATED,
+          aggregateType: "NotificationPreference",
+          aggregateId: preference.id,
+          actorUserId: context.userId,
+          payload: { category: preference.category, channel: preference.channel, enabled: preference.enabled },
+        },
+      });
+      return preference;
     });
   }
 }

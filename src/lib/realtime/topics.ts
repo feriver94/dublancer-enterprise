@@ -13,6 +13,8 @@ export const REALTIME_EVENTS = {
   PROJECT_MILESTONE_CREATED: "project.milestone.created",
   PROJECT_MEMBER_UPDATED: "project.member.updated",
   NOTIFICATION_CREATED: "notification.created",
+  NOTIFICATION_UPDATED: "notification.updated",
+  NOTIFICATION_PREFERENCES_UPDATED: "notification.preferences.updated",
   PRESENCE_UPDATED: "presence.updated",
   CHAT_CHANNEL_CREATED: "chat.channel.created",
   CHAT_CHANNEL_UPDATED: "chat.channel.updated",

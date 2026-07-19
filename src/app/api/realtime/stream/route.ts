@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       topics.push(REALTIME_TOPICS.chatChannel(channelId));
     }
 
-    return createSseResponse(
+    return await createSseResponse(
       topics,
       request.signal,
     );
