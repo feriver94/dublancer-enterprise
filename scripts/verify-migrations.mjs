@@ -19,8 +19,10 @@ const completeSql = migrationSql.join("\n");
 const finalSql = migrationSql.at(-1);
 const commercialMigrationName = "20260719090000_governed_commercial_settlement";
 const phase4MigrationName = "20260720090000_enterprise_files_search_analytics";
+const phase5MigrationName = "20260722090000_ai_governance_enterprise_operations";
 const commercialSql = migrationSql[entries.indexOf(commercialMigrationName)];
 const phase4Sql = migrationSql[entries.indexOf(phase4MigrationName)];
+const phase5Sql = migrationSql[entries.indexOf(phase5MigrationName)];
 for (const table of ["WorkGraphNode", "WorkflowDefinition", "WorkflowRun", "WorkflowApproval", "TalentMatch", "RateLimitBucket"]) {
   if (!completeSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Migration history is missing ${table}.`);
 }
@@ -30,6 +32,9 @@ for (const table of ["ContractAcceptance", "WorkSubmissionDecision"]) {
 for (const table of ["FileUploadIntent", "SearchIndexCheckpoint", "AnalyticsAggregationRun"]) {
   if (!phase4Sql?.includes(`CREATE TABLE "${table}"`)) throw new Error(`Phase 4 migration is missing ${table}.`);
 }
-if (entries.at(-1) !== phase4MigrationName) throw new Error("Phase 4 migration must remain the latest chronological migration.");
+for (const table of ["AiBudgetReservation", "BackgroundJobAttempt", "JobSchedule", "WorkerHeartbeat", "DataExportArtifact"]) {
+  if (!phase5Sql?.includes(`CREATE TABLE "${table}"`)) throw new Error(`Phase 5 migration is missing ${table}.`);
+}
+if (entries.at(-1) !== phase5MigrationName) throw new Error("Phase 5 migration must remain the latest chronological migration.");
 if (/\bDROP\s+(TABLE|COLUMN|TYPE)\b/i.test(finalSql)) throw new Error("Final migration contains a destructive DROP statement.");
-console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial and Phase 4 migrations).`);
+console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial, Phase 4 and Phase 5 migrations).`);

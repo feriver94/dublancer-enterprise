@@ -28,6 +28,7 @@ const exemptions = new Map([
   ["internal/workers/analytics/route.ts", "internal"],
   ["internal/workers/files/route.ts", "internal"],
   ["internal/workers/orchestration/route.ts", "internal"],
+  ["internal/workers/runtime/route.ts", "internal"],
   ["internal/workers/search/route.ts", "internal"],
   ["realtime/publish/route.ts", "internal"],
   ["webhooks/file-scan/[providerKey]/route.ts", "webhook"],

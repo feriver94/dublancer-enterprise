@@ -1,3 +1,10 @@
 import { Navbar, Footer, Container } from "@/components/layout";
-import { AIPlatformHeader, AIPlatformStats, AgentRegistry, MultiAgentOrchestrator, ToolRegistry, MemoryManager, PromptVersionManager, ModelRoutingEngine, HumanApprovalQueue, ExecutionObservability, AIPlatformArchitect } from "@/components/ai-platform";
-export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px",display:"grid",gap:28}}><AIPlatformHeader/><AIPlatformStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28}}><div style={{display:"grid",gap:28}}><AgentRegistry/><MultiAgentOrchestrator/><ToolRegistry/><ModelRoutingEngine/></div><aside style={{display:"grid",gap:24}}><AIPlatformArchitect/><MemoryManager/><HumanApprovalQueue/><ExecutionObservability/></aside></section></main></Container><Footer/></>}
+import { AiGovernanceWorkspaceClient } from "@/components/ai-platform";
+import { getAuthenticatedContext } from "@/lib/auth/session";
+import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
+
+export default async function Page() {
+  const authorization = await resolveAuthorization(await getAuthenticatedContext());
+  const can = (permission: string) => authorization.isPlatformAdmin || authorization.permissions.includes(permission);
+  return <><Navbar/><Container><AiGovernanceWorkspaceClient canManage={can("ai.manage")} canApprove={can("ai.approve")} canAudit={can("audit.read")} /></Container><Footer/></>;
+}

@@ -43,6 +43,16 @@ export type AiCompletion = {
   outputTokens: number;
   model: string;
   providerReference?: string;
+  costMinor?: number;
+};
+
+export type AiProviderStatus = {
+  key: string;
+  status: "healthy" | "degraded" | "not_configured";
+  configured: boolean;
+  latencyMs: number;
+  checkedAt: string;
+  message?: string;
 };
 
 export interface AiProvider {
@@ -52,7 +62,9 @@ export interface AiProvider {
     system: string;
     user: string;
     metadata: Record<string, string>;
+    maxOutputTokens?: number;
   }): Promise<AiCompletion>;
+  status(): Promise<AiProviderStatus>;
 }
 
 export type PaymentOperation = {
@@ -240,7 +252,7 @@ class OpenAiCompatibleProvider implements AiProvider {
       id?: string;
       model?: string;
       choices?: Array<{ message?: { content?: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      usage?: { prompt_tokens?: number; completion_tokens?: number; cost_minor?: number };
     }>(`${baseUrl.replace(/\/$/, "")}/chat/completions`, apiKey, {
       model: input.model,
       messages: [
@@ -248,6 +260,7 @@ class OpenAiCompatibleProvider implements AiProvider {
         { role: "user", content: input.user },
       ],
       temperature: 0.2,
+      ...(input.maxOutputTokens ? { max_completion_tokens: input.maxOutputTokens } : {}),
       user: createHash("sha256").update(input.metadata.userId ?? "unknown").digest("hex"),
     });
     return {
@@ -256,7 +269,31 @@ class OpenAiCompatibleProvider implements AiProvider {
       outputTokens: result.usage?.completion_tokens ?? 0,
       model: result.model ?? input.model,
       providerReference: result.id,
+      costMinor: Number.isSafeInteger(result.usage?.cost_minor) ? result.usage?.cost_minor : undefined,
     };
+  }
+
+  async status(): Promise<AiProviderStatus> {
+    const started = Date.now();
+    const checkedAt = new Date().toISOString();
+    const baseUrl = process.env.AI_PROVIDER_BASE_URL;
+    const apiKey = process.env.AI_PROVIDER_API_KEY;
+    if (!baseUrl || !apiKey) {
+      return { key: this.key, status: "not_configured", configured: false, latencyMs: 0, checkedAt, message: "AI provider credentials are not configured." };
+    }
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
+        headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" },
+        signal: AbortSignal.timeout(5_000),
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return { key: this.key, status: "degraded", configured: true, latencyMs: Date.now() - started, checkedAt, message: `Provider health request returned ${response.status}.` };
+      }
+      return { key: this.key, status: "healthy", configured: true, latencyMs: Date.now() - started, checkedAt };
+    } catch {
+      return { key: this.key, status: "degraded", configured: true, latencyMs: Date.now() - started, checkedAt, message: "AI provider health request failed." };
+    }
   }
 }
 

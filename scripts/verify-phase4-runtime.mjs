@@ -229,7 +229,7 @@ try {
   await pglite.waitReady;
   const migrations = (await readdir(path.join(root, "prisma/migrations"), { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
   const phase4Migration = "20260720090000_enterprise_files_search_analytics";
-  for (const migration of migrations.filter((name) => name !== phase4Migration)) await applyMigration(pglite, migration);
+  for (const migration of migrations.filter((name) => name < phase4Migration)) await applyMigration(pglite, migration);
 
   const legacyUserId = `legacy-user-${randomUUID()}`;
   const legacyOrganizationId = `legacy-org-${randomUUID()}`;
@@ -240,6 +240,7 @@ try {
   await pglite.query(`INSERT INTO "Project" ("id","organizationId","ownerId","title","slug","status","currency","createdAt","updatedAt") VALUES ($1,$2,$3,'Legacy Project',$4,'OPEN','AED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`, [legacyProjectId, legacyOrganizationId, legacyUserId, `legacy-${randomUUID()}`]);
   await pglite.query(`INSERT INTO "ProjectAttachment" ("id","projectId","uploadedById","filename","storageKey","mimeType","sizeBytes","createdAt") VALUES ($1,$2,$3,'unverified.pdf',$4,'application/pdf',10,CURRENT_TIMESTAMP)`, [legacyAttachmentId, legacyProjectId, legacyUserId, `legacy/${randomUUID()}`]);
   await applyMigration(pglite, phase4Migration);
+  for (const migration of migrations.filter((name) => name > phase4Migration)) await applyMigration(pglite, migration);
   const migrated = (await pglite.query(`SELECT attachment."fileVersionId", version."scanStatus", version."storageProvider" FROM "ProjectAttachment" attachment JOIN "FileVersion" version ON version."id"=attachment."fileVersionId" WHERE attachment."id"=$1`, [legacyAttachmentId])).rows[0];
   assert.ok(migrated.fileVersionId);
   assert.equal(migrated.scanStatus, "NOT_CONFIGURED");

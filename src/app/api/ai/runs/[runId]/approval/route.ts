@@ -8,6 +8,6 @@ import { aiDecisionSchema } from "@/lib/validation/product";
 
 const service = new AiRunService();
 export async function POST(request: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
-  try { await requireCsrfToken(request); const context = await getAuthenticatedContext(); await requirePermission(context, "ai.manage"); return apiSuccess(await service.decide(context, (await params).runId, aiDecisionSchema.parse(await request.json()))); }
+  try { await requireCsrfToken(request); const context = await getAuthenticatedContext(); await requirePermission(context, "ai.approve"); return apiSuccess(await service.decide(context, (await params).runId, aiDecisionSchema.parse(await request.json()))); }
   catch (error) { return apiError(error); }
 }

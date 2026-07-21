@@ -5,12 +5,14 @@ const MAX_ATTEMPTS = 8;
 
 export async function processNotificationDeliveries(
   batchSize = 100,
+  organizationId?: string,
 ) {
   const deliveries = await prisma.notificationDelivery.findMany({
     where: {
       status: "PENDING",
       attempts: { lt: MAX_ATTEMPTS },
       availableAt: { lte: new Date() },
+      ...(organizationId ? { notification: { organizationId } } : {}),
     },
     include: {
       notification: true,

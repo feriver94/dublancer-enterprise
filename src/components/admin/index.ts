@@ -8,3 +8,4 @@ export { default as IncidentCenter } from "./IncidentCenter";
 export { default as ObservabilityPanel } from "./ObservabilityPanel";
 export { default as AIRouterConfig } from "./AIRouterConfig";
 export { default as DatabaseReadiness } from "./DatabaseReadiness";
+export { EnterpriseOperationsClient } from "./EnterpriseOperationsClient";

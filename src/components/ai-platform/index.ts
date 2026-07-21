@@ -9,3 +9,4 @@ export { default as ModelRoutingEngine } from "./ModelRoutingEngine";
 export { default as HumanApprovalQueue } from "./HumanApprovalQueue";
 export { default as ExecutionObservability } from "./ExecutionObservability";
 export { default as AIPlatformArchitect } from "./AIPlatformArchitect";
+export { AiGovernanceWorkspaceClient } from "./AiGovernanceWorkspaceClient";

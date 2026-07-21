@@ -26,12 +26,14 @@ export const PLATFORM_PERMISSIONS = [
   "files.manage",
   "ai.use",
   "ai.manage",
+  "ai.approve",
   "finance.read",
   "finance.manage",
   "analytics.read",
   "search.use",
   "support.manage",
   "security.events.read",
+  "security.events.manage",
   "data.export",
   "orchestration.read",
   "orchestration.manage",
@@ -44,6 +46,7 @@ export const PLATFORM_PERMISSIONS = [
   "moderation.manage",
   "compliance.manage",
   "platform.operations.read",
+  "platform.operations.manage",
   "audit.read",
 ] as const;
 

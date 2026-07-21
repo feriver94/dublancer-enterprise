@@ -1,1 +1,10 @@
-import type{NextRequest}from"next/server";import{getAuthenticatedContext}from"@/lib/auth/session";import{requireCsrfToken}from"@/lib/auth/csrf";import{apiError,apiSuccess}from"@/lib/http/api-response";import{ModerationComplianceService}from"@/lib/services/commercial-platform.service";import{moderationDecisionSchema}from"@/lib/validation/commercial";const s=new ModerationComplianceService();export async function GET(){try{return apiSuccess(await s.queue(await getAuthenticatedContext()))}catch(e){return apiError(e)}}export async function PATCH(q:NextRequest){try{await requireCsrfToken(q);return apiSuccess(await s.decide(await getAuthenticatedContext(),moderationDecisionSchema.parse(await q.json())))}catch(e){return apiError(e)}}
+import type { NextRequest } from "next/server";
+import { getAuthenticatedContext } from "@/lib/auth/session";
+import { requireCsrfToken } from "@/lib/auth/csrf";
+import { apiError, apiSuccess } from "@/lib/http/api-response";
+import { EnterpriseOperationsService } from "@/lib/services/enterprise-operations.service";
+import { moderationDecisionSchema } from "@/lib/validation/commercial";
+
+const service = new EnterpriseOperationsService();
+export async function GET() { try { return apiSuccess(await service.moderation(await getAuthenticatedContext())); } catch (error) { return apiError(error); } }
+export async function PATCH(request: NextRequest) { try { await requireCsrfToken(request); return apiSuccess(await service.decideModeration(await getAuthenticatedContext(), moderationDecisionSchema.parse(await request.json()))); } catch (error) { return apiError(error); } }

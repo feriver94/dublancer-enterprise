@@ -125,6 +125,7 @@ export const createUploadIntentSchema = z.object({
 export const createAiRunSchema = z.object({
   useCase: z.string().trim().min(2).max(100),
   projectId: id.optional(),
+  promptKey: z.string().trim().min(2).max(100).optional(),
   input: jsonObject,
   idempotencyKey: z.string().trim().min(8).max(128),
 });
@@ -133,6 +134,12 @@ export const aiTenantConfigSchema = z.object({
   enabled: z.boolean(), providerKey: z.string().trim().max(100).nullable().optional(), defaultModel: z.string().trim().max(200).nullable().optional(),
   dataUsagePolicy: z.enum(["NO_TRAINING","TENANT_ONLY","STANDARD"]).default("NO_TRAINING"), humanApprovalRequired: z.boolean().default(true),
   monthlyTokenBudget: z.coerce.bigint().nonnegative().nullable().optional(), allowedUseCases: z.array(z.string().trim().min(2).max(100)).max(100).default([]), settings: jsonObject.optional(),
+  monthlyCostBudgetMinor: z.coerce.bigint().nonnegative().nullable().optional(),
+  maxTokensPerRun: z.number().int().min(128).max(1_000_000).default(4096),
+  maxCostPerRunMinor: z.coerce.bigint().nonnegative().nullable().optional(),
+  maxInputBytes: z.number().int().min(1024).max(10 * 1024 * 1024).default(65536),
+  allowedModels: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
+  allowedProviderKeys: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
 });
 
 export const aiDecisionSchema = z.object({
