@@ -7,3 +7,4 @@ export { default as RecentCommands } from "./RecentCommands";
 export { default as IndexHealth } from "./IndexHealth";
 export { default as PermissionGuard } from "./PermissionGuard";
 export { default as SearchAI } from "./SearchAI";
+export { SearchProductClient } from "./SearchProductClient";

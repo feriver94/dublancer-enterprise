@@ -11,6 +11,7 @@
     "test": "node --test tests/*.test.mjs",
     "test:commercial": "node scripts/verify-commercial-flow.mjs",
     "test:phase3:runtime": "node scripts/verify-phase3-runtime.mjs",
+    "test:phase4:runtime": "node scripts/verify-phase4-runtime.mjs",
     "verify:locales": "node scripts/verify-locales.mjs",
     "verify:security": "node scripts/verify-security.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",

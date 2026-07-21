@@ -37,11 +37,7 @@ export const createCommentSchema = z.object({
 
 export const createAttachmentSchema = z.object({
   taskId: z.string().trim().min(1).optional(),
-  filename: z.string().trim().min(1).max(255),
-  storageKey: z.string().trim().min(1).max(1024),
-  mimeType: z.string().trim().min(1).max(255),
-  sizeBytes: z.coerce.bigint().positive(),
-  checksumSha256: z.string().trim().length(64).optional(),
+  fileVersionId: z.string().trim().min(1).max(191),
 });
 
 export const paginationSchema = z.object({

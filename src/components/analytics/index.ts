@@ -7,3 +7,4 @@ export { default as AIAnalytics } from "./AIAnalytics";
 export { default as OperationsAnalytics } from "./OperationsAnalytics";
 export { default as ForecastingPanel } from "./ForecastingPanel";
 export { default as AnalyticsAI } from "./AnalyticsAI";
+export { AnalyticsDashboardClient } from "./AnalyticsDashboardClient";

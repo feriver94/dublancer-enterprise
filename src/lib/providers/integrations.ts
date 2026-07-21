@@ -22,6 +22,19 @@ export interface StorageProvider {
     storageKey: string;
     downloadName: string;
   }): Promise<SignedStorageOperation>;
+  verifyUpload(input: {
+    organizationId: string;
+    storageKey: string;
+    expectedMimeType: string;
+    expectedSizeBytes: number;
+    expectedChecksumSha256: string;
+  }): Promise<{
+    providerReference: string;
+    mimeType: string;
+    sizeBytes: number;
+    checksumSha256: string;
+    etag?: string;
+  }>;
 }
 
 export type AiCompletion = {
@@ -95,6 +108,14 @@ export interface NotificationProvider {
 
 export interface FileScanProvider {
   readonly key: string;
+  submit(input: {
+    organizationId: string;
+    fileVersionId: string;
+    storageProvider: string;
+    storageKey: string;
+    mimeType: string;
+    checksumSha256: string;
+  }): Promise<{ providerReference: string }>;
   verifyWebhook(rawBody: string, signature: string): boolean;
 }
 
@@ -176,6 +197,33 @@ class SigningBrokerStorageProvider implements StorageProvider {
       input,
     );
     return { ...result, headers: result.headers ?? {} };
+  }
+
+  async verifyUpload(input: Parameters<StorageProvider["verifyUpload"]>[0]) {
+    const config = this.config();
+    const result = await postJson<{
+      providerReference?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+      checksumSha256?: string;
+      etag?: string;
+    }>(`${config.endpoint}/v1/uploads/verify`, config.token, input);
+    if (
+      !result.providerReference ||
+      !result.mimeType ||
+      !Number.isSafeInteger(result.sizeBytes) ||
+      !result.checksumSha256 ||
+      !/^[a-f0-9]{64}$/i.test(result.checksumSha256)
+    ) {
+      throw new AppError("SERVICE_UNAVAILABLE", "Storage provider returned invalid upload evidence.", 503);
+    }
+    return {
+      providerReference: result.providerReference,
+      mimeType: result.mimeType,
+      sizeBytes: result.sizeBytes as number,
+      checksumSha256: result.checksumSha256.toLowerCase(),
+      ...(result.etag ? { etag: result.etag } : {}),
+    };
   }
 }
 
@@ -265,6 +313,23 @@ class HttpNotificationProvider implements NotificationProvider {
 
 class HmacFileScanProvider implements FileScanProvider {
   readonly key = process.env.FILE_SCAN_PROVIDER_KEY ?? "malware-scan-broker";
+  async submit(input: Parameters<FileScanProvider["submit"]>[0]) {
+    const endpoint = process.env.FILE_SCAN_PROVIDER_BASE_URL;
+    const token = process.env.FILE_SCAN_PROVIDER_API_KEY ?? process.env.FILE_SCAN_PROVIDER_TOKEN;
+    if (!endpoint || !token) {
+      throw new AppError("SERVICE_UNAVAILABLE", "Malware scanning is not configured.", 503);
+    }
+    const result = await postJson<{ providerReference?: string }>(
+      `${endpoint.replace(/\/$/, "")}/v1/scans`,
+      token,
+      input,
+      `file-scan:${input.fileVersionId}`,
+    );
+    if (!result.providerReference) {
+      throw new AppError("SERVICE_UNAVAILABLE", "Malware scanner returned invalid submission evidence.", 503);
+    }
+    return { providerReference: result.providerReference };
+  }
   verifyWebhook(rawBody: string, signature: string) {
     const secret = process.env.FILE_SCAN_WEBHOOK_SECRET;
     if (!secret || !/^[a-f0-9]{64}$/i.test(signature)) return false;

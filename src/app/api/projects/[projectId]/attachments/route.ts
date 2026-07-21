@@ -3,9 +3,9 @@ import { apiError, apiSuccess } from "@/lib/http/api-response";
 import { getAuthenticatedContext } from "@/lib/auth/session";
 import { requireCsrfToken } from "@/lib/auth/csrf";
 import { createAttachmentSchema } from "@/lib/validation/project-workspace";
-import { ProjectWorkspaceService } from "@/lib/services/project-workspace.service";
+import { EnterpriseFileProductService } from "@/lib/services/enterprise-file.service";
 
-const service = new ProjectWorkspaceService();
+const service = new EnterpriseFileProductService();
 type Context = { params: Promise<{ projectId: string }> };
 
 export async function POST(request: NextRequest, route: Context) {
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, route: Context) {
     const context = await getAuthenticatedContext();
     const { projectId } = await route.params;
     const input = createAttachmentSchema.parse(await request.json());
-    return apiSuccess(await service.registerAttachment(context, projectId, input), 201);
+    return apiSuccess(await service.bindProjectAttachment(context, projectId, input), 201);
   } catch (error) {
     return apiError(error);
   }

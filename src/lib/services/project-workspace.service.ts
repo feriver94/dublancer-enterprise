@@ -3,6 +3,7 @@ import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { requireProjectAccess } from "@/lib/authorization/project-access";
+import { EnterpriseFileProductService } from "@/lib/services/enterprise-file.service";
 
 export class ProjectWorkspaceService {
   async addMember(
@@ -304,37 +305,10 @@ export class ProjectWorkspaceService {
     projectId: string,
     input: {
       taskId?: string;
-      filename: string;
-      storageKey: string;
-      mimeType: string;
-      sizeBytes: bigint;
-      checksumSha256?: string;
+      fileVersionId: string;
     },
   ) {
-    await requireProjectAccess(context, projectId, ["OWNER", "MANAGER", "CONTRIBUTOR"]);
-
-    return prisma.$transaction(async (tx) => {
-      const attachment = await tx.projectAttachment.create({
-        data: {
-          projectId,
-          uploadedById: context.userId,
-          ...input,
-        },
-      });
-
-      await tx.projectActivity.create({
-        data: {
-          projectId,
-          actorUserId: context.userId,
-          type: "ATTACHMENT_ADDED",
-          resourceType: "ProjectAttachment",
-          resourceId: attachment.id,
-          summary: `Attachment registered: ${attachment.filename}.`,
-        },
-      });
-
-      return attachment;
-    });
+    return new EnterpriseFileProductService().bindProjectAttachment(context, projectId, input);
   }
 
   async listActivity(

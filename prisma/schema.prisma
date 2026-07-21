@@ -59,79 +59,80 @@ enum SessionStatus {
 }
 
 model User {
-  id                         String                   @id @default(cuid())
-  email                      String                   @unique
+  id                         String                    @id @default(cuid())
+  email                      String                    @unique
   displayName                String?
   passwordHash               String?
   emailVerified              DateTime?
-  isPlatformAdmin            Boolean                  @default(false)
+  isPlatformAdmin            Boolean                   @default(false)
   memberships                Membership[]
-  ownedProjects              Project[]                @relation("ProjectOwner")
-  auditEvents                AuditEvent[]             @relation("AuditActor")
-  createdInvites             OrganizationInvitation[] @relation("InvitationCreator")
-  activities                 OrganizationActivity[]   @relation("ActivityActor")
+  ownedProjects              Project[]                 @relation("ProjectOwner")
+  auditEvents                AuditEvent[]              @relation("AuditActor")
+  createdInvites             OrganizationInvitation[]  @relation("InvitationCreator")
+  activities                 OrganizationActivity[]    @relation("ActivityActor")
   sessions                   AuthSession[]
   loginEvents                LoginEvent[]
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetTokens        PasswordResetToken[]
   projectMemberships         ProjectMembership[]
-  assignedTasks              ProjectTask[]            @relation("TaskAssignee")
-  createdTasks               ProjectTask[]            @relation("TaskCreator")
+  assignedTasks              ProjectTask[]             @relation("TaskAssignee")
+  createdTasks               ProjectTask[]             @relation("TaskCreator")
   projectComments            ProjectComment[]
   uploadedFiles              ProjectAttachment[]
   notifications              UserNotification[]
   notificationPreferences    NotificationPreference[]
   notificationDeliveries     NotificationDelivery[]
-  preferredLocale            String                   @default("en-AE")
+  preferredLocale            String                    @default("en-AE")
   realtimeConnections        RealtimeConnection[]
   presenceSessions           PresenceSession[]
-  createdChatChannels        ChatChannel[]            @relation("ChatChannelCreator")
+  createdChatChannels        ChatChannel[]             @relation("ChatChannelCreator")
   chatChannelMemberships     ChatChannelMember[]
-  chatMessages               ChatMessage[]            @relation("ChatMessageAuthor")
-  deletedChatMessages        ChatMessage[]            @relation("ChatMessageDeleter")
-  chatMessageRevisions       ChatMessageRevision[]    @relation("ChatRevisionEditor")
+  chatMessages               ChatMessage[]             @relation("ChatMessageAuthor")
+  deletedChatMessages        ChatMessage[]             @relation("ChatMessageDeleter")
+  chatMessageRevisions       ChatMessageRevision[]     @relation("ChatRevisionEditor")
   chatMentions               ChatMention[]
   chatReactions              ChatReaction[]
   freelancerProfile          FreelancerProfile?
-  createdListings            MarketplaceListing[]     @relation("ListingCreator")
+  createdListings            MarketplaceListing[]      @relation("ListingCreator")
   savedListings              SavedListing[]
-  submittedProposals         Proposal[]               @relation("ProposalSubmitter")
-  decidedProposals           Proposal[]               @relation("ProposalDecider")
-  proposalRevisions          ProposalRevision[]       @relation("ProposalRevisionCreator")
-  createdContracts           Contract[]               @relation("ContractCreator")
-  providerContracts          Contract[]               @relation("ContractProviderUser")
+  submittedProposals         Proposal[]                @relation("ProposalSubmitter")
+  decidedProposals           Proposal[]                @relation("ProposalDecider")
+  proposalRevisions          ProposalRevision[]        @relation("ProposalRevisionCreator")
+  createdContracts           Contract[]                @relation("ContractCreator")
+  providerContracts          Contract[]                @relation("ContractProviderUser")
   contractAcceptances        ContractAcceptance[]
-  proposedAmendments         ContractAmendment[]      @relation("AmendmentProposer")
+  proposedAmendments         ContractAmendment[]       @relation("AmendmentProposer")
   workSubmissions            WorkSubmission[]
   workSubmissionDecisions    WorkSubmissionDecision[]
-  reviewsWritten             Review[]                 @relation("ReviewAuthor")
-  reviewsReceived            Review[]                 @relation("ReviewSubjectUser")
-  disputesOpened             Dispute[]                @relation("DisputeOpener")
-  disputesAgainst            Dispute[]                @relation("DisputeAgainstUser")
-  abuseReports               AbuseReport[]            @relation("AbuseReporter")
-  assignedAbuseReports       AbuseReport[]            @relation("AbuseAssignee")
-  vendorOnboardings          VendorOnboarding[]       @relation("VendorCandidateUser")
+  reviewsWritten             Review[]                  @relation("ReviewAuthor")
+  reviewsReceived            Review[]                  @relation("ReviewSubjectUser")
+  disputesOpened             Dispute[]                 @relation("DisputeOpener")
+  disputesAgainst            Dispute[]                 @relation("DisputeAgainstUser")
+  abuseReports               AbuseReport[]             @relation("AbuseReporter")
+  assignedAbuseReports       AbuseReport[]             @relation("AbuseAssignee")
+  vendorOnboardings          VendorOnboarding[]        @relation("VendorCandidateUser")
   timeEntries                TimeEntry[]
   timesheets                 Timesheet[]
-  createdDeliverables        Deliverable[]            @relation("DeliverableCreator")
-  requestedApprovals         ApprovalRequest[]        @relation("ApprovalRequester")
-  assignedApprovals          ApprovalRequest[]        @relation("ApprovalAssignee")
-  changeRequests             ChangeRequest[]          @relation("ChangeRequester")
-  ownedRisks                 ProjectRisk[]            @relation("RiskOwner")
+  createdDeliverables        Deliverable[]             @relation("DeliverableCreator")
+  requestedApprovals         ApprovalRequest[]         @relation("ApprovalRequester")
+  assignedApprovals          ApprovalRequest[]         @relation("ApprovalAssignee")
+  changeRequests             ChangeRequest[]           @relation("ChangeRequester")
+  ownedRisks                 ProjectRisk[]             @relation("RiskOwner")
   resourceAllocations        ResourceAllocation[]
-  projectTemplates           ProjectTemplate[]        @relation("TemplateCreator")
-  createdFileNodes           FileNode[]               @relation("FileNodeCreator")
-  uploadedFileVersions       FileVersion[]            @relation("FileVersionUploader")
+  projectTemplates           ProjectTemplate[]         @relation("TemplateCreator")
+  createdFileNodes           FileNode[]                @relation("FileNodeCreator")
+  uploadedFileVersions       FileVersion[]             @relation("FileVersionUploader")
+  createdFileUploadIntents   FileUploadIntent[]        @relation("FileUploadIntentCreator")
   fileLocks                  FileLock[]
   fileAccessGrants           FileAccessGrant[]
   fileActivities             FileActivity[]
   aiRuns                     AiRun[]
-  aiPromptVersions           AiPromptVersion[]        @relation("AiPromptVersionCreator")
-  requestedAiApprovals       AiApproval[]             @relation("AiApprovalRequester")
-  decidedAiApprovals         AiApproval[]             @relation("AiApprovalDecider")
+  aiPromptVersions           AiPromptVersion[]         @relation("AiPromptVersionCreator")
+  requestedAiApprovals       AiApproval[]              @relation("AiApprovalRequester")
+  decidedAiApprovals         AiApproval[]              @relation("AiApprovalDecider")
   aiUsageRecords             AiUsageRecord[]
   aiAuditLogs                AiAuditLog[]
-  issuedInvoices             Invoice[]                @relation("InvoiceIssuer")
+  issuedInvoices             Invoice[]                 @relation("InvoiceIssuer")
   requestedRefunds           Refund[]
   creditEntries              CreditLedgerEntry[]
   savedSearches              SavedSearch[]
@@ -139,17 +140,18 @@ model User {
   securityEvents             SecurityEvent[]
   supportCases               SupportCase[]
   analyticsEvents            AnalyticsEvent[]
+  requestedAnalyticsRuns     AnalyticsAggregationRun[] @relation("AnalyticsRunRequester")
   requestedExports           DataExportJob[]
   consentRecords             ConsentRecord[]
-  verifiedCredentials        VerifiedCredential[]     @relation("CredentialSubjectUser")
-  assignedSupportCases       SupportCase[]            @relation("SupportCaseAssignee")
+  verifiedCredentials        VerifiedCredential[]      @relation("CredentialSubjectUser")
+  assignedSupportCases       SupportCase[]             @relation("SupportCaseAssignee")
   idempotencyRecords         IdempotencyRecord[]
-  workflowDefinitions        WorkflowDefinition[]     @relation("WorkflowDefinitionCreator")
-  workflowRuns               WorkflowRun[]            @relation("WorkflowRunStarter")
-  requestedWorkflowApprovals WorkflowApproval[]       @relation("WorkflowApprovalRequester")
-  decidedWorkflowApprovals   WorkflowApproval[]       @relation("WorkflowApprovalDecider")
-  createdAt                  DateTime                 @default(now())
-  updatedAt                  DateTime                 @updatedAt
+  workflowDefinitions        WorkflowDefinition[]      @relation("WorkflowDefinitionCreator")
+  workflowRuns               WorkflowRun[]             @relation("WorkflowRunStarter")
+  requestedWorkflowApprovals WorkflowApproval[]        @relation("WorkflowApprovalRequester")
+  decidedWorkflowApprovals   WorkflowApproval[]        @relation("WorkflowApprovalDecider")
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 }
 
 model Organization {
@@ -176,6 +178,7 @@ model Organization {
   submittedProposals       Proposal[]                @relation("ProposalProviderOrganization")
   reviewSubjects           Review[]                  @relation("ReviewSubjectOrganization")
   fileNodes                FileNode[]
+  fileUploadIntents        FileUploadIntent[]
   aiConfig                 AiTenantConfig?
   aiPrompts                AiPrompt[]
   aiRuns                   AiRun[]
@@ -183,6 +186,7 @@ model Organization {
   aiAuditLogs              AiAuditLog[]
   knowledgeSources         KnowledgeSource[]
   searchDocuments          SearchDocument[]
+  searchIndexCheckpoint    SearchIndexCheckpoint?
   savedSearches            SavedSearch[]
   searchQueryLogs          SearchQueryLog[]
   invoices                 Invoice[]
@@ -202,6 +206,7 @@ model Organization {
   retentionPolicies        DataRetentionPolicy[]
   analyticsEvents          AnalyticsEvent[]
   analyticsMetrics         AnalyticsDailyMetric[]
+  analyticsAggregationRuns AnalyticsAggregationRun[]
   dataExports              DataExportJob[]
   backgroundJobs           BackgroundJob[]
   idempotencyRecords       IdempotencyRecord[]
@@ -288,6 +293,8 @@ model Project {
   tasks                ProjectTask[]
   comments             ProjectComment[]
   attachments          ProjectAttachment[]
+  fileUploadIntents    FileUploadIntent[]
+  searchDocuments      SearchDocument[]
   activities           ProjectActivity[]
   realtimeEvents       RealtimeEvent[]
   presenceSessions     PresenceSession[]
@@ -594,9 +601,11 @@ model ProjectAttachment {
   mimeType       String
   sizeBytes      BigInt
   checksumSha256 String?
+  fileVersionId  String       @unique
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task           ProjectTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
   uploadedBy     User         @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  fileVersion    FileVersion  @relation(fields: [fileVersionId], references: [id], onDelete: Restrict)
   createdAt      DateTime     @default(now())
 
   @@index([projectId, createdAt])
@@ -888,6 +897,13 @@ enum FileScanStatus {
   INFECTED
   FAILED
   NOT_CONFIGURED
+}
+
+enum FileUploadIntentStatus {
+  ISSUED
+  COMPLETED
+  FAILED
+  EXPIRED
 }
 
 enum FileAccessLevel {
@@ -2070,31 +2086,34 @@ model ProjectHealthSnapshot {
 }
 
 model FileNode {
-  id                   String            @id @default(cuid())
+  id                   String             @id @default(cuid())
   organizationId       String
   projectId            String?
   parentId             String?
   createdById          String
   type                 FileNodeType
   name                 String
-  currentVersionNumber Int               @default(0)
-  inheritedPermissions Boolean           @default(true)
+  currentVersionNumber Int                @default(0)
+  inheritedPermissions Boolean            @default(true)
   retentionUntil       DateTime?
-  legalHold            Boolean           @default(false)
+  legalHold            Boolean            @default(false)
   deletedAt            DateTime?
   metadata             Json?
-  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project              Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent               FileNode?         @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children             FileNode[]        @relation("FileHierarchy")
-  createdBy            User              @relation("FileNodeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project              Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent               FileNode?          @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children             FileNode[]         @relation("FileHierarchy")
+  createdBy            User               @relation("FileNodeCreator", fields: [createdById], references: [id], onDelete: Restrict)
   versions             FileVersion[]
+  versionUploadIntents FileUploadIntent[] @relation("FileUploadIntentTarget")
+  childUploadIntents   FileUploadIntent[] @relation("FileUploadIntentParent")
   lock                 FileLock?
   accessGrants         FileAccessGrant[]
   activities           FileActivity[]
   knowledgeSources     KnowledgeSource[]
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  searchDocuments      SearchDocument[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@unique([organizationId, parentId, name])
   @@index([organizationId, projectId, parentId, deletedAt])
@@ -2103,27 +2122,65 @@ model FileNode {
 }
 
 model FileVersion {
-  id              String               @id @default(cuid())
-  fileNodeId      String
-  uploadedById    String
-  version         Int
-  storageProvider String
-  storageKey      String               @unique
-  mimeType        String
-  sizeBytes       BigInt
-  checksumSha256  String
-  scanStatus      FileScanStatus       @default(PENDING)
-  scanProviderRef String?
-  scannedAt       DateTime?
-  fileNode        FileNode             @relation(fields: [fileNodeId], references: [id], onDelete: Cascade)
-  uploadedBy      User                 @relation("FileVersionUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
-  chatMessages    ChatMessageFile[]
-  workSubmissions WorkSubmissionFile[]
-  createdAt       DateTime             @default(now())
+  id                String               @id @default(cuid())
+  fileNodeId        String
+  uploadedById      String
+  version           Int
+  storageProvider   String
+  storageKey        String               @unique
+  mimeType          String
+  sizeBytes         BigInt
+  checksumSha256    String
+  scanStatus        FileScanStatus       @default(PENDING)
+  scanProviderRef   String?
+  scannedAt         DateTime?
+  uploadIntentId    String?              @unique
+  fileNode          FileNode             @relation(fields: [fileNodeId], references: [id], onDelete: Cascade)
+  uploadedBy        User                 @relation("FileVersionUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadIntent      FileUploadIntent?    @relation(fields: [uploadIntentId], references: [id], onDelete: SetNull)
+  projectAttachment ProjectAttachment?
+  chatMessages      ChatMessageFile[]
+  workSubmissions   WorkSubmissionFile[]
+  createdAt         DateTime             @default(now())
 
   @@unique([fileNodeId, version])
   @@index([fileNodeId, createdAt])
   @@index([scanStatus, createdAt])
+}
+
+model FileUploadIntent {
+  id                  String                 @id @default(cuid())
+  organizationId      String
+  projectId           String?
+  parentId            String?
+  fileNodeId          String?
+  createdById         String
+  name                String
+  mimeType            String
+  sizeBytes           BigInt
+  checksumSha256      String
+  storageProvider     String
+  storageKey          String                 @unique
+  status              FileUploadIntentStatus @default(ISSUED)
+  expectedFileVersion Int                    @default(0)
+  providerReference   String?
+  providerEvidence    Json?
+  expiresAt           DateTime
+  completedAt         DateTime?
+  failedAt            DateTime?
+  failureCode         String?
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project             Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent              FileNode?              @relation("FileUploadIntentParent", fields: [parentId], references: [id], onDelete: Cascade)
+  fileNode            FileNode?              @relation("FileUploadIntentTarget", fields: [fileNodeId], references: [id], onDelete: Cascade)
+  createdBy           User                   @relation("FileUploadIntentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  completedVersion    FileVersion?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([organizationId, status, expiresAt])
+  @@index([fileNodeId, status, createdAt])
+  @@index([createdById, createdAt])
 }
 
 model FileLock {
@@ -2362,20 +2419,47 @@ model KnowledgeSource {
 }
 
 model SearchDocument {
-  id             String       @id @default(cuid())
-  organizationId String
-  entityType     String
-  entityId       String
-  title          String
-  body           String
-  locale         String       @default("en-AE")
-  metadata       Json?
-  indexedAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                 String       @id @default(cuid())
+  organizationId     String
+  entityType         String
+  entityId           String
+  title              String
+  body               String
+  locale             String       @default("en-AE")
+  projectId          String?
+  fileNodeId         String?
+  requiredPermission String?
+  sourceUpdatedAt    DateTime
+  generation         String?
+  deletedAt          DateTime?
+  metadata           Json?
+  indexedAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project            Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileNode           FileNode?    @relation(fields: [fileNodeId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, entityType, entityId])
   @@index([organizationId, entityType, indexedAt])
   @@index([organizationId, locale])
+  @@index([organizationId, projectId, deletedAt])
+  @@index([organizationId, requiredPermission, deletedAt])
+  @@index([fileNodeId])
+}
+
+model SearchIndexCheckpoint {
+  organizationId    String       @id
+  status            String       @default("IDLE")
+  lastIncrementalAt DateTime?
+  lastFullReindexAt DateTime?
+  lastIndexedAt     DateTime?
+  documentCount     Int          @default(0)
+  lastError         String?
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([status, updatedAt])
 }
 
 model SavedSearch {
@@ -2827,6 +2911,37 @@ model AnalyticsDailyMetric {
   @@index([organizationId, metric, date])
 }
 
+enum AnalyticsAggregationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model AnalyticsAggregationRun {
+  id                  String                     @id @default(cuid())
+  organizationId      String
+  requestedById       String?
+  rangeStart          DateTime
+  rangeEnd            DateTime
+  timezone            String                     @default("Asia/Dubai")
+  status              AnalyticsAggregationStatus @default(PENDING)
+  idempotencyKey      String
+  processedEventCount Int                        @default(0)
+  metricCount         Int                        @default(0)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  errorMessage        String?
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy         User?                      @relation("AnalyticsRunRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, rangeStart, rangeEnd])
+}
+
 model DataExportJob {
   id             String           @id @default(cuid())
   organizationId String
@@ -2849,26 +2964,30 @@ model DataExportJob {
 }
 
 model BackgroundJob {
-  id             String              @id @default(cuid())
-  organizationId String?
-  type           String
-  status         BackgroundJobStatus @default(PENDING)
-  payload        Json
-  attempts       Int                 @default(0)
-  maxAttempts    Int                 @default(10)
-  availableAt    DateTime            @default(now())
-  lockedAt       DateTime?
-  lockedBy       String?
-  lastError      String?
-  completedAt    DateTime?
-  organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deadLetter     DeadLetterJob?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id               String              @id @default(cuid())
+  organizationId   String?
+  type             String
+  status           BackgroundJobStatus @default(PENDING)
+  payload          Json
+  attempts         Int                 @default(0)
+  maxAttempts      Int                 @default(10)
+  availableAt      DateTime            @default(now())
+  deduplicationKey String?             @unique
+  lockedAt         DateTime?
+  lockedBy         String?
+  leaseExpiresAt   DateTime?
+  heartbeatAt      DateTime?
+  lastError        String?
+  completedAt      DateTime?
+  organization     Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deadLetter       DeadLetterJob?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([status, availableAt])
   @@index([organizationId, type, createdAt])
   @@index([lockedAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model DeadLetterJob {
