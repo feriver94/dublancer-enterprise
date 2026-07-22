@@ -1,127 +1,107 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Card } from "@/components/ui";
+import type { AppLocale } from "@/i18n/config";
 import { apiMutation } from "@/lib/client/api-client";
 import { useApiResource } from "@/lib/client/use-api-resource";
+import { formatAed, formatUaeDate, formatUaeDateTime } from "@/lib/locale/formatters";
 
-type Decision = { id: string; decision: string; note: string; decidedAt: string };
-type Submission = { id: string; status: string; version: number; revision: number; note?: string | null; submittedAt?: string | null; submittedBy: { displayName: string }; decisions: Decision[] };
-type Milestone = { id: string; title: string; description?: string | null; status: string; version: number; amountMinor: string; currency: string; dueAt?: string | null; submissions: Submission[] };
+type Submission = { id: string; status: string; version: number; revision: number; note?: string | null; submittedBy: { displayName: string }; decisions: Array<{ id: string; decision: string; note?: string | null }> };
+type Milestone = { id: string; title: string; description?: string | null; status: string; version: number; amountMinor: string; currency: string; dueAt?: string | null; closedAt?: string | null; closeoutNote?: string | null; submissions: Submission[] };
+type Amendment = { id: string; summary: string; changes: unknown; status: string; version: number; rowVersion: number; proposedBy: { id: string; displayName: string }; decidedBy?: { displayName: string } | null; decisionNote?: string | null };
+type Dispute = { id: string; category: string; status: string; reason: string; version: number; resolution?: unknown; events: Array<{ id: string; status: string; note?: string | null; createdAt: string; actor: { displayName: string } }> };
+type Review = { id: string; reviewerParty: string; rating: number; title?: string | null; body?: string | null; reviewer: { displayName: string }; publishedAt?: string | null };
 type Contract = {
-  id: string; title: string; status: string; version: number; valueMinor: string; currency: string;
-  taxRateBasisPoints: number; platformFeeBasisPoints: number; startsAt?: string | null; endsAt?: string | null;
-  viewerParty: "CLIENT" | "PROVIDER"; termsHash: string; terms: unknown;
-  project?: { id: string; title: string } | null; listing?: { id: string; title: string } | null;
-  acceptances: Array<{ id: string; party: string; method: string; termsHash: string; acceptedAt: string; acceptedBy: { displayName: string } }>;
-  milestones: Milestone[];
-  amendments: Array<{ id: string; summary: string; status: string; version: number }>;
-  disputes: Array<{ id: string; category: string; status: string; reason: string }>;
+  id: string; title: string; status: string; version: number; valueMinor: string; currency: string; taxRateBasisPoints: number; platformFeeBasisPoints: number;
+  viewerParty: "CLIENT" | "PROVIDER"; termsHash: string; project?: { id: string; title: string } | null; listing?: { id: string; title: string } | null;
+  acceptances: Array<{ id: string; party: string; method: string; acceptedAt: string; acceptedBy: { displayName: string } }>;
+  milestones: Milestone[]; amendments: Amendment[]; disputes: Dispute[]; reviews: Review[];
   invoices: Array<{ id: string; number: string; status: string; totalMinor: string; currency: string }>;
   transactions: Array<{ id: string; status: string; amountMinor: string; currency: string }>;
 };
 
-const allowed: Record<string, string[]> = {
-  DRAFT: ["PENDING_SIGNATURES", "TERMINATED"],
-  PENDING_SIGNATURES: ["TERMINATED"],
-  ACTIVE: ["PAUSED", "COMPLETED", "TERMINATED", "DISPUTED"],
-  PAUSED: ["ACTIVE", "TERMINATED", "DISPUTED"],
-  DISPUTED: ["ACTIVE", "TERMINATED"],
-};
-const money = (minor: string, currency: string) => new Intl.NumberFormat("en-AE", { style: "currency", currency }).format(Number(minor) / 100);
+const transitions: Record<string, string[]> = { DRAFT: ["PENDING_SIGNATURES", "TERMINATED"], PENDING_SIGNATURES: ["TERMINATED"], ACTIVE: ["PAUSED", "TERMINATED", "DISPUTED"], PAUSED: ["ACTIVE", "TERMINATED", "DISPUTED"], DISPUTED: ["ACTIVE", "TERMINATED"] };
+const disputeTransitions: Record<string, string[]> = { OPEN: ["EVIDENCE_COLLECTION", "CANCELLED"], EVIDENCE_COLLECTION: ["MEDIATION", "RESOLVED", "CANCELLED"], MEDIATION: ["RESOLVED", "CANCELLED"], RESOLVED: ["CLOSED", "MEDIATION"], CLOSED: [], CANCELLED: [] };
 
 export default function ContractDetailClient({ contractId }: { contractId: string }) {
+  const t = useTranslations("Contracts");
+  const common = useTranslations("Common");
+  const status = useTranslations("Status");
+  const locale = useLocale() as AppLocale;
   const contract = useApiResource<Contract>(`/api/contracts/${contractId}`);
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const label = (value: string) => status.has(value) ? status(value) : value.replaceAll("_", " ");
+  const money = (minor: string) => formatAed(Number(minor) / 100, locale);
 
-  async function mutate(label: string, operation: () => Promise<unknown>, success: string) {
-    setPending(label); setError(""); setNotice("");
-    try { await operation(); setNotice(success); await contract.refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "The contract action failed."); }
+  async function mutate(key: string, operation: () => Promise<unknown>, success: string) {
+    setPending(key); setError(""); setNotice("");
+    try { await operation(); setNotice(success); await contract.refresh(); return true; }
+    catch (reason) { setError(reason instanceof Error ? reason.message : t("actionFailed")); return false; }
     finally { setPending(""); }
   }
 
-  async function transition(status: string) {
-    if (["TERMINATED", "COMPLETED"].includes(status) && !window.confirm(`Move this contract to ${status}?`)) return;
-    await mutate(`status:${status}`, () => apiMutation(`/api/contracts/${contractId}`, "PATCH", { status, expectedVersion: contract.data?.version }), `Contract moved to ${status.replaceAll("_", " ")}.`);
+  function parseJson(value: FormDataEntryValue | null, optional = false) {
+    const text = String(value ?? "").trim();
+    if (!text && optional) return undefined;
+    try { return JSON.parse(text || "{}"); } catch { throw new Error(t("invalidJson")); }
+  }
+
+  async function transition(next: string) {
+    if (next === "TERMINATED" && !window.confirm(`${label(next)}?`)) return;
+    await mutate(`status:${next}`, () => apiMutation(`/api/contracts/${contractId}`, "PATCH", { status: next, expectedVersion: contract.data?.version }), common("completed"));
   }
 
   async function accept() {
     const row = contract.data;
-    if (!row || !window.confirm("Confirm that you have reviewed and accept the current contract terms?")) return;
-    await mutate("accept", () => apiMutation(`/api/contracts/${contractId}/acceptances`, "POST", {
-      expectedVersion: row.version,
-      party: row.viewerParty,
-      method: "CLICKWRAP",
-      termsHash: row.termsHash,
-    }), "Acceptance evidence recorded.");
+    if (!row || !window.confirm(t("acceptConfirm"))) return;
+    await mutate("accept", () => apiMutation(`/api/contracts/${contractId}/acceptances`, "POST", { expectedVersion: row.version, party: row.viewerParty, method: "CLICKWRAP", termsHash: row.termsHash }), t("acceptanceRecorded"));
   }
 
-  async function createMilestone(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    await mutate("milestone:create", () => apiMutation(`/api/contracts/${contractId}/milestones`, "POST", {
-      title: data.get("title"), description: data.get("description") || undefined,
-      amountMinor: String(Math.round(Number(data.get("amount")) * 100)), currency: "AED",
-      dueAt: data.get("dueAt") || undefined,
-    }), "Milestone created.");
-    form.reset();
+  async function formMutation(event: FormEvent<HTMLFormElement>, key: string, path: string, method: "POST" | "PATCH", body: (data: FormData) => unknown, success: string) {
+    event.preventDefault(); const form = event.currentTarget;
+    try { if (await mutate(key, () => apiMutation(path, method, body(new FormData(form))), success)) form.reset(); } catch (reason) { setError(reason instanceof Error ? reason.message : t("actionFailed")); }
   }
 
-  async function submitMilestone(event: FormEvent<HTMLFormElement>, milestone: Milestone) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    await mutate(`submit:${milestone.id}`, () => apiMutation(`/api/contracts/${contractId}/milestones/${milestone.id}/submissions`, "POST", {
-      note: data.get("note"), expectedMilestoneVersion: milestone.version,
-    }), "Milestone submitted for client review.");
-  }
-
-  async function decideMilestone(event: FormEvent<HTMLFormElement>, milestone: Milestone, submission: Submission) {
-    event.preventDefault(); const data = new FormData(event.currentTarget); const decision = String(data.get("decision"));
-    if (!window.confirm(`Record the immutable ${decision.replaceAll("_", " ")} decision?`)) return;
-    await mutate(`decide:${submission.id}`, () => apiMutation(`/api/contracts/${contractId}/milestones/${milestone.id}/submissions`, "PATCH", {
-      submissionId: submission.id, decision, note: data.get("note"),
-      expectedMilestoneVersion: milestone.version, expectedSubmissionVersion: submission.version,
-    }), "Immutable milestone decision recorded.");
-  }
-
-  if (contract.loading) return <p className="enterprise-loading py-24">Loading contract…</p>;
-  if (!contract.data) return <main className="py-24"><p className="enterprise-error">{contract.error || "Contract not found."}</p><Link href="/contracts">Return to contracts</Link></main>;
+  if (contract.loading) return <p className="enterprise-loading py-24">{t("loading")}</p>;
+  if (!contract.data) return <main className="py-24"><p className="enterprise-error">{contract.error || t("notFound")}</p><Link href="/contracts">{t("return")}</Link></main>;
   const row = contract.data;
   const accepted = row.acceptances.some((item) => item.party === row.viewerParty);
 
   return <main className="py-12">
-    <Link href="/contracts" className="font-bold text-[#009A44]">← Contracts</Link>
-    <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <Link href="/contracts" className="font-bold text-[#009A44]">{t("back")}</Link>
+    <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_350px]">
       <section className="grid gap-6">
-        <Card variant="elevated">
-          <div className="flex flex-wrap justify-between gap-4"><div><p className="font-bold text-[#009A44]">{row.project?.title ?? row.listing?.title ?? "Enterprise agreement"}</p><h1 className="mt-2 text-4xl font-bold text-[#0F4C5C]">{row.title}</h1><p className="mt-2 text-sm text-slate-500">You are acting as the {row.viewerParty.toLowerCase()}.</p></div><Badge variant={row.status === "ACTIVE" ? "success" : "info"}>{row.status.replaceAll("_", " ")}</Badge></div>
-          <dl className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4"><Metric label="Value" value={money(row.valueMinor, row.currency)} /><Metric label="Tax" value={`${row.taxRateBasisPoints / 100}%`} /><Metric label="Platform fee" value={`${row.platformFeeBasisPoints / 100}%`} /><Metric label="Milestones" value={String(row.milestones.length)} /></dl>
+        <Card variant="elevated"><div className="flex flex-wrap justify-between gap-4"><div><p className="font-bold text-[#009A44]">{row.project?.title ?? row.listing?.title ?? t("agreement")}</p><h1 className="mt-2 text-4xl font-bold text-[#0F4C5C]">{row.title}</h1><p className="mt-2 text-sm text-slate-500">{t("partyContext", { party: label(row.viewerParty).toLocaleLowerCase(locale) })}</p></div><Badge variant={row.status === "ACTIVE" || row.status === "COMPLETED" ? "success" : "info"}>{label(row.status)}</Badge></div><dl className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4"><Metric label={t("value")} value={money(row.valueMinor)} /><Metric label={t("tax")} value={`${row.taxRateBasisPoints / 100}%`} /><Metric label={t("platformFee")} value={`${row.platformFeeBasisPoints / 100}%`} /><Metric label={t("milestones")} value={String(row.milestones.length)} /></dl></Card>
+
+        <Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("signatureEvidence")}</h2><p className="mt-2 break-all text-xs text-slate-500">{t("termsHash")}: {row.termsHash}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{["CLIENT", "PROVIDER"].map((party) => { const evidence = row.acceptances.find((item) => item.party === party); return <div key={party} className="rounded-xl border p-4"><strong>{label(party)}</strong>{evidence ? <p className="mt-1 text-sm text-slate-600">{t("acceptedBy", { name: evidence.acceptedBy.displayName })}<br />{formatUaeDateTime(evidence.acceptedAt, locale)}<br />{label(evidence.method)}</p> : <p className="mt-1 text-sm text-slate-500">{t("awaitingAcceptance")}</p>}</div>; })}</div>{row.status === "PENDING_SIGNATURES" && !accepted ? <Button className="mt-5" disabled={Boolean(pending)} onClick={() => void accept()}>{pending === "accept" ? t("recordingAcceptance") : t("acceptAs", { party: label(row.viewerParty).toLocaleLowerCase(locale) })}</Button> : null}</Card>
+
+        <Card variant="elevated"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold uppercase tracking-widest text-[#009A44]">{t("executionEvidence")}</p><h2 className="text-xl font-bold text-[#0F4C5C]">{t("milestonesAndSubmissions")}</h2></div><Badge variant="info">{label(row.viewerParty)}</Badge></div>
+          {row.viewerParty === "CLIENT" && ["PENDING_SIGNATURES", "ACTIVE"].includes(row.status) ? <form className="enterprise-form mt-5 rounded-xl bg-slate-50 p-4" onSubmit={(event) => void formMutation(event, "milestone:create", `/api/contracts/${contractId}/milestones`, "POST", (data) => ({ title: data.get("title"), description: data.get("description") || undefined, amountMinor: String(Math.round(Number(data.get("amount")) * 100)), currency: "AED", dueAt: data.get("dueAt") || undefined }), t("createMilestone"))}><h3 className="font-bold">{t("createMilestone")}</h3><label>{common("title")}<input name="title" minLength={2} required /></label><label>{common("description")}<textarea name="description" /></label><div className="grid gap-3 sm:grid-cols-2"><label>{t("amountAed")}<input name="amount" type="number" min="0" step="0.01" required /></label><label>{t("dueDate")}<input name="dueAt" type="date" /></label></div><Button disabled={Boolean(pending)}>{t("createMilestone")}</Button></form> : null}
+          <div className="mt-5 grid gap-4">{row.milestones.length ? row.milestones.map((milestone) => { const active = milestone.submissions.find((item) => ["SUBMITTED", "IN_REVIEW"].includes(item.status)); return <article key={milestone.id} className="rounded-2xl border p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-bold text-[#0F4C5C]">{milestone.title}</h3><p className="text-sm text-slate-500">{money(milestone.amountMinor)}{milestone.dueAt ? ` · ${formatUaeDate(milestone.dueAt, locale)}` : ""}</p></div><Badge variant={["ACCEPTED", "RELEASED"].includes(milestone.status) ? "success" : "info"}>{label(milestone.status)}</Badge></div>{milestone.description ? <p className="mt-3 text-sm">{milestone.description}</p> : null}
+            {row.viewerParty === "PROVIDER" && row.status === "ACTIVE" && ["PLANNED", "FUNDED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(milestone.status) && !active ? <form className="enterprise-form mt-4" onSubmit={(event) => void formMutation(event, `submit:${milestone.id}`, `/api/contracts/${contractId}/milestones/${milestone.id}/submissions`, "POST", (data) => ({ note: data.get("note"), expectedMilestoneVersion: milestone.version }), t("submittedForReview"))}><label>{t("submissionNote")}<textarea name="note" minLength={3} required placeholder={t("submissionPlaceholder")} /></label><Button disabled={Boolean(pending)}>{t("submitMilestone")}</Button></form> : null}
+            {milestone.submissions.map((submission) => <div key={submission.id} className="mt-3 rounded-xl bg-slate-50 p-4"><div className="flex justify-between gap-3"><strong>{t("revision", { number: submission.revision })} · {submission.submittedBy.displayName}</strong><Badge variant={submission.status === "ACCEPTED" ? "success" : "info"}>{label(submission.status)}</Badge></div>{submission.note ? <p className="mt-2 text-sm">{submission.note}</p> : null}{submission.decisions.map((decision) => <p key={decision.id} className="mt-2 border-s-4 border-[#009A44] ps-3 text-sm"><strong>{label(decision.decision)}</strong> · {decision.note}</p>)}{row.viewerParty === "CLIENT" && active?.id === submission.id ? <form className="enterprise-form mt-4" onSubmit={(event) => void formMutation(event, `decide:${submission.id}`, `/api/contracts/${contractId}/milestones/${milestone.id}/submissions`, "PATCH", (data) => ({ submissionId: submission.id, decision: data.get("decision"), note: data.get("note"), expectedMilestoneVersion: milestone.version, expectedSubmissionVersion: submission.version }), t("decisionRecorded"))}><label>{t("decision")}<select name="decision"><option value="APPROVED">{common("approve")}</option><option value="REVISION_REQUESTED">{t("requestRevision")}</option><option value="REJECTED">{common("reject")}</option></select></label><label>{t("decisionNote")}<textarea name="note" minLength={3} required /></label><Button disabled={Boolean(pending)}>{t("recordDecision")}</Button></form> : null}</div>)}
+            {row.viewerParty === "CLIENT" && ["RELEASED", "CANCELLED"].includes(milestone.status) && !milestone.closedAt ? <form className="enterprise-form mt-4" onSubmit={(event) => void formMutation(event, `closeout:${milestone.id}`, `/api/contracts/${contractId}/milestones/${milestone.id}/closeout`, "POST", (data) => ({ note: data.get("note"), expectedVersion: milestone.version }), t("closeoutRecorded"))}><label>{t("closeoutNote")}<textarea name="note" minLength={3} required /></label><Button>{t("closeout")}</Button></form> : null}{milestone.closedAt ? <p className="mt-3 text-sm text-[#009A44]">{t("closeoutRecorded")} · {formatUaeDateTime(milestone.closedAt, locale)}</p> : null}</article>; }) : <p className="enterprise-empty">{t("noMilestones")}</p>}</div>
         </Card>
-        <Card variant="elevated">
-          <h2 className="text-xl font-bold text-[#0F4C5C]">Signature evidence</h2>
-          <p className="mt-2 break-all text-xs text-slate-500">Terms SHA-256: {row.termsHash}</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">{["CLIENT", "PROVIDER"].map((party) => { const evidence = row.acceptances.find((item) => item.party === party); return <div key={party} className="rounded-xl border p-4"><strong>{party}</strong>{evidence ? <p className="mt-1 text-sm text-slate-600">Accepted by {evidence.acceptedBy.displayName}<br />{new Intl.DateTimeFormat("en-AE", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Dubai" }).format(new Date(evidence.acceptedAt))}<br />{evidence.method.replaceAll("_", " ")}</p> : <p className="mt-1 text-sm text-slate-500">Awaiting acceptance</p>}</div> })}</div>
-          {row.status === "PENDING_SIGNATURES" && !accepted ? <Button className="mt-5" disabled={Boolean(pending)} onClick={() => void accept()}>{pending === "accept" ? "Recording acceptance…" : `Accept as ${row.viewerParty.toLowerCase()}`}</Button> : null}
-        </Card>
-        <Milestones contract={row} pending={pending} onCreate={createMilestone} onSubmit={submitMilestone} onDecide={decideMilestone} />
-        <RecordSection title="Amendments" empty="No amendments." rows={row.amendments.map((item) => ({ id: item.id, title: `Version ${item.version}: ${item.summary}`, detail: item.status }))} />
-        <RecordSection title="Disputes" empty="No disputes." rows={row.disputes.map((item) => ({ id: item.id, title: item.category, detail: `${item.status} · ${item.reason}` }))} />
-        <RecordSection title="Invoices and transactions" empty="No financial records." rows={[...row.invoices.map((item) => ({ id: item.id, title: `Invoice ${item.number}`, detail: `${item.status} · ${money(item.totalMinor, item.currency)}` })), ...row.transactions.map((item) => ({ id: item.id, title: "Transaction", detail: `${item.status} · ${money(item.amountMinor, item.currency)}` }))]} />
+
+        <Card variant="elevated"><h2 className="mb-4 text-xl font-bold text-[#0F4C5C]">{t("amendments")}</h2>{["ACTIVE", "PAUSED"].includes(row.status) ? <form className="enterprise-form mb-5" onSubmit={(event) => void formMutation(event, "amendment:create", `/api/contracts/${contractId}/amendments`, "POST", (data) => ({ summary: data.get("summary"), changes: parseJson(data.get("changes")), submit: true }), t("amendmentProposed"))}><label>{t("amendmentSummary")}<input name="summary" minLength={3} required /></label><label>{t("changesJson")}<textarea name="changes" defaultValue={'{"endsAt":"2026-12-31T20:00:00.000Z"}'} required /></label><small>{t("changesHelp")}</small><Button>{t("proposeAmendment")}</Button></form> : null}<div className="grid gap-3">{row.amendments.length ? row.amendments.map((item) => <article key={item.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><strong>{t("revision", { number: item.version })}: {item.summary}</strong><Badge variant={item.status === "ACCEPTED" ? "success" : "info"}>{label(item.status)}</Badge></div><pre className="mt-2 overflow-auto rounded-lg bg-slate-50 p-2 text-xs">{JSON.stringify(item.changes, null, 2)}</pre>{item.status === "PROPOSED" ? <form className="enterprise-form mt-3" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void mutate(`amendment:${item.id}`, () => apiMutation(`/api/contracts/${contractId}/amendments/${item.id}/decision`, "PATCH", { decision: data.get("decision"), note: data.get("note"), expectedAmendmentVersion: item.rowVersion, expectedContractVersion: row.version }), t("amendmentDecided")); }}><label>{t("decisionNote")}<textarea name="note" minLength={3} required /></label><div className="flex gap-2"><Button name="decision" value="ACCEPT">{t("acceptAmendment")}</Button><Button name="decision" value="REJECT" variant="outline">{t("rejectAmendment")}</Button></div></form> : item.decisionNote ? <p className="mt-2 text-sm">{item.decisionNote}</p> : null}</article>) : <p className="enterprise-empty">{t("noAmendments")}</p>}</div></Card>
+
+        <Card variant="elevated"><h2 className="mb-4 text-xl font-bold text-[#0F4C5C]">{t("disputes")}</h2>{["ACTIVE", "PAUSED", "DISPUTED"].includes(row.status) && !row.disputes.some((item) => ["OPEN", "EVIDENCE_COLLECTION", "MEDIATION"].includes(item.status)) ? <form className="enterprise-form mb-5" onSubmit={(event) => void formMutation(event, "dispute:create", `/api/contracts/${contractId}/disputes`, "POST", (data) => ({ category: data.get("category"), reason: data.get("reason"), evidence: parseJson(data.get("evidence"), true) }), t("disputeOpened"))}><label>{t("category")}<input name="category" minLength={2} required /></label><label>{t("reason")}<textarea name="reason" minLength={10} required /></label><label>{t("evidenceJson")}<textarea name="evidence" /></label><Button>{t("openDispute")}</Button></form> : null}<div className="grid gap-3">{row.disputes.length ? row.disputes.map((item) => <article key={item.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><strong>{item.category}</strong><Badge variant={["RESOLVED", "CLOSED"].includes(item.status) ? "success" : "info"}>{label(item.status)}</Badge></div><p className="mt-2 text-sm">{item.reason}</p>{item.events.map((event) => <p key={event.id} className="mt-2 border-s-2 ps-3 text-xs text-slate-500">{label(event.status)} · {event.actor.displayName} · {formatUaeDateTime(event.createdAt, locale)}{event.note ? ` · ${event.note}` : ""}</p>)}{(disputeTransitions[item.status] ?? []).length ? <form className="enterprise-form mt-3" onSubmit={(event) => void formMutation(event, `dispute:${item.id}`, `/api/contracts/${contractId}/disputes/${item.id}`, "PATCH", (data) => ({ status: data.get("status"), note: data.get("note"), evidence: parseJson(data.get("evidence"), true), resolution: parseJson(data.get("resolution"), true), expectedVersion: item.version }), t("disputeAdvanced"))}><label>{t("nextState")}<select name="status">{disputeTransitions[item.status].map((value) => <option value={value} key={value}>{label(value)}</option>)}</select></label><label>{t("decisionNote")}<textarea name="note" minLength={3} required /></label><label>{t("evidenceJson")}<textarea name="evidence" /></label><label>{t("resolutionJson")}<textarea name="resolution" /></label><Button>{t("advanceDispute")}</Button></form> : null}</article>) : <p className="enterprise-empty">{t("noDisputes")}</p>}</div></Card>
+
+        <Card variant="elevated"><h2 className="mb-4 text-xl font-bold text-[#0F4C5C]">{t("reviews")}</h2>{row.status === "COMPLETED" && !row.reviews.some((review) => review.reviewerParty === row.viewerParty) ? <form className="enterprise-form mb-5" onSubmit={(event) => void formMutation(event, "review:create", `/api/contracts/${contractId}/reviews`, "POST", (data) => ({ rating: Number(data.get("rating")), title: data.get("title") || undefined, body: data.get("body") || undefined }), t("reviewPublished"))}><label>{t("rating")}<select name="rating">{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} / 5</option>)}</select></label><label>{common("title")}<input name="title" /></label><label>{t("reviewBody")}<textarea name="body" minLength={3} /></label><Button>{t("writeReview")}</Button></form> : null}{row.reviews.length ? <div className="grid gap-3">{row.reviews.map((review) => <article key={review.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><strong>{review.title || review.reviewer.displayName}</strong><span aria-label={`${review.rating} / 5`}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span></div><p className="mt-2 text-sm">{review.body}</p></article>)}</div> : <p className="enterprise-empty">{t("noReviews")}</p>}</Card>
+
+        <RecordSection title={t("financeRecords")} empty={t("noFinanceRecords")} rows={[...row.invoices.map((item) => ({ id: item.id, title: t("invoice", { number: item.number }), detail: `${label(item.status)} · ${money(item.totalMinor)}` })), ...row.transactions.map((item) => ({ id: item.id, title: t("transaction"), detail: `${label(item.status)} · ${money(item.amountMinor)}` }))]} />
       </section>
-      <aside><Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">Contract lifecycle</h2><p className="mt-2 text-sm text-slate-600">Activation requires both parties to accept the exact contract terms.</p>{error ? <p className="enterprise-error mt-4" role="alert">{error}</p> : null}{notice ? <p className="enterprise-notice mt-4" role="status">{notice}</p> : null}<div className="mt-5 grid gap-3">{(allowed[row.status] ?? []).filter((status) => row.viewerParty === "CLIENT" || !["PENDING_SIGNATURES", "COMPLETED", "TERMINATED"].includes(status)).map((status) => <Button key={status} type="button" variant={status === "ACTIVE" || status === "COMPLETED" ? "primary" : "outline"} disabled={Boolean(pending)} onClick={() => void transition(status)}>{pending === `status:${status}` ? "Updating…" : status.replaceAll("_", " ")}</Button>)}{!(allowed[row.status] ?? []).length ? <p className="enterprise-empty">No further transitions are currently available.</p> : null}</div></Card></aside>
+
+      <aside className="grid content-start gap-6"><Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("lifecycle")}</h2><p className="mt-2 text-sm text-slate-600">{t("lifecycleHelp")}</p>{error ? <p className="enterprise-error mt-4" role="alert">{error}</p> : null}{notice ? <p className="enterprise-notice mt-4" role="status">{notice}</p> : null}<div className="mt-5 grid gap-3">{(transitions[row.status] ?? []).filter((next) => row.viewerParty === "CLIENT" || !["PENDING_SIGNATURES", "TERMINATED"].includes(next)).map((next) => <Button key={next} type="button" variant={next === "ACTIVE" ? "primary" : "outline"} disabled={Boolean(pending)} onClick={() => void transition(next)}>{label(next)}</Button>)}{!(transitions[row.status] ?? []).length ? <p className="enterprise-empty">{t("noTransitions")}</p> : null}</div></Card>
+        {row.viewerParty === "CLIENT" && row.status === "ACTIVE" ? <Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("finalCompletion")}</h2><form className="enterprise-form mt-4" onSubmit={(event) => { if (!window.confirm(t("completionConfirm"))) { event.preventDefault(); return; } void formMutation(event, "contract:complete", `/api/contracts/${contractId}/completion`, "POST", (data) => ({ note: data.get("note"), checklist: { milestoneCloseout: data.get("confirmed") === "on", deliveryAccepted: data.get("confirmed") === "on", disputesResolved: data.get("confirmed") === "on" }, expectedVersion: row.version }), t("contractCompleted")); }}><label>{t("completionNote")}<textarea name="note" minLength={10} required /></label><label className="flex-row"><input name="confirmed" type="checkbox" required />{t("completionChecklist")}</label><Button>{t("completeContract")}</Button></form></Card> : null}
+      </aside>
     </div>
   </main>;
-}
-
-function Milestones({ contract, pending, onCreate, onSubmit, onDecide }: { contract: Contract; pending: string; onCreate: (event: FormEvent<HTMLFormElement>) => void; onSubmit: (event: FormEvent<HTMLFormElement>, milestone: Milestone) => void; onDecide: (event: FormEvent<HTMLFormElement>, milestone: Milestone, submission: Submission) => void }) {
-  return <Card variant="elevated"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold uppercase tracking-widest text-[#009A44]">Execution evidence</p><h2 className="text-xl font-bold text-[#0F4C5C]">Milestones and submissions</h2></div><Badge variant="info">{contract.viewerParty}</Badge></div>
-    {contract.viewerParty === "CLIENT" && ["PENDING_SIGNATURES", "ACTIVE"].includes(contract.status) ? <form className="enterprise-form mt-5 rounded-xl bg-slate-50 p-4" onSubmit={onCreate}><h3 className="font-bold">Create milestone</h3><label>Title<input name="title" minLength={2} required /></label><label>Description<textarea name="description" /></label><div className="grid gap-3 sm:grid-cols-2"><label>Amount (AED)<input name="amount" type="number" min="0" step="0.01" required /></label><label>Due date<input name="dueAt" type="date" /></label></div><Button disabled={Boolean(pending)}>{pending === "milestone:create" ? "Creating…" : "Create milestone"}</Button></form> : null}
-    <div className="mt-5 grid gap-4">{contract.milestones.length ? contract.milestones.map((milestone) => { const active = milestone.submissions.find((item) => ["SUBMITTED", "IN_REVIEW"].includes(item.status)); return <article key={milestone.id} className="rounded-2xl border p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-bold text-[#0F4C5C]">{milestone.title}</h3><p className="text-sm text-slate-500">{money(milestone.amountMinor, milestone.currency)}{milestone.dueAt ? ` · due ${new Intl.DateTimeFormat("en-AE", { dateStyle: "medium" }).format(new Date(milestone.dueAt))}` : ""}</p></div><Badge variant={milestone.status === "ACCEPTED" || milestone.status === "RELEASED" ? "success" : "info"}>{milestone.status.replaceAll("_", " ")}</Badge></div>{milestone.description ? <p className="mt-3 text-sm text-slate-700">{milestone.description}</p> : null}
-      {contract.viewerParty === "PROVIDER" && contract.status === "ACTIVE" && ["PLANNED", "FUNDED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(milestone.status) && !active ? <form className="enterprise-form mt-4" onSubmit={(event) => onSubmit(event, milestone)}><label>Submission note<textarea name="note" minLength={3} required placeholder="Describe the completed work and supporting evidence." /></label><Button disabled={Boolean(pending)}>{pending === `submit:${milestone.id}` ? "Submitting…" : "Submit milestone"}</Button></form> : null}
-      {milestone.submissions.length ? <div className="mt-4 grid gap-3">{milestone.submissions.map((submission) => <div key={submission.id} className="rounded-xl bg-slate-50 p-4"><div className="flex justify-between gap-3"><strong>Revision {submission.revision} · {submission.submittedBy.displayName}</strong><Badge variant={submission.status === "ACCEPTED" ? "success" : "info"}>{submission.status}</Badge></div>{submission.note ? <p className="mt-2 text-sm text-slate-700">{submission.note}</p> : null}{submission.decisions.map((decision) => <p key={decision.id} className="mt-2 border-s-4 border-[#009A44] ps-3 text-sm"><strong>{decision.decision.replaceAll("_", " ")}</strong> · {decision.note}</p>)}{contract.viewerParty === "CLIENT" && active?.id === submission.id ? <form className="enterprise-form mt-4" onSubmit={(event) => onDecide(event, milestone, submission)}><label>Decision<select name="decision" defaultValue="APPROVED"><option value="APPROVED">Approve</option><option value="REVISION_REQUESTED">Request revision</option><option value="REJECTED">Reject</option></select></label><label>Decision note<textarea name="note" minLength={3} required /></label><Button disabled={Boolean(pending)}>{pending === `decide:${submission.id}` ? "Recording…" : "Record immutable decision"}</Button></form> : null}</div>)}</div> : null}</article> }) : <p className="enterprise-empty">No milestones.</p>}</div>
-  </Card>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) { return <div><dt className="text-sm text-slate-500">{label}</dt><dd className="font-bold text-[#0F4C5C]">{value}</dd></div>; }

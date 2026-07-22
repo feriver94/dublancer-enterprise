@@ -11,7 +11,7 @@ type MetricCardProps = {
 export default function MetricCard({
   title,
   value,
-  change = "Live metric",
+  change,
   variant = "info",
 }: MetricCardProps) {
   return (
@@ -38,7 +38,7 @@ export default function MetricCard({
             {value}
           </h3>
         </div>
-        <Badge variant={variant}>{change}</Badge>
+        {change ? <Badge variant={variant}>{change}</Badge> : null}
       </div>
     </Card>
   );

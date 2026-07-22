@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Card } from "@/components/ui";
 import { apiMutation } from "@/lib/client/api-client";
+import type { AppLocale } from "@/i18n/config";
+import { formatAed } from "@/lib/locale/formatters";
 
 export type MarketplaceProposal = {
   id: string;
@@ -20,9 +23,6 @@ export type MarketplaceProposal = {
   listing?: { id: string; title: string; organizationId: string; status: string; version: number };
 };
 
-const money = (minor: string, currency: string) =>
-  new Intl.NumberFormat("en-AE", { style: "currency", currency }).format(Number(minor) / 100);
-
 export default function ProposalReviewClient({
   listing,
   onChanged,
@@ -30,12 +30,15 @@ export default function ProposalReviewClient({
   listing: { id: string; title: string; status: string; version: number; proposals: MarketplaceProposal[] };
   onChanged: () => Promise<unknown>;
 }) {
+  const t = useTranslations("Marketplace");
+  const statusLabel = useTranslations("Status");
+  const locale = useLocale() as AppLocale;
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   async function decide(proposal: MarketplaceProposal, status: "SHORTLISTED" | "REJECTED") {
-    if (status === "REJECTED" && !window.confirm("Reject this proposal? This decision cannot be undone.")) return;
+    if (status === "REJECTED" && !window.confirm(t("rejectConfirm"))) return;
     setPending(`${proposal.id}:${status}`);
     setError("");
     setNotice("");
@@ -43,12 +46,12 @@ export default function ProposalReviewClient({
       await apiMutation(`/api/marketplace/proposals/${proposal.id}`, "PATCH", {
         status,
         expectedVersion: proposal.version,
-        note: status === "SHORTLISTED" ? "Shortlisted by the listing owner." : "Rejected by the listing owner.",
+        note: status === "SHORTLISTED" ? t("shortlistNote") : t("rejectNote"),
       });
-      setNotice(`Proposal ${status === "SHORTLISTED" ? "shortlisted" : "rejected"}.`);
+      setNotice(status === "SHORTLISTED" ? t("shortlistedNotice") : t("rejectedNotice"));
       await onChanged();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The proposal decision could not be saved.");
+      setError(reason instanceof Error ? reason.message : t("decisionFailed"));
     } finally {
       setPending("");
     }
@@ -56,7 +59,7 @@ export default function ProposalReviewClient({
 
   async function award(event: FormEvent<HTMLFormElement>, proposal: MarketplaceProposal) {
     event.preventDefault();
-    if (!window.confirm("Award this proposal? All competing proposals will be rejected atomically.")) return;
+    if (!window.confirm(t("awardConfirm"))) return;
     const data = new FormData(event.currentTarget);
     setPending(`${proposal.id}:AWARD`);
     setError("");
@@ -81,10 +84,10 @@ export default function ProposalReviewClient({
           endsAt: data.get("endsAt") || undefined,
         },
       );
-      setNotice(`Award completed. Contract ${contract.id} is awaiting signatures.`);
+      setNotice(t("awardCompleted", { id: contract.id }));
       await onChanged();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The proposal could not be awarded.");
+      setError(reason instanceof Error ? reason.message : t("awardFailed"));
     } finally {
       setPending("");
     }
@@ -94,13 +97,13 @@ export default function ProposalReviewClient({
     <Card variant="elevated">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-bold uppercase tracking-widest text-[#009A44]">Owner proposal management</p>
-          <h2 className="mt-1 text-2xl font-bold text-[#0F4C5C]">Review and award</h2>
+          <p className="font-bold uppercase tracking-widest text-[#009A44]">{t("ownerManagement")}</p>
+          <h2 className="mt-1 text-2xl font-bold text-[#0F4C5C]">{t("reviewAndAward")}</h2>
         </div>
-        <Badge variant={listing.status === "AWARDED" ? "success" : "info"}>{listing.status}</Badge>
+        <Badge variant={listing.status === "AWARDED" ? "success" : "info"}>{statusLabel.has(listing.status) ? statusLabel(listing.status) : listing.status}</Badge>
       </div>
       <p className="mt-2 text-sm text-slate-600">
-        Shortlist, reject or atomically award a proposal. Awarding creates one governed contract and rejects every competing proposal.
+        {t("reviewDescription")}
       </p>
       {error ? <p className="enterprise-error mt-4" role="alert">{error}</p> : null}
       {notice ? <p className="enterprise-notice mt-4" role="status">{notice}</p> : null}
@@ -109,19 +112,19 @@ export default function ProposalReviewClient({
           <article key={proposal.id} className="rounded-2xl border border-slate-200 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-bold text-[#0F4C5C]">{proposal.submittedBy?.displayName ?? "Marketplace provider"}</h3>
-                <p className="text-sm text-slate-500">{proposal.freelancerProfile?.headline ?? "Provider profile"}</p>
+                <h3 className="text-lg font-bold text-[#0F4C5C]">{proposal.submittedBy?.displayName ?? t("marketplaceProvider")}</h3>
+                <p className="text-sm text-slate-500">{proposal.freelancerProfile?.headline ?? t("providerProfile")}</p>
               </div>
               <div className="text-end">
-                <Badge variant={proposal.status === "ACCEPTED" ? "success" : proposal.status === "REJECTED" ? "neutral" : "info"}>{proposal.status}</Badge>
-                <p className="mt-2 font-bold text-[#009A44]">{money(proposal.bidMinor, proposal.currency)}</p>
-                {proposal.estimatedDays ? <p className="text-sm text-slate-500">{proposal.estimatedDays} days</p> : null}
+                <Badge variant={proposal.status === "ACCEPTED" ? "success" : proposal.status === "REJECTED" ? "neutral" : "info"}>{statusLabel.has(proposal.status) ? statusLabel(proposal.status) : proposal.status}</Badge>
+                <p className="mt-2 font-bold text-[#009A44]">{formatAed(Number(proposal.bidMinor) / 100, locale)}</p>
+                {proposal.estimatedDays ? <p className="text-sm text-slate-500">{t("days", { count: proposal.estimatedDays })}</p> : null}
               </div>
             </div>
             <p className="mt-4 whitespace-pre-wrap text-sm text-slate-700">{proposal.coverLetter}</p>
             {proposal.contract ? (
               <Link href={`/contracts/${proposal.contract.id}`} className="mt-4 inline-block font-bold text-[#009A44]">
-                Open contract · {proposal.contract.status.replaceAll("_", " ")}
+                {t("openContract")} · {statusLabel.has(proposal.contract.status) ? statusLabel(proposal.contract.status) : proposal.contract.status.replaceAll("_", " ")}
               </Link>
             ) : null}
             {listing.status === "PUBLISHED" && ["SUBMITTED", "SHORTLISTED", "REVISION_REQUESTED"].includes(proposal.status) ? (
@@ -129,29 +132,29 @@ export default function ProposalReviewClient({
                 <div className="flex flex-wrap gap-3">
                   {proposal.status === "SUBMITTED" ? (
                     <Button type="button" variant="outline" disabled={Boolean(pending)} onClick={() => void decide(proposal, "SHORTLISTED")}>
-                      {pending === `${proposal.id}:SHORTLISTED` ? "Saving…" : "Shortlist"}
+                      {pending === `${proposal.id}:SHORTLISTED` ? t("saving") : t("shortlist")}
                     </Button>
                   ) : null}
                   <Button type="button" variant="outline" disabled={Boolean(pending)} onClick={() => void decide(proposal, "REJECTED")}>
-                    {pending === `${proposal.id}:REJECTED` ? "Saving…" : "Reject"}
+                    {pending === `${proposal.id}:REJECTED` ? t("saving") : t("reject")}
                   </Button>
                 </div>
                 <form className="enterprise-form rounded-xl bg-slate-50 p-4" onSubmit={(event) => void award(event, proposal)}>
-                  <h4 className="font-bold text-[#0F4C5C]">Award and create contract</h4>
-                  <label>Contract title<input name="title" defaultValue={`${listing.title} contract`} minLength={3} required /></label>
-                  <label>Commercial terms<textarea name="terms" defaultValue="Delivery will follow the awarded proposal and approved contract milestones." minLength={10} required /></label>
+                  <h4 className="font-bold text-[#0F4C5C]">{t("awardCreateContract")}</h4>
+                  <label>{t("contractTitle")}<input name="title" defaultValue={t("contractTitleDefault", { title: listing.title })} minLength={3} required /></label>
+                  <label>{t("commercialTerms")}<textarea name="terms" defaultValue={t("commercialTermsDefault")} minLength={10} required /></label>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label>Start date<input name="startsAt" type="date" /></label>
-                    <label>End date<input name="endsAt" type="date" /></label>
-                    <label>Tax rate (%)<input name="taxRate" type="number" min="0" max="100" step="0.01" defaultValue="5" required /></label>
-                    <label>Platform fee (%)<input name="platformFee" type="number" min="0" max="100" step="0.01" defaultValue="10" required /></label>
+                    <label>{t("startDate")}<input name="startsAt" type="date" /></label>
+                    <label>{t("endDate")}<input name="endsAt" type="date" /></label>
+                    <label>{t("taxRate")}<input name="taxRate" type="number" min="0" max="100" step="0.01" defaultValue="5" required /></label>
+                    <label>{t("platformFee")}<input name="platformFee" type="number" min="0" max="100" step="0.01" defaultValue="10" required /></label>
                   </div>
-                  <Button disabled={Boolean(pending)}>{pending === `${proposal.id}:AWARD` ? "Awarding atomically…" : "Award proposal"}</Button>
+                  <Button disabled={Boolean(pending)}>{pending === `${proposal.id}:AWARD` ? t("awarding") : t("awardProposal")}</Button>
                 </form>
               </div>
             ) : null}
           </article>
-        )) : <p className="enterprise-empty">No proposals have been submitted.</p>}
+        )) : <p className="enterprise-empty">{t("noneSubmitted")}</p>}
       </div>
     </Card>
   );

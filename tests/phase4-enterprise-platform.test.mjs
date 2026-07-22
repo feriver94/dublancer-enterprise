@@ -23,7 +23,7 @@ test("FA-011 and FA-022: governed files require signed intent completion and cle
   assert.match(service, /folder cannot be moved into its descendant/i);
   assert.match(attachmentRoute, /bindProjectAttachment/);
   assert.doesNotMatch(attachmentRoute, /storageKey/);
-  for (const capability of [/upload-intents/, /versions\/upload-intents/, /uploadProgress/, /malware scan/i, /Legal hold/, /Restore/, /EventSource/]) assert.match(client, capability);
+  for (const capability of [/upload-intents/, /versions\/upload-intents/, /uploadProgress/, /statusLabel\.has\(latest\.scanStatus\)/, /t\("legalHold"\)/, /t\("restore"\)/, /EventSource/]) assert.match(client, capability);
 });
 
 test("FA-013: search has durable producers, leased workers, FTS ranking and permission filtering", () => {
@@ -41,8 +41,8 @@ test("FA-013: search has durable producers, leased workers, FTS ranking and perm
   assert.match(service, /ts_headline/);
   assert.match(service, /nextCursor/);
   assert.match(route, /requireInternalSecret/);
-  assert.match(client, /Reindex organization/);
-  assert.match(client, /Load more ranked results/);
+  assert.match(client, /t\("reindex"\)/);
+  assert.match(client, /t\("loadMore"\)/);
 });
 
 test("FA-014: analytics is scheduled, idempotent, backfillable and freshness-aware", () => {
@@ -58,7 +58,7 @@ test("FA-014: analytics is scheduled, idempotent, backfillable and freshness-awa
   assert.match(service, /analyticsDailyMetric\.deleteMany/);
   assert.match(service, /analyticsDailyMetric\.create/);
   assert.match(route, /requireInternalSecret/);
-  for (const capability of [/freshness/, /Daily trend/, /drill-down/i, /backfill/i, /EventSource/]) assert.match(client, capability);
+  for (const capability of [/freshness/, /t\("dailyTrend"\)/, /dimensionKey/, /backfill/i, /EventSource/]) assert.match(client, capability);
 });
 
 test("Phase 4 migration is additive and hardens legacy attachment and root-name upgrade paths", () => {

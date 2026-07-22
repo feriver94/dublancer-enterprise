@@ -32,8 +32,9 @@ test("FA-004: every product route group is protected by the shared server guard"
   const navbar = read("src/components/layout/Navbar.tsx");
   assert.match(navbar, /resolveAuthorization/);
   assert.match(navbar, /permission: "chat\.read"/);
-  assert.match(navbar, /Chat/);
-  assert.match(navbar, /Notifications/);
+  assert.match(navbar, /key: "chat"/);
+  assert.match(navbar, /key: "notifications"/);
+  assert.match(navbar, /\{t\(item\.key\)\}/);
 });
 
 test("FA-009: chat product UI connects every required collaboration lifecycle", () => {

@@ -1,5 +1,8 @@
 "use client";
 
+import enMessages from "../../../messages/en-AE.json";
+import arMessages from "../../../messages/ar-AE.json";
+
 type ApiEnvelope<T> = {
   data?: T;
   error?: {
@@ -24,6 +27,12 @@ export class ApiClientError extends Error {
 
 let csrfPromise: Promise<string> | null = null;
 
+function errorMessage(code: string | undefined, fallback: string | undefined) {
+  const messages = document.documentElement.lang === "ar-AE" ? arMessages.Errors : enMessages.Errors;
+  const key = (code ?? "REQUEST_FAILED") as keyof typeof messages;
+  return messages[key] ?? fallback ?? messages.REQUEST_FAILED;
+}
+
 async function csrfToken(): Promise<string> {
   csrfPromise ??= fetch("/api/auth/csrf", {
     cache: "no-store",
@@ -33,7 +42,7 @@ async function csrfToken(): Promise<string> {
       const body = (await response.json()) as ApiEnvelope<{ csrfToken: string }>;
       if (!response.ok || !body.data?.csrfToken) {
         throw new ApiClientError(
-          body.error?.message ?? "Unable to establish a secure request.",
+          errorMessage(body.error?.code ?? "SECURE_REQUEST", body.error?.message),
           response.status,
           body.error?.code,
           body.error?.details,
@@ -52,7 +61,7 @@ async function parse<T>(response: Response): Promise<T> {
   const body = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
   if (!response.ok) {
     throw new ApiClientError(
-      body.error?.message ?? `Request failed with status ${response.status}.`,
+      errorMessage(body.error?.code, body.error?.message),
       response.status,
       body.error?.code,
       body.error?.details,
@@ -68,7 +77,7 @@ async function parseWithMeta<T>(response: Response): Promise<{
   const body = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
   if (!response.ok) {
     throw new ApiClientError(
-      body.error?.message ?? `Request failed with status ${response.status}.`,
+      errorMessage(body.error?.code, body.error?.message),
       response.status,
       body.error?.code,
       body.error?.details,

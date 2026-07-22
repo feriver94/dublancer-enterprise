@@ -1,15 +1,17 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { brand } from "@/constants/design";
 import Container from "./Container";
 
 const footerLinks = [
-  { label: "Privacy", href: "/privacy" },
-  { label: "Terms", href: "/terms" },
-  { label: "Security", href: "/security" },
-  { label: "Contact", href: "/contact" },
+  { key: "privacy", href: "/privacy" },
+  { key: "terms", href: "/terms" },
+  { key: "security", href: "/security" },
+  { key: "contact", href: "/contact" },
 ];
 
-export default function Footer() {
+export default async function Footer() {
+  const t = await getTranslations("Footer");
   return (
     <footer
       className="border-t bg-white py-10"
@@ -21,7 +23,7 @@ export default function Footer() {
             {brand.name} © 2026
           </p>
           <p className="mt-1 text-sm" style={{ color: brand.colors.muted }}>
-            {brand.tagline}
+            {t("tagline")}
           </p>
         </div>
 
@@ -31,7 +33,7 @@ export default function Footer() {
         >
           {footerLinks.map((item) => (
             <Link key={item.href} href={item.href} style={{ transition: brand.transition.default }}>
-              {item.label}
+            {t(item.key)}
             </Link>
           ))}
         </div>

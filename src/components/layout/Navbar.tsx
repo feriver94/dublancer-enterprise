@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { brand } from "@/constants/design";
 import { getAuthenticatedContext } from "@/lib/auth/session";
 import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
@@ -7,15 +8,15 @@ import { isAppError } from "@/lib/errors/app-error";
 import Container from "./Container";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", authenticated: true },
-  { label: "AI Copilot", href: "/ai-copilot", permission: "ai.use" },
-  { label: "Marketplace", href: "/marketplace", permission: "marketplace.listing.read" },
-  { label: "Workspace", href: "/workspace", permission: "project.read" },
-  { label: "Contracts", href: "/contracts", permission: "marketplace.contract.manage" },
-  { label: "Chat", href: "/communications/chat", permission: "chat.read" },
-  { label: "Notifications", href: "/notifications", authenticated: true },
-  { label: "Pricing", href: "/pricing" },
-  { label: "Enterprise", href: "/enterprise", permission: "organization.read" },
+  { key: "dashboard", href: "/dashboard", authenticated: true },
+  { key: "aiWorkspace", href: "/ai-copilot", permission: "ai.use" },
+  { key: "marketplace", href: "/marketplace", permission: "marketplace.listing.read" },
+  { key: "workspace", href: "/workspace", permission: "project.read" },
+  { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },
+  { key: "chat", href: "/communications/chat", permission: "chat.read" },
+  { key: "notifications", href: "/notifications", authenticated: true },
+  { key: "pricing", href: "/pricing" },
+  { key: "enterprise", href: "/enterprise", permission: "organization.read" },
 ];
 
 export default async function Navbar({
@@ -25,6 +26,8 @@ export default async function Navbar({
   authenticated?: boolean;
   permissions?: string[];
 }) {
+  const t = await getTranslations("Navigation");
+  const common = await getTranslations("Common");
   let isAuthenticated = authenticated;
   let permissions = suppliedPermissions ?? [];
 
@@ -55,29 +58,29 @@ export default async function Navbar({
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
       <Container>
-        <nav className="flex min-h-24 flex-wrap items-center justify-between gap-5 py-3" aria-label="Primary navigation">
-          <Link href={isAuthenticated ? "/dashboard" : "/"} className="shrink-0" aria-label="Dublancer home">
+        <nav className="flex min-h-24 flex-wrap items-center justify-between gap-5 py-3" aria-label={common("primaryNavigation")}>
+          <Link href={isAuthenticated ? "/dashboard" : "/"} className="shrink-0" aria-label={common("home")}>
             <Image src="/images/Logo.jpg" alt="Dublancer" width={230} height={74} priority className="h-auto w-[190px] object-contain lg:w-[230px]" />
           </Link>
-          <div className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-bold text-[#0F4C5C] lg:order-none lg:w-auto lg:flex-1 lg:justify-center" aria-label="Product modules">
+          <div className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-bold text-[#0F4C5C] lg:order-none lg:w-auto lg:flex-1 lg:justify-center" aria-label={common("productModules")}>
             {visibleItems.map((item) => (
               <Link key={item.href} href={item.href} className="whitespace-nowrap hover:text-[#009A44]">
-                {item.label}
+                {t(item.key)}
               </Link>
             ))}
           </div>
           <div className="flex shrink-0 items-center gap-3">
             {isAuthenticated ? (
               <>
-                {can("organization.read") ? <Link href="/organization" className="font-bold text-[#0F4C5C]">Organization</Link> : null}
+                {can("organization.read") ? <Link href="/organization" className="font-bold text-[#0F4C5C]">{t("organization")}</Link> : null}
                 <Link href={can("project.read") ? "/workspace" : "/dashboard"} className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">
-                  {can("project.read") ? "Open Workspace" : "Dashboard"}
+                  {can("project.read") ? t("openWorkspace") : t("dashboard")}
                 </Link>
               </>
             ) : (
               <>
-                <Link href="/login" className="font-bold text-[#0F4C5C]">Login</Link>
-                <Link href="/register" className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">Start Free</Link>
+                <Link href="/login" className="font-bold text-[#0F4C5C]">{t("login")}</Link>
+                <Link href="/register" className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">{t("startFree")}</Link>
               </>
             )}
           </div>

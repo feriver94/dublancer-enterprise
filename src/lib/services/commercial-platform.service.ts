@@ -79,12 +79,12 @@ export class MarketplaceLifecycleService {
 export class ContractLifecycleService {
   private include = {
     acceptances: { include: { acceptedBy: { select: { id: true, displayName: true } } }, orderBy: { acceptedAt: "asc" as const } },
-    amendments: true,
-    milestones: { include: { submissions: { include: { decisions: true, submittedBy: { select: { id: true, displayName: true } } }, orderBy: { revision: "desc" as const } }, paymentSchedules: true }, orderBy: { createdAt: "asc" as const } },
+    amendments: { include: { proposedBy: { select: { id: true, displayName: true } }, decidedBy: { select: { id: true, displayName: true } } }, orderBy: { version: "desc" as const } },
+    milestones: { include: { submissions: { include: { decisions: true, submittedBy: { select: { id: true, displayName: true } } }, orderBy: { revision: "desc" as const } }, paymentSchedules: true, closedBy: { select: { id: true, displayName: true } } }, orderBy: { createdAt: "asc" as const } },
     invoices: { include: { transactions: { include: { refunds: true } } }, orderBy: { createdAt: "desc" as const } },
     transactions: { include: { refunds: true }, orderBy: { createdAt: "desc" as const } },
-    disputes: true,
-    reviews: true,
+    disputes: { include: { openedBy: { select: { id: true, displayName: true } }, assignedTo: { select: { id: true, displayName: true } }, events: { include: { actor: { select: { id: true, displayName: true } } }, orderBy: { createdAt: "asc" as const } } }, orderBy: { createdAt: "desc" as const } },
+    reviews: { include: { reviewer: { select: { id: true, displayName: true } } }, orderBy: { createdAt: "desc" as const } },
     project: true,
     listing: true,
     proposal: true,
@@ -117,21 +117,24 @@ export class ContractLifecycleService {
 
   async transition(context: TenantContext, id: string, status: "PENDING_SIGNATURES" | "ACTIVE" | "PAUSED" | "COMPLETED" | "TERMINATED" | "DISPUTED", expectedVersion: number) {
     await requirePermission(context, "marketplace.contract.manage");
+    if (status === "COMPLETED") {
+      throw new AppError("CONFLICT", "Use the final contract completion workflow so milestone closeout, disputes, delivery evidence, and the completion checklist are verified.", 409);
+    }
     const row = await this.access(context, id);
     const party = this.party(context, row);
     const allowed: Record<string, string[]> = {
       DRAFT: ["PENDING_SIGNATURES", "TERMINATED"],
       PENDING_SIGNATURES: ["TERMINATED"],
-      ACTIVE: ["PAUSED", "COMPLETED", "TERMINATED", "DISPUTED"],
+      ACTIVE: ["PAUSED", "TERMINATED", "DISPUTED"],
       PAUSED: ["ACTIVE", "TERMINATED", "DISPUTED"],
       DISPUTED: ["ACTIVE", "TERMINATED"],
     };
     if (!(allowed[row.status] ?? []).includes(status)) throw new AppError("CONFLICT", `Invalid contract transition from ${row.status} to ${status}.`, 409);
-    if (["PENDING_SIGNATURES", "COMPLETED", "TERMINATED"].includes(status) && party !== "CLIENT") {
+    if (["PENDING_SIGNATURES", "TERMINATED"].includes(status) && party !== "CLIENT") {
       throw new AppError("FORBIDDEN", "Only the client organization can apply this contract transition.", 403);
     }
     return prisma.$transaction(async (tx) => {
-      const changed = await tx.contract.updateMany({ where: { id, status: row.status, version: expectedVersion }, data: { status, completedAt: status === "COMPLETED" ? new Date() : undefined, version: { increment: 1 } } });
+      const changed = await tx.contract.updateMany({ where: { id, status: row.status, version: expectedVersion }, data: { status, version: { increment: 1 } } });
       if (changed.count !== 1) throw new AppError("CONFLICT", "Contract changed before the transition was applied.", 409);
       await commercialAudit(tx, context, `contract.${status.toLowerCase()}`, "Contract", id, { previousStatus: row.status });
       await commercialEvent(tx, { ...context, organizationId: row.organizationId }, "contract.status.changed", "Contract", id, { previousStatus: row.status, status }, row.projectId);

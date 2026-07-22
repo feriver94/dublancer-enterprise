@@ -460,9 +460,9 @@ process.memoryUsage = safe;
 
   const reactionPath = `/api/chat/channels/${channel.id}/messages/${firstMessage.id}/reactions`;
   let reactionCreated = await request(owner.jar, reactionPath, { method: "POST", expected: [201, 404], body: { emoji: "👍" } });
-  if (reactionCreated.status === 404 && !reactionCreated.error?.code) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    reactionCreated = await request(owner.jar, reactionPath, { method: "POST", expected: [201], body: { emoji: "👍" } });
+  for (let compileAttempt = 1; reactionCreated.status === 404 && !reactionCreated.error?.code && compileAttempt <= 8; compileAttempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, compileAttempt * 500));
+    reactionCreated = await request(owner.jar, reactionPath, { method: "POST", expected: [201, 404], body: { emoji: "👍" } });
   }
   assert.equal(reactionCreated.status, 201);
   const reacted = await request(owner.jar, `/api/chat/channels/${channel.id}/messages?take=20`);

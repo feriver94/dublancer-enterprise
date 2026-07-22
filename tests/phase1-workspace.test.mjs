@@ -6,9 +6,9 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("dashboard quick actions execute existing APIs", async () => {
   const source = await read("src/components/dashboard/QuickActions.tsx");
-  for (const label of ["Create Project", "Generate Proposal", "Invite Team", "Open Workspace"]) {
-    assert.match(source, new RegExp(label));
-  }
+  assert.match(source, /useTranslations\("Dashboard"\)/);
+  assert.match(source, /\["project", "proposal", "invite", "workspace"\]/);
+  assert.match(source, /t\(`action\.\$\{key\}`\)/);
   assert.match(source, /\/api\/projects/);
   assert.match(source, /\/api\/marketplace\/proposals/);
   assert.match(source, /\/api\/organizations\/\$\{organization\.id\}\/invitations/);

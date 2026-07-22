@@ -102,23 +102,33 @@ model User {
   providerContracts          Contract[]                @relation("ContractProviderUser")
   contractAcceptances        ContractAcceptance[]
   proposedAmendments         ContractAmendment[]       @relation("AmendmentProposer")
+  decidedAmendments          ContractAmendment[]       @relation("AmendmentDecider")
+  completedContracts         Contract[]                @relation("ContractCompleter")
+  closedContractMilestones   ContractMilestone[]       @relation("ContractMilestoneCloser")
   workSubmissions            WorkSubmission[]
   workSubmissionDecisions    WorkSubmissionDecision[]
   reviewsWritten             Review[]                  @relation("ReviewAuthor")
   reviewsReceived            Review[]                  @relation("ReviewSubjectUser")
   disputesOpened             Dispute[]                 @relation("DisputeOpener")
   disputesAgainst            Dispute[]                 @relation("DisputeAgainstUser")
+  disputesAssigned           Dispute[]                 @relation("DisputeAssignee")
+  disputeEvents              DisputeEvent[]            @relation("DisputeEventActor")
   abuseReports               AbuseReport[]             @relation("AbuseReporter")
   assignedAbuseReports       AbuseReport[]             @relation("AbuseAssignee")
   vendorOnboardings          VendorOnboarding[]        @relation("VendorCandidateUser")
   timeEntries                TimeEntry[]
   timesheets                 Timesheet[]
+  approvedTimesheets         Timesheet[]               @relation("TimesheetApprover")
   createdDeliverables        Deliverable[]             @relation("DeliverableCreator")
+  decidedDeliverables        Deliverable[]             @relation("DeliverableDecider")
   requestedApprovals         ApprovalRequest[]         @relation("ApprovalRequester")
   assignedApprovals          ApprovalRequest[]         @relation("ApprovalAssignee")
   changeRequests             ChangeRequest[]           @relation("ChangeRequester")
+  decidedChangeRequests      ChangeRequest[]           @relation("ChangeRequestDecider")
   ownedRisks                 ProjectRisk[]             @relation("RiskOwner")
+  ownedIssues                ProjectIssue[]            @relation("IssueOwner")
   resourceAllocations        ResourceAllocation[]
+  createdResourceAllocations ResourceAllocation[]      @relation("ResourceAllocator")
   projectTemplates           ProjectTemplate[]         @relation("TemplateCreator")
   createdFileNodes           FileNode[]                @relation("FileNodeCreator")
   uploadedFileVersions       FileVersion[]             @relation("FileVersionUploader")
@@ -1703,6 +1713,9 @@ model Contract {
   endsAt                 DateTime?
   signedAt               DateTime?
   completedAt            DateTime?
+  completedById          String?
+  completionNote         String?
+  completionChecklist    Json?
   version                Int                    @default(1)
   organization           Organization           @relation("ContractClientOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
   providerOrganization   Organization?          @relation("ContractProviderOrganization", fields: [providerOrganizationId], references: [id], onDelete: Restrict)
@@ -1711,6 +1724,7 @@ model Contract {
   proposal               Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   project                Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy              User                   @relation("ContractCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy            User?                  @relation("ContractCompleter", fields: [completedById], references: [id], onDelete: SetNull)
   amendments             ContractAmendment[]
   milestones             ContractMilestone[]
   acceptances            ContractAcceptance[]
@@ -1748,21 +1762,29 @@ model ContractAcceptance {
 }
 
 model ContractAmendment {
-  id           String          @id @default(cuid())
-  contractId   String
-  proposedById String
-  version      Int
-  status       AmendmentStatus @default(DRAFT)
-  summary      String
-  changes      Json
-  decidedAt    DateTime?
-  contract     Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  proposedBy   User            @relation("AmendmentProposer", fields: [proposedById], references: [id], onDelete: Restrict)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id                  String          @id @default(cuid())
+  contractId          String
+  proposedById        String
+  version             Int
+  status              AmendmentStatus @default(DRAFT)
+  summary             String
+  changes             Json
+  baseContractVersion Int             @default(1)
+  proposedAt          DateTime?
+  decidedById         String?
+  decidedAt           DateTime?
+  decisionNote        String?
+  appliedAt           DateTime?
+  rowVersion          Int             @default(1)
+  contract            Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  proposedBy          User            @relation("AmendmentProposer", fields: [proposedById], references: [id], onDelete: Restrict)
+  decidedBy           User?           @relation("AmendmentDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   @@unique([contractId, version])
   @@index([contractId, status])
+  @@index([decidedById, decidedAt])
 }
 
 model ContractMilestone {
@@ -1777,8 +1799,12 @@ model ContractMilestone {
   dueAt              DateTime?
   acceptedAt         DateTime?
   releasedAt         DateTime?
+  closedAt           DateTime?
+  closedById         String?
+  closeoutNote       String?
   version            Int                     @default(1)
   contract           Contract                @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  closedBy           User?                   @relation("ContractMilestoneCloser", fields: [closedById], references: [id], onDelete: SetNull)
   projectMilestone   ProjectMilestone?       @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
   submissions        WorkSubmission[]
   paymentSchedules   PaymentSchedule[]
@@ -1829,22 +1855,25 @@ model WorkSubmissionDecision {
 }
 
 model Review {
-  id                     String        @id @default(cuid())
+  id                     String                  @id @default(cuid())
   contractId             String
   reviewerId             String
   revieweeUserId         String?
   revieweeOrganizationId String?
   rating                 Int
+  reviewerParty          ContractAcceptanceParty
   title                  String?
   body                   String?
-  status                 ReviewStatus  @default(PENDING)
+  status                 ReviewStatus            @default(PENDING)
+  submittedAt            DateTime?
   publishedAt            DateTime?
-  contract               Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  reviewer               User          @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Restrict)
-  revieweeUser           User?         @relation("ReviewSubjectUser", fields: [revieweeUserId], references: [id], onDelete: SetNull)
-  revieweeOrganization   Organization? @relation("ReviewSubjectOrganization", fields: [revieweeOrganizationId], references: [id], onDelete: SetNull)
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
+  version                Int                     @default(1)
+  contract               Contract                @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  reviewer               User                    @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Restrict)
+  revieweeUser           User?                   @relation("ReviewSubjectUser", fields: [revieweeUserId], references: [id], onDelete: SetNull)
+  revieweeOrganization   Organization?           @relation("ReviewSubjectOrganization", fields: [revieweeOrganizationId], references: [id], onDelete: SetNull)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@unique([contractId, reviewerId])
   @@index([revieweeUserId, status, publishedAt])
@@ -1852,24 +1881,46 @@ model Review {
 }
 
 model Dispute {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   contractId    String
   openedById    String
   againstUserId String?
-  status        DisputeStatus @default(OPEN)
+  assignedToId  String?
+  status        DisputeStatus  @default(OPEN)
   category      String
   reason        String
   evidence      Json?
   resolution    Json?
+  closedAt      DateTime?
+  version       Int            @default(1)
   resolvedAt    DateTime?
-  contract      Contract      @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  openedBy      User          @relation("DisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
-  againstUser   User?         @relation("DisputeAgainstUser", fields: [againstUserId], references: [id], onDelete: SetNull)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  contract      Contract       @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  openedBy      User           @relation("DisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  againstUser   User?          @relation("DisputeAgainstUser", fields: [againstUserId], references: [id], onDelete: SetNull)
+  assignedTo    User?          @relation("DisputeAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  events        DisputeEvent[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([contractId, status, updatedAt])
   @@index([openedById, status])
+  @@index([assignedToId, status])
+}
+
+model DisputeEvent {
+  id             String         @id @default(cuid())
+  disputeId      String
+  actorUserId    String
+  previousStatus DisputeStatus?
+  status         DisputeStatus
+  note           String?
+  evidence       Json?
+  dispute        Dispute        @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  actor          User           @relation("DisputeEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  createdAt      DateTime       @default(now())
+
+  @@index([disputeId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model AbuseReport {
@@ -1900,6 +1951,7 @@ model TaskDependency {
   successorTaskId   String
   dependencyType    String      @default("FINISH_TO_START")
   lagMinutes        Int         @default(0)
+  version           Int         @default(1)
   project           Project     @relation("TaskDependencyProject", fields: [projectId], references: [id], onDelete: Cascade)
   predecessorTask   ProjectTask @relation("TaskPredecessor", fields: [predecessorTaskId], references: [id], onDelete: Cascade)
   successorTask     ProjectTask @relation("TaskSuccessor", fields: [successorTaskId], references: [id], onDelete: Cascade)
@@ -1919,8 +1971,13 @@ model Timesheet {
   totalMinutes Int             @default(0)
   submittedAt  DateTime?
   approvedAt   DateTime?
+  approvedById String?
+  decisionNote String?
+  lockedAt     DateTime?
+  version      Int             @default(1)
   project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user         User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  approvedBy   User?           @relation("TimesheetApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   entries      TimeEntry[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -1928,6 +1985,7 @@ model Timesheet {
   @@unique([projectId, userId, periodStart, periodEnd])
   @@index([projectId, status, periodStart])
   @@index([userId, status, periodStart])
+  @@index([approvedById, approvedAt])
 }
 
 model TimeEntry {
@@ -1942,6 +2000,7 @@ model TimeEntry {
   description     String?
   billable        Boolean      @default(true)
   metadata        Json?
+  version         Int          @default(1)
   project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task            ProjectTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
   user            User         @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -1956,24 +2015,30 @@ model TimeEntry {
 }
 
 model Deliverable {
-  id          String           @id @default(cuid())
-  projectId   String
-  taskId      String?
-  createdById String
-  title       String
-  description String?
-  status      SubmissionStatus @default(DRAFT)
-  dueAt       DateTime?
-  submittedAt DateTime?
-  acceptedAt  DateTime?
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task        ProjectTask?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  createdBy   User             @relation("DeliverableCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id           String           @id @default(cuid())
+  projectId    String
+  taskId       String?
+  createdById  String
+  title        String
+  description  String?
+  status       SubmissionStatus @default(DRAFT)
+  dueAt        DateTime?
+  submittedAt  DateTime?
+  acceptedAt   DateTime?
+  decidedById  String?
+  decisionNote String?
+  evidence     Json?
+  version      Int              @default(1)
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task         ProjectTask?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  createdBy    User             @relation("DeliverableCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  decidedBy    User?            @relation("DeliverableDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@index([projectId, status, dueAt])
   @@index([taskId, status])
+  @@index([decidedById, acceptedAt])
 }
 
 model ApprovalRequest {
@@ -2010,12 +2075,17 @@ model ChangeRequest {
   status        ChangeRequestStatus @default(DRAFT)
   decisionNote  String?
   decidedAt     DateTime?
+  decidedById   String?
+  implementedAt DateTime?
+  version       Int                 @default(1)
   project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   requestedBy   User                @relation("ChangeRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy     User?               @relation("ChangeRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
   @@index([projectId, status, updatedAt])
+  @@index([decidedById, decidedAt])
 }
 
 model ProjectRisk {
@@ -2030,6 +2100,7 @@ model ProjectRisk {
   status      RiskStatus   @default(OPEN)
   mitigation  String?
   dueAt       DateTime?
+  version     Int          @default(1)
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner       User?        @relation("RiskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt   DateTime     @default(now())
@@ -2042,35 +2113,43 @@ model ProjectRisk {
 model ProjectIssue {
   id          String       @id @default(cuid())
   projectId   String
+  ownerId     String?
   title       String
   description String?
   severity    RiskSeverity @default(MEDIUM)
   status      IssueStatus  @default(OPEN)
   resolution  String?
   dueAt       DateTime?
+  version     Int          @default(1)
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner       User?        @relation("IssueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
   @@index([projectId, status, severity])
+  @@index([ownerId, status])
 }
 
 model ResourceAllocation {
   id                String    @id @default(cuid())
   projectId         String
   userId            String
+  allocatedById     String
   allocationPercent Int
   startsAt          DateTime
   endsAt            DateTime?
   roleLabel         String?
   project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocatedBy       User      @relation("ResourceAllocator", fields: [allocatedById], references: [id], onDelete: Restrict)
+  version           Int       @default(1)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   @@unique([projectId, userId, startsAt])
   @@index([userId, startsAt, endsAt])
   @@index([projectId, startsAt, endsAt])
+  @@index([allocatedById, createdAt])
 }
 
 model ProjectTemplate {
@@ -2081,6 +2160,9 @@ model ProjectTemplate {
   description    String?
   snapshot       Json
   isActive       Boolean      @default(true)
+  version        Int          @default(1)
+  publishedAt    DateTime?
+  archivedAt     DateTime?
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy      User         @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt      DateTime     @default(now())

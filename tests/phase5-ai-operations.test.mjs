@@ -18,7 +18,7 @@ test("Phase 5 AI governance enforces policy, approval, budgets and immutable pro
   assert.match(service, /ai\.run\.retry_scheduled/);
   assert.match(service, /ai\.run\.output\.discarded/);
   assert.match(service, /policy_blocked/);
-  for (const capability of [/Policy & budget/, /New immutable version/, /Approve/, /Retry/, /Dubai-day usage/, /Provider/, /Audit/]) assert.match(client, capability);
+  for (const capability of [/t\("policyEnforcement"\)/, /t\("newVersion"\)/, /common\("approve"\)/, /t\("retry"\)/, /t\("dubaiUsage"\)/, /t\("provider"\)/, /t\("tab\.audit"\)/]) assert.match(client, capability);
 });
 
 test("Phase 5 shared worker runtime provides leases, heartbeats, retry evidence and dead-letter recovery", () => {
@@ -45,7 +45,7 @@ test("Phase 5 administration covers operational queues, exports, moderation, sup
   assert.match(service, /checksumSha256/);
   assert.match(service, /enforceRetention/);
   assert.match(exportRoute, /x-content-sha256/);
-  for (const capability of [/Pending jobs/, /Attempt history/, /Recover/, /Workers & schedules/, /Schedules/, /Request export/, /Moderation/, /Support/, /Security/, /Retention/]) assert.match(client, capability);
+  for (const capability of [/t\("pendingJobs"\)/, /t\("attemptHistory"/, /t\("recover"\)/, /t\("tab\.workers"\)/, /t\("schedules"\)/, /t\("requestExport"\)/, /t\("tab\.moderation"\)/, /t\("tab\.support"\)/, /t\("tab\.security"\)/, /t\("tab\.retention"\)/]) assert.match(client, capability);
 });
 
 test("Phase 5 internal worker protocol uses constant-time internal authentication and lease tokens", () => {

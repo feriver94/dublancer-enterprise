@@ -13,6 +13,7 @@
     "test:phase3:runtime": "node scripts/verify-phase3-runtime.mjs",
     "test:phase4:runtime": "node scripts/verify-phase4-runtime.mjs",
     "test:phase5:runtime": "node scripts/verify-phase5-runtime.mjs",
+    "test:phase6:runtime": "node scripts/verify-phase6-runtime.mjs",
     "verify:locales": "node scripts/verify-locales.mjs",
     "verify:security": "node scripts/verify-security.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",

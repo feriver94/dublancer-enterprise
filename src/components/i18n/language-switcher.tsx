@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ARABIC_LOCALE,
   DEFAULT_LOCALE,
@@ -20,6 +20,7 @@ function setLocaleCookie(locale: AppLocale) {
 
 export function LanguageSwitcher() {
   const locale = useLocale() as AppLocale;
+  const t = useTranslations("Common");
   const [pending, startTransition] = useTransition();
 
   const nextLocale =
@@ -63,8 +64,8 @@ export function LanguageSwitcher() {
       disabled={pending}
       aria-label={
         nextLocale === ARABIC_LOCALE
-          ? "Switch to Arabic"
-          : "Switch to English"
+          ? t("switchArabic")
+          : t("switchEnglish")
       }
       className="locale-switcher"
     >

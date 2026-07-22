@@ -284,7 +284,13 @@ process.memoryUsage=safe;
   const operatorJobs = await request(operator.jar, "/api/operations/jobs?take=100");
   assert.ok(operatorJobs.data.items.some((item) => item.id === failureJob.id));
   await request(operator.jar, `/api/operations/jobs/${failureJob.id}/recover`, { method: "POST", expected: [403], body: { reason: "Should be denied." } });
-  await request(owner.jar, `/api/operations/jobs/${failureJob.id}/recover`, { method: "POST", body: { reason: "Diagnostics reviewed and safe to replay." } });
+  const recoveryPath = `/api/operations/jobs/${failureJob.id}/recover`;
+  let recovery = await request(owner.jar, recoveryPath, { method: "POST", expected: [200, 404], body: { reason: "Diagnostics reviewed and safe to replay." } });
+  for (let compileAttempt = 1; recovery.status === 404 && !recovery.error?.code && compileAttempt <= 8; compileAttempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, compileAttempt * 500));
+    recovery = await request(owner.jar, recoveryPath, { method: "POST", expected: [200, 404], body: { reason: "Diagnostics reviewed and safe to replay." } });
+  }
+  assert.equal(recovery.status, 200);
   assert.equal((await prisma.backgroundJob.findUniqueOrThrow({ where: { id: failureJob.id } })).status, "PENDING");
   const recoveredClaim = await runtime({ action: "CLAIM", workerId: "lease-worker-a", queues: ["integration"], types: ["PHASE5_FAILURE_TEST"] });
   await runtime({ action: "COMPLETE", workerId: "lease-worker-a", jobId: failureJob.id, leaseToken: recoveredClaim.data.leaseToken, diagnostics: { stage: "recovered" }, queues: ["integration"] });

@@ -1,10 +1,14 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Card, Badge, Button } from "@/components/ui";
 import { brand } from "@/constants/design";
 
 export default function AIWidget() {
+  const t = useTranslations("Dashboard");
   return (
     <Card variant="glass">
-      <Badge variant="success">AI Copilot</Badge>
+      <Badge variant="success">{t("aiCopilot")}</Badge>
 
       <h3
         style={{
@@ -15,15 +19,14 @@ export default function AIWidget() {
           marginBottom: 12,
         }}
       >
-        Project Intelligence Ready
+        {t("aiReady")}
       </h3>
 
       <p style={{ color: brand.colors.muted, lineHeight: 1.7, marginBottom: 24 }}>
-        Use Dublancer AI to analyze requirements, estimate project scope, identify risks,
-        recommend skills, and generate proposal strategy.
+        {t("aiDescription")}
       </p>
 
-      <Button variant="primary">Run AI Analysis</Button>
+      <Button variant="primary">{t("runAiAnalysis")}</Button>
     </Card>
   );
 }

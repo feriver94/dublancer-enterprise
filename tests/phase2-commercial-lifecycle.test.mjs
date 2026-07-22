@@ -78,15 +78,15 @@ test("Phase 2 product interfaces expose both counterparty workflows", async () =
     read("src/components/contracts/ContractDetailClient.tsx"),
     read("src/components/payments/PaymentsClient.tsx"),
   ]);
-  assert.match(marketplace, /Provider proposal tracking|Provider tracking/);
-  for (const action of ["Shortlist", "Reject", "Award proposal"]) assert.match(review, new RegExp(action));
-  assert.match(contract, /Accept as/);
-  assert.match(contract, /Submit milestone/);
-  assert.match(contract, /Record immutable decision/);
-  assert.match(payments, /Issue invoice/);
-  assert.match(payments, /Charge outstanding/);
-  assert.match(payments, /Request refund/);
-  assert.match(payments, /configured payment-provider credentials/);
+  assert.match(marketplace, /t\("providerTracking"\)/);
+  for (const action of ["shortlist", "reject", "awardProposal"]) assert.match(review, new RegExp(`(?:common|t)\\(\"${action}\"`));
+  assert.match(contract, /t\("acceptAs"/);
+  assert.match(contract, /t\("submitMilestone"/);
+  assert.match(contract, /t\("recordDecision"/);
+  assert.match(payments, /t\("issueInvoice"\)/);
+  assert.match(payments, /t\("chargeOutstanding"\)/);
+  assert.match(payments, /t\("requestRefund"\)/);
+  assert.match(payments, /t\("providerBoundaryDescription"\)/);
 });
 
 test("commercial database constraints prevent duplicate and invalid settlement records", async () => {

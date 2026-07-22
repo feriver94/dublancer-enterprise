@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { apiGet, apiGetWithMeta, apiMutation } from "@/lib/client/api-client";
+import type { AppLocale } from "@/i18n/config";
+import { formatUaeDateTime } from "@/lib/locale/formatters";
 
 type Channel = {
   id: string;
@@ -57,23 +60,17 @@ type StreamState = "connecting" | "connected" | "reconnecting" | "unavailable";
 
 const EMOJIS = ["👍", "✅", "❤️", "🎉"];
 
-function displayChannel(channel: Channel) {
-  return channel.name || (channel.type === "DIRECT" ? "Direct conversation" : `${channel.type.toLowerCase()} channel`);
-}
-
-function dateTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Dubai",
-  }).format(new Date(value));
-}
-
 function errorMessage(reason: unknown, fallback: string) {
   return reason instanceof Error ? reason.message : fallback;
 }
 
 export default function ChatWorkspaceClient() {
+  const t = useTranslations("Chat");
+  const common = useTranslations("Common");
+  const statusLabel = useTranslations("Status");
+  const locale = useLocale() as AppLocale;
+  const dateTime = (value: string) => formatUaeDateTime(value, locale);
+  const displayChannel = (channel: Channel) => channel.name || (channel.type === "DIRECT" ? t("directConversation") : t("channelType", { type: statusLabel.has(channel.type) ? statusLabel(channel.type) : channel.type }));
   const [me, setMe] = useState<Me | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelCursor, setChannelCursor] = useState<string | null>(null);
@@ -114,20 +111,20 @@ export default function ChatWorkspaceClient() {
       setError("");
       return response.data;
     } catch (reason) {
-      setError(errorMessage(reason, "Unable to load chat channels."));
+      setError(errorMessage(reason, t("channelsFailed")));
       return [];
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadMembers = useCallback(async (channelId: string) => {
     try {
       setMembers(await apiGet<Member[]>(`/api/chat/channels/${channelId}/members`));
     } catch (reason) {
-      setError(errorMessage(reason, "Unable to load channel members."));
+      setError(errorMessage(reason, t("membersFailed")));
     }
-  }, []);
+  }, [t]);
 
   const loadPresence = useCallback(async (channelId: string) => {
     try {
@@ -163,12 +160,12 @@ export default function ChatWorkspaceClient() {
       setError("");
       return ordered;
     } catch (reason) {
-      setError(errorMessage(reason, "Unable to load conversation."));
+      setError(errorMessage(reason, t("conversationFailed")));
       return [];
     } finally {
       setLoadingConversation(false);
     }
-  }, [markRead]);
+  }, [markRead, t]);
 
   const refreshConversation = useCallback(async (channelId: string) => {
     await Promise.all([
@@ -188,9 +185,9 @@ export default function ChatWorkspaceClient() {
       );
       setThreadReplies([...response.data].reverse());
     } catch (reason) {
-      setError(errorMessage(reason, "Unable to load the thread."));
+      setError(errorMessage(reason, t("threadFailed")));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     connectionId.current = crypto.randomUUID();
@@ -350,7 +347,7 @@ export default function ChatWorkspaceClient() {
       await refreshConversation(selectedId);
       if (parentId && threadRoot) await loadThread(selectedId, threadRoot);
     } catch (reason) {
-      setError(errorMessage(reason, "Message was not sent. Your draft has been preserved."));
+      setError(errorMessage(reason, t("messageFailed")));
     } finally {
       setPending("");
     }
@@ -369,7 +366,7 @@ export default function ChatWorkspaceClient() {
       await refreshConversation(selectedId);
       if (threadRoot) await loadThread(selectedId, threadRoot);
     } catch (reason) {
-      setError(errorMessage(reason, "Unable to update the reaction."));
+      setError(errorMessage(reason, t("reactionFailed")));
     } finally {
       setPending("");
     }
@@ -391,9 +388,9 @@ export default function ChatWorkspaceClient() {
       form.reset();
       await loadChannels();
       setSelectedId(channel.id);
-      setNotice("Channel created.");
+      setNotice(t("channelCreated"));
     } catch (reason) {
-      setError(errorMessage(reason, "Unable to create the channel."));
+      setError(errorMessage(reason, t("channelCreateFailed")));
     } finally {
       setPending("");
     }
@@ -408,11 +405,11 @@ export default function ChatWorkspaceClient() {
     return (
       <article key={message.id} id={`message-${message.id}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <strong className="text-[#0F4C5C]">{message.author.displayName || "Member"}</strong>
+          <strong className="text-[#0F4C5C]">{message.author.displayName || t("member")}</strong>
           <time className="text-xs text-slate-500" dateTime={message.createdAt}>{dateTime(message.createdAt)}</time>
         </div>
         <p className={`mt-2 whitespace-pre-wrap text-sm leading-6 ${message.deletedAt ? "italic text-slate-400" : "text-slate-700"}`}>
-          {message.deletedAt ? "Message removed" : message.body}
+          {message.deletedAt ? t("messageRemoved") : message.body}
         </p>
         {!message.deletedAt ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -421,54 +418,54 @@ export default function ChatWorkspaceClient() {
                 {emoji}{groupedReactions[emoji]?.length ? ` ${groupedReactions[emoji].length}` : ""}
               </button>
             ))}
-            {!threaded ? <button type="button" onClick={() => void loadThread(selectedId, message)} className="text-xs font-bold text-[#009A44]">Thread {message.replyCount ? `(${message.replyCount})` : ""}</button> : null}
-            <span className="ml-auto text-xs text-slate-400" title={readBy.map((member) => member.user.displayName).join(", ")}>{readBy.length ? `Read by ${readBy.length}` : "Sent"}</span>
+            {!threaded ? <button type="button" onClick={() => void loadThread(selectedId, message)} className="text-xs font-bold text-[#009A44]">{t("thread")}{message.replyCount ? ` (${message.replyCount})` : ""}</button> : null}
+            <span className="ms-auto text-xs text-slate-400" title={readBy.map((member) => member.user.displayName).join(", ")}>{readBy.length ? t("readBy", { count: readBy.length }) : t("sent")}</span>
           </div>
         ) : null}
       </article>
     );
   }
 
-  const activeTyping = [...typingUsers.keys()].filter(Boolean).map((userId) => members.find((member) => member.userId === userId)?.user.displayName ?? "A member");
+  const activeTyping = [...typingUsers.keys()].filter(Boolean).map((userId) => members.find((member) => member.userId === userId)?.user.displayName ?? t("aMember"));
 
   return (
     <main className="py-10 lg:py-14">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div><p className="font-bold uppercase tracking-[.18em] text-[#009A44]">Enterprise collaboration</p><h1 className="text-4xl font-bold text-[#0F4C5C]">Realtime chat</h1><p className="mt-2 text-slate-600">Tenant-isolated channels with durable messages and recoverable realtime delivery.</p></div>
+        <div><p className="font-bold uppercase tracking-[.18em] text-[#009A44]">{t("eyebrow")}</p><h1 className="text-4xl font-bold text-[#0F4C5C]">{t("title")}</h1><p className="mt-2 text-slate-600">{t("description")}</p></div>
         <div aria-live="polite" className={`rounded-full px-4 py-2 text-sm font-bold ${streamState === "connected" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-          {streamState === "connected" ? "Live" : streamState === "unavailable" ? "Realtime unavailable · messages remain durable" : "Reconnecting…"}
+          {streamState === "connected" ? t("live") : streamState === "unavailable" ? t("unavailable") : t("reconnecting")}
         </div>
       </header>
       {error ? <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-700">{error}</div> : null}
       {notice ? <div role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-emerald-700">{notice}</div> : null}
       <div className="grid min-h-[680px] gap-4 lg:grid-cols-[290px_minmax(0,1fr)_330px]">
         <aside className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-          <h2 className="text-lg font-bold text-[#0F4C5C]">Channels</h2>
-          <form onSubmit={createChannel} className="mt-3 flex gap-2"><input name="name" aria-label="New channel name" maxLength={120} placeholder="New channel" className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2" /><button disabled={pending === "channel:create"} className="rounded-xl bg-[#009A44] px-3 py-2 font-bold text-white">Add</button></form>
+          <h2 className="text-lg font-bold text-[#0F4C5C]">{t("channels")}</h2>
+          <form onSubmit={createChannel} className="mt-3 flex gap-2"><input name="name" aria-label={t("newChannelName")} maxLength={120} placeholder={t("newChannel")} className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2" /><button disabled={pending === "channel:create"} className="rounded-xl bg-[#009A44] px-3 py-2 font-bold text-white">{t("add")}</button></form>
           <div className="mt-4 grid gap-2">
-            {loading ? <p className="text-sm text-slate-500">Loading channels…</p> : channels.length === 0 ? <p className="text-sm text-slate-500">No channels yet.</p> : channels.map((channel) => (
-              <button key={channel.id} type="button" onClick={() => setSelectedId(channel.id)} className={`rounded-2xl border p-3 text-left ${channel.id === selectedId ? "border-[#009A44] bg-white" : "border-transparent hover:bg-white"}`}>
+            {loading ? <p className="text-sm text-slate-500">{t("loadingChannels")}</p> : channels.length === 0 ? <p className="text-sm text-slate-500">{t("noChannels")}</p> : channels.map((channel) => (
+              <button key={channel.id} type="button" onClick={() => setSelectedId(channel.id)} className={`rounded-2xl border p-3 text-start ${channel.id === selectedId ? "border-[#009A44] bg-white" : "border-transparent hover:bg-white"}`}>
                 <span className="flex items-center justify-between gap-2"><strong className="truncate text-[#0F4C5C]">{displayChannel(channel)}</strong>{BigInt(channel.unreadCount || "0") > BigInt(0) ? <span className="rounded-full bg-[#009A44] px-2 py-0.5 text-xs font-bold text-white">{channel.unreadCount}</span> : null}</span>
-                <span className="mt-1 block truncate text-xs text-slate-500">{channel.messages[0]?.deletedAt ? "Message removed" : channel.messages[0]?.body || `${channel._count.members} members`}</span>
+                <span className="mt-1 block truncate text-xs text-slate-500">{channel.messages[0]?.deletedAt ? t("messageRemoved") : channel.messages[0]?.body || t("memberCount", { count: channel._count.members })}</span>
               </button>
             ))}
           </div>
-          {channelCursor ? <button type="button" onClick={() => void loadChannels(true, channelCursor)} className="mt-4 w-full rounded-xl border border-slate-300 py-2 text-sm font-bold">Load more channels</button> : null}
+          {channelCursor ? <button type="button" onClick={() => void loadChannels(true, channelCursor)} className="mt-4 w-full rounded-xl border border-slate-300 py-2 text-sm font-bold">{t("loadMoreChannels")}</button> : null}
         </aside>
 
         <section className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50 p-4">
-          {selected ? <><div className="border-b border-slate-200 pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-[#0F4C5C]">{displayChannel(selected)}</h2><p className="text-sm text-slate-500">{selected.description || `${selected._count.members} members · ${selected.type.toLowerCase()}`}</p></div><button type="button" onClick={() => void refreshConversation(selected.id)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">Refresh</button></div><div className="mt-3 flex flex-wrap gap-2">{presence.map((entry) => <span key={entry.userId} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">● {entry.user.displayName} {entry.status.toLowerCase()}</span>)}</div></div>
+          {selected ? <><div className="border-b border-slate-200 pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-[#0F4C5C]">{displayChannel(selected)}</h2><p className="text-sm text-slate-500">{selected.description || t("channelSummary", { count: selected._count.members, type: statusLabel.has(selected.type) ? statusLabel(selected.type) : selected.type })}</p></div><button type="button" onClick={() => void refreshConversation(selected.id)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">{common("refresh")}</button></div><div className="mt-3 flex flex-wrap gap-2">{presence.map((entry) => <span key={entry.userId} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">● {entry.user.displayName} {statusLabel.has(entry.status) ? statusLabel(entry.status) : entry.status}</span>)}</div></div>
             <div className="flex-1 space-y-3 overflow-y-auto py-4">
-              {olderSequence ? <button type="button" onClick={() => void loadMessages(selected.id, olderSequence)} className="mx-auto block rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">Load older messages</button> : null}
-              {loadingConversation ? <p className="text-center text-sm text-slate-500">Loading conversation…</p> : messages.length ? messages.map((message) => renderMessage(message)) : <p className="text-center text-sm text-slate-500">Start this conversation.</p>}
+              {olderSequence ? <button type="button" onClick={() => void loadMessages(selected.id, olderSequence)} className="mx-auto block rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">{t("loadOlder")}</button> : null}
+              {loadingConversation ? <p className="text-center text-sm text-slate-500">{t("loadingConversation")}</p> : messages.length ? messages.map((message) => renderMessage(message)) : <p className="text-center text-sm text-slate-500">{t("startConversation")}</p>}
             </div>
-            <div aria-live="polite" className="min-h-6 text-xs text-slate-500">{activeTyping.length ? `${activeTyping.join(", ")} ${activeTyping.length === 1 ? "is" : "are"} typing…` : ""}</div>
-            <form onSubmit={(event) => void sendMessage(event)} className="flex gap-2"><textarea value={draft} onChange={(event) => draftChanged(event.target.value)} rows={2} maxLength={12000} aria-label="Message" placeholder="Write a message" className="min-w-0 flex-1 resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3" /><button disabled={!draft.trim() || pending === "message:send" || selected.isArchived} className="rounded-2xl bg-[#009A44] px-5 font-bold text-white disabled:opacity-50">Send</button></form>
-          </> : <p className="m-auto text-slate-500">Select a channel to begin.</p>}
+            <div aria-live="polite" className="min-h-6 text-xs text-slate-500">{activeTyping.length ? t("typing", { names: activeTyping.join(", "), count: activeTyping.length }) : ""}</div>
+            <form onSubmit={(event) => void sendMessage(event)} className="flex gap-2"><textarea value={draft} onChange={(event) => draftChanged(event.target.value)} rows={2} maxLength={12000} aria-label={t("message")} placeholder={t("writeMessage")} className="min-w-0 flex-1 resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3" /><button disabled={!draft.trim() || pending === "message:send" || selected.isArchived} className="rounded-2xl bg-[#009A44] px-5 font-bold text-white disabled:opacity-50">{t("send")}</button></form>
+          </> : <p className="m-auto text-slate-500">{t("selectChannel")}</p>}
         </section>
 
         <aside className="rounded-3xl border border-slate-200 bg-white p-4">
-          {threadRoot ? <><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold text-[#0F4C5C]">Thread</h2><button type="button" onClick={() => { setThreadRoot(null); setThreadReplies([]); }} className="text-sm font-bold text-slate-500">Close</button></div><div className="mt-4 space-y-3">{renderMessage(threadRoot, true)}{threadReplies.map((message) => renderMessage(message, true))}</div><form onSubmit={(event) => void sendMessage(event, threadRoot.id)} className="mt-4 grid gap-2"><textarea value={threadDraft} onChange={(event) => draftChanged(event.target.value, true)} rows={3} maxLength={12000} aria-label="Thread reply" placeholder="Reply in thread" className="resize-none rounded-2xl border border-slate-300 px-4 py-3" /><button disabled={!threadDraft.trim() || pending === "thread:send"} className="rounded-2xl bg-[#0F4C5C] py-3 font-bold text-white disabled:opacity-50">Reply</button></form></> : <><h2 className="text-lg font-bold text-[#0F4C5C]">Members and read state</h2><div className="mt-4 grid gap-3">{members.map((member) => <div key={member.userId} className="rounded-2xl bg-slate-50 p-3"><div className="flex items-center justify-between gap-2"><strong className="text-sm text-[#0F4C5C]">{member.user.displayName}</strong><span className="text-xs font-bold text-slate-500">{member.role}</span></div><p className="mt-1 text-xs text-slate-500">Read through #{member.lastReadSequence}</p></div>)}</div></>}
+          {threadRoot ? <><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold text-[#0F4C5C]">{t("thread")}</h2><button type="button" onClick={() => { setThreadRoot(null); setThreadReplies([]); }} className="text-sm font-bold text-slate-500">{common("close")}</button></div><div className="mt-4 space-y-3">{renderMessage(threadRoot, true)}{threadReplies.map((message) => renderMessage(message, true))}</div><form onSubmit={(event) => void sendMessage(event, threadRoot.id)} className="mt-4 grid gap-2"><textarea value={threadDraft} onChange={(event) => draftChanged(event.target.value, true)} rows={3} maxLength={12000} aria-label={t("threadReply")} placeholder={t("replyThread")} className="resize-none rounded-2xl border border-slate-300 px-4 py-3" /><button disabled={!threadDraft.trim() || pending === "thread:send"} className="rounded-2xl bg-[#0F4C5C] py-3 font-bold text-white disabled:opacity-50">{t("reply")}</button></form></> : <><h2 className="text-lg font-bold text-[#0F4C5C]">{t("membersReadState")}</h2><div className="mt-4 grid gap-3">{members.map((member) => <div key={member.userId} className="rounded-2xl bg-slate-50 p-3"><div className="flex items-center justify-between gap-2"><strong className="text-sm text-[#0F4C5C]">{member.user.displayName}</strong><span className="text-xs font-bold text-slate-500">{statusLabel.has(member.role) ? statusLabel(member.role) : member.role}</span></div><p className="mt-1 text-xs text-slate-500">{t("readThrough", { sequence: member.lastReadSequence })}</p></div>)}</div></>}
         </aside>
       </div>
     </main>
