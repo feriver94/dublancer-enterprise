@@ -115,7 +115,8 @@ export interface PaymentProvider {
 
 export interface NotificationProvider {
   readonly key: string;
-  deliver(input: { channel: "EMAIL" | "SMS" | "PUSH"; recipient: string; title: string; body: string; actionUrl?: string | null; idempotencyKey: string; locale: string }): Promise<{ providerReference?: string }>;
+  deliver(input: { channel: "EMAIL" | "SMS" | "PUSH"; recipient: string; title: string; body: string; htmlBody?: string; actionUrl?: string | null; idempotencyKey: string; locale: string }): Promise<{ providerReference?: string }>;
+  verifyWebhook(rawBody: string, signature: string): boolean;
 }
 
 export interface FileScanProvider {
@@ -345,6 +346,13 @@ class HttpNotificationProvider implements NotificationProvider {
     const apiKey = process.env.NOTIFICATION_PROVIDER_API_KEY;
     if (!endpoint || !apiKey) throw new AppError("SERVICE_UNAVAILABLE", "Notification provider is not configured.", 503);
     return postJson<{ providerReference?: string }>(`${endpoint.replace(/\/$/, "")}/v1/deliveries`, apiKey, input, input.idempotencyKey);
+  }
+  verifyWebhook(rawBody: string, signature: string) {
+    const secret = process.env.NOTIFICATION_WEBHOOK_SECRET;
+    if (!secret || !/^[a-f0-9]{64}$/i.test(signature)) return false;
+    const expected = createHmac("sha256", secret).update(rawBody).digest();
+    const provided = Buffer.from(signature, "hex");
+    return provided.length === expected.length && timingSafeEqual(provided, expected);
   }
 }
 

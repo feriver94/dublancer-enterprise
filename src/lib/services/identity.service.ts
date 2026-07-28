@@ -3,6 +3,7 @@ import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { requirePermission, resolveAuthorization } from "@/lib/authorization/permission-resolver";
+import { ensureSeatForMembership, releaseMembershipSeat } from "@/lib/services/subscription-administration.service";
 
 export class IdentityService {
   async getCurrentUser(context: TenantContext) {
@@ -30,6 +31,19 @@ export class IdentityService {
     context: TenantContext,
     input: { email?: string; displayName?: string | null },
   ) {
+    if (input.email) {
+      const current = await prisma.user.findUnique({
+        where: { id: context.userId },
+        select: { email: true },
+      });
+      if (current?.email !== input.email) {
+        throw new AppError(
+          "CONFLICT",
+          "Email changes require the verified email-change workflow.",
+          409,
+        );
+      }
+    }
     return prisma.user.update({
       where: { id: context.userId },
       data: input,
@@ -267,12 +281,34 @@ export class IdentityService {
           ? "ACTIVE"
           : "REMOVED";
 
-    return prisma.membership.update({
-      where: {
-        id: membershipId,
-        organizationId: context.organizationId,
-      },
-      data: { status },
+    return prisma.$transaction(async (tx) => {
+      if (
+        membership.status === "ACTIVE" &&
+        ["SUSPENDED", "REMOVED"].includes(status)
+      ) {
+        const role = membership.roleId
+          ? await tx.role.findUnique({ where: { id: membership.roleId }, select: { name: true } })
+          : null;
+        if (role?.name === "Owner") {
+          const owners = await tx.membership.count({
+            where: { organizationId: context.organizationId, status: "ACTIVE", role: { name: "Owner" } },
+          });
+          if (owners <= 1) throw new AppError("CONFLICT", "The last active owner cannot be changed or removed.", 409);
+        }
+      }
+      const updated = await tx.membership.update({
+        where: {
+          id: membershipId,
+          organizationId: context.organizationId,
+        },
+        data: { status },
+      });
+      if (status === "ACTIVE") {
+        await ensureSeatForMembership(tx, context.organizationId, membershipId, context.userId);
+      } else {
+        await releaseMembershipSeat(tx, context.organizationId, membershipId, context.userId);
+      }
+      return updated;
     });
   }
 
@@ -327,6 +363,12 @@ export class IdentityService {
         },
       });
 
+      await ensureSeatForMembership(
+        tx,
+        invitation.organizationId,
+        membership.id,
+        context.userId,
+      );
       await tx.organizationInvitation.update({
         where: { id: invitation.id },
         data: { status: "ACCEPTED" },

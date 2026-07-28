@@ -10,3 +10,4 @@ export { default as ApiKeys } from "./ApiKeys";
 export { default as AuditLogs } from "./AuditLogs";
 export { default as OrganizationAI } from "./OrganizationAI";
 export { default as SettingsPanel } from "./SettingsPanel";
+export { EnterpriseAdministrationClient } from "./EnterpriseAdministrationClient";

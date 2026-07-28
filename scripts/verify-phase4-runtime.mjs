@@ -261,6 +261,7 @@ process.memoryUsage=safe;
 `, "utf8");
   const env = {
     DATABASE_URL: databaseUrl,
+    DATABASE_POOL_MAX: "1",
     APP_BASE_URL: baseUrl,
     REDIS_URL: "redis://127.0.0.1:6392",
     AUTH_SECRET: `${randomUUID()}${randomUUID()}`,

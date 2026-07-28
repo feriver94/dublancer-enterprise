@@ -1,16 +1,17 @@
 import { Navbar, Footer, Container } from "@/components/layout";
-import { OrganizationHeader, OrganizationStats, OrganizationOverview, MemberDirectory, RoleManagement, PermissionMatrix, SecurityCenter, CompliancePanel, ApiKeys, AuditLogs, OrganizationAI, SettingsPanel } from "@/components/organization";
+import { EnterpriseAdministrationClient } from "@/components/organization";
+import { getAuthenticatedContext } from "@/lib/auth/session";
+import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
 
-export default function OrganizationPage() {
+export default async function OrganizationPage() {
+  const context = await getAuthenticatedContext();
+  const authorization = await resolveAuthorization(context);
+  const can = (permission: string) =>
+    authorization.isPlatformAdmin ||
+    authorization.permissions.includes(permission);
   return (
     <>
-      <Navbar /><Container><main style={{ padding: "72px 0 96px" }}>
-        <OrganizationHeader /><OrganizationStats />
-        <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 380px", gap: 28, alignItems: "start" }}>
-          <div style={{ display: "grid", gap: 28 }}><OrganizationOverview /><MemberDirectory /><RoleManagement /></div>
-          <aside style={{ display: "grid", gap: 24 }}><OrganizationAI /><SecurityCenter /><AuditLogs /></aside>
-        </section>
-      </main></Container><Footer />
+      <Navbar /><Container><EnterpriseAdministrationClient organizationId={context.organizationId} capabilities={{ manageBilling: can("billing.manage"), manageMembers: can("organization.members.manage"), reviewSecurity: can("security.events.manage") }} /></Container><Footer />
     </>
   );
 }

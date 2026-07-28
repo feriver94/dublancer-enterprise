@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors/app-error";
 import { requirePermission, resolveAuthorization } from "@/lib/authorization/permission-resolver";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { hashContractTerms } from "@/lib/services/product-platform.service";
+import { SubscriptionAdministrationService } from "@/lib/services/subscription-administration.service";
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 
 function commercialAudit(tx: Prisma.TransactionClient, context: TenantContext, action: string, resourceType: string, resourceId: string, metadata?: unknown) {
@@ -273,8 +274,8 @@ export class FileLifecycleService{
 }
 
 export class BillingAdministrationService{
- async summary(context:TenantContext){await requirePermission(context,"finance.read");const[subscription,usage,credits,invoices,transactions]=await Promise.all([prisma.organizationSubscription.findUnique({where:{organizationId:context.organizationId},include:{plan:true}}),prisma.usageRecord.groupBy({by:["unit"],where:{organizationId:context.organizationId},_sum:{quantity:true}}),prisma.creditLedgerEntry.aggregate({where:{organizationId:context.organizationId},_sum:{amountMinor:true}}),prisma.invoice.groupBy({by:["status"],where:{organizationId:context.organizationId},_count:true,_sum:{totalMinor:true}}),prisma.financialTransaction.groupBy({by:["status"],where:{organizationId:context.organizationId},_count:true,_sum:{amountMinor:true}})]);return{subscription,usage,creditBalanceMinor:credits._sum.amountMinor??0,invoices,transactions,currency:"AED"};}
- async configure(context:TenantContext,input:{planId:string;status:"TRIALING"|"ACTIVE"|"PAST_DUE"|"PAUSED"|"CANCELLED"|"EXPIRED";currentPeriodEnd:Date;cancelAtPeriodEnd:boolean}){await requirePermission(context,"billing.manage");const plan=await prisma.subscriptionPlan.findFirst({where:{id:input.planId,isActive:true}});if(!plan)throw new AppError("NOT_FOUND","Subscription plan not found.",404);return prisma.organizationSubscription.upsert({where:{organizationId:context.organizationId},create:{organizationId:context.organizationId,planId:input.planId,status:input.status,currentPeriodStart:new Date(),currentPeriodEnd:input.currentPeriodEnd,cancelAtPeriodEnd:input.cancelAtPeriodEnd},update:{planId:input.planId,status:input.status,currentPeriodEnd:input.currentPeriodEnd,cancelAtPeriodEnd:input.cancelAtPeriodEnd}});}
+ async summary(context:TenantContext){await requirePermission(context,"finance.read");const[subscriptionDashboard,usage,credits,invoices,transactions]=await Promise.all([new SubscriptionAdministrationService().dashboard(context),prisma.usageRecord.groupBy({by:["unit"],where:{organizationId:context.organizationId},_sum:{quantity:true}}),prisma.creditLedgerEntry.aggregate({where:{organizationId:context.organizationId},_sum:{amountMinor:true}}),prisma.invoice.groupBy({by:["status"],where:{organizationId:context.organizationId},_count:true,_sum:{totalMinor:true}}),prisma.financialTransaction.groupBy({by:["status"],where:{organizationId:context.organizationId},_count:true,_sum:{amountMinor:true}})]);return{...subscriptionDashboard,usage,creditBalanceMinor:credits._sum.amountMinor??0,invoices,transactions,currency:"AED"};}
+ async configure(context:TenantContext,input:{planId:string;status:"TRIALING"|"ACTIVE"|"PAST_DUE"|"PAUSED"|"SUSPENDED"|"CANCELLED"|"EXPIRED";currentPeriodEnd:Date;cancelAtPeriodEnd:boolean}){return new SubscriptionAdministrationService().configureLegacy(context,input);}
 }
 
 export class ModerationComplianceService{

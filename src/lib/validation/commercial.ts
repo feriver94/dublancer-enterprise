@@ -10,6 +10,6 @@ export const milestoneDecisionSchema=z.object({submissionId:id,decision:z.enum([
 export const disputeSchema=z.object({category:z.string().trim().min(2).max(100),reason:z.string().trim().min(10).max(10000),againstUserId:id.optional(),evidence:z.record(z.string(),z.unknown()).optional()});
 export const updateFileSchema=z.object({name:z.string().trim().min(1).max(255).optional(),retentionUntil:z.coerce.date().nullable().optional(),legalHold:z.boolean().optional(),deleted:z.boolean().optional()}).refine(v=>Object.keys(v).length>0);
 export const lockFileSchema=z.object({expiresInMinutes:z.number().int().min(1).max(1440).default(30)});
-export const subscriptionSchema=z.object({planId:id,status:z.enum(["TRIALING","ACTIVE","PAST_DUE","PAUSED","CANCELLED","EXPIRED"]).default("ACTIVE"),currentPeriodEnd:z.coerce.date(),cancelAtPeriodEnd:z.boolean().default(false)});
+export const subscriptionSchema=z.object({planId:id,status:z.enum(["TRIALING","ACTIVE","PAST_DUE","PAUSED","SUSPENDED","CANCELLED","EXPIRED"]).default("ACTIVE"),currentPeriodEnd:z.coerce.date(),cancelAtPeriodEnd:z.boolean().default(false)});
 export const moderationDecisionSchema=z.object({reportId:id,status:z.enum(["TRIAGED","INVESTIGATING","ACTIONED","DISMISSED"]),resolution:z.string().trim().min(2).max(5000)});
 export const retentionSchema=z.object({resourceType:z.string().trim().min(2).max(100),retentionDays:z.number().int().min(1).max(36500),legalHoldDefault:z.boolean().default(false),configuration:z.record(z.string(),z.unknown()).optional()});

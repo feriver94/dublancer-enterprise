@@ -13,6 +13,7 @@ const globalForPrisma = globalThis as unknown as {
 
 const adapter = new PrismaPg({
   connectionString,
+  max: Number(process.env.DATABASE_POOL_MAX ?? 10),
 });
 
 export const prisma =

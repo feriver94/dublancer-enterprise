@@ -83,6 +83,7 @@
     "workspace": "مساحة العمل",
     "contracts": "العقود",
     "chat": "المحادثات",
+    "notifications": "الإشعارات",
     "pricing": "الأسعار",
     "enterprise": "المؤسسات",
     "organization": "المؤسسة",
@@ -764,7 +765,7 @@
   },
   "Status": {
     "DRAFT": "مسودة", "OPEN": "مفتوح", "ACTIVE": "نشط", "IN_PROGRESS": "قيد التنفيذ", "COMPLETED": "مكتمل", "CANCELLED": "ملغى", "DISPUTED": "متنازع عليه", "PENDING_SIGNATURES": "بانتظار التوقيعات", "PAUSED": "متوقف", "TERMINATED": "منتهي", "PLANNED": "مخطط", "FUNDED": "ممّول", "SUBMITTED": "مُرسل", "IN_REVIEW": "قيد المراجعة", "REVISION_REQUESTED": "مطلوب تعديل", "ACCEPTED": "مقبول", "REJECTED": "مرفوض", "RELEASE_PENDING": "بانتظار الصرف", "RELEASED": "مصروف", "PROPOSED": "مقترح", "SUPERSEDED": "مستبدل", "EVIDENCE_COLLECTION": "جمع الأدلة", "MEDIATION": "وساطة", "RESOLVED": "محلول", "CLOSED": "مغلق", "PUBLISHED": "منشور", "HIDDEN": "مخفي", "REMOVED": "محذوف", "APPROVED": "معتمد", "LOCKED": "مقفل", "UNDER_REVIEW": "قيد المراجعة", "IMPLEMENTED": "منفذ", "MITIGATING": "قيد المعالجة", "BLOCKED": "محظور", "TODO": "للعمل", "BACKLOG": "قائمة الانتظار", "IN_REVIEW_TASK": "قيد المراجعة", "DONE": "منجز", "LOW": "منخفض", "MEDIUM": "متوسط", "HIGH": "مرتفع", "CRITICAL": "حرج", "URGENT": "عاجل", "HEALTHY": "سليم", "WATCH": "للمراقبة", "AT_RISK": "معرض للخطر", "CLIENT": "العميل", "PROVIDER": "المزود", "PENDING": "معلق", "PROCESSING": "قيد المعالجة", "FAILED": "فشل", "DEAD_LETTER": "رسالة متعذرة", "QUEUED": "في قائمة الانتظار", "RUNNING": "قيد التشغيل", "PENDING_APPROVAL": "بانتظار الموافقة", "EXPIRED": "منتهي الصلاحية", "CLEAN": "سليم", "INFECTED": "مصاب", "SCANNING": "قيد الفحص", "UPLOADING": "قيد الرفع", "INVESTIGATING": "قيد التحقيق", "ACTIONED": "تم اتخاذ إجراء", "NORMAL": "عادي", "ONLINE": "متصل", "AWAY": "بعيد", "OFFLINE": "غير متصل", "FRESH": "حديث", "STALE": "قديم", "EMPTY": "فارغ", "healthy": "سليم", "ready": "جاهز", "degraded": "متدهور", "unhealthy": "غير سليم", "configured": "مهيأ", "not_configured": "غير مهيأ"
-    , "NOT_CONFIGURED": "غير مهيأ", "ISSUED": "صادرة", "PARTIALLY_PAID": "مدفوعة جزئياً", "OVERDUE": "متأخرة", "VOID": "ملغاة", "PAID": "مدفوعة", "CHARGE": "تحصيل", "REFUND": "استرداد", "SUCCEEDED": "نجح", "SHORTLISTED": "في القائمة المختصرة", "WITHDRAWN": "مسحوب", "AWARDED": "تم الإسناد", "UNREAD": "غير مقروء", "READ": "مقروء", "ARCHIVED": "مؤرشف", "MANAGER": "مدير", "CONTRIBUTOR": "مساهم", "VIEWER": "مشاهد", "FIXED_PRICE": "سعر ثابت", "HOURLY": "بالساعة", "RETAINER": "عقد مستمر", "EMPLOYMENT": "توظيف", "ENTRY": "مبتدئ", "INTERMEDIATE": "متوسط", "EXPERT": "خبير", "AVAILABLE": "متاح", "LIMITED": "متاح جزئياً", "UNAVAILABLE": "غير متاح", "FINISH_TO_START": "من الإنهاء إلى البدء", "START_TO_START": "من البدء إلى البدء", "FINISH_TO_FINISH": "من الإنهاء إلى الإنهاء", "NO_TRAINING": "دون تدريب", "TENANT_ONLY": "للمؤسسة فقط", "STANDARD": "قياسي", "RETENTION_ENFORCE": "تطبيق الاحتفاظ", "SEARCH_INCREMENTAL": "بحث تزايدي", "NOTIFICATION_DELIVERY": "تسليم الإشعارات", "ORGANIZATION": "المؤسسة", "PROJECT": "المشروع", "FINANCE": "المالية", "AUDIT": "التدقيق"
+    , "NOT_CONFIGURED": "غير مهيأ", "ISSUED": "صادرة", "PARTIALLY_PAID": "مدفوعة جزئياً", "OVERDUE": "متأخرة", "VOID": "ملغاة", "PAID": "مدفوعة", "CHARGE": "تحصيل", "REFUND": "استرداد", "SUCCEEDED": "نجح", "SHORTLISTED": "في القائمة المختصرة", "WITHDRAWN": "مسحوب", "AWARDED": "تم الإسناد", "UNREAD": "غير مقروء", "READ": "مقروء", "ARCHIVED": "مؤرشف", "MANAGER": "مدير", "CONTRIBUTOR": "مساهم", "VIEWER": "مشاهد", "FIXED_PRICE": "سعر ثابت", "HOURLY": "بالساعة", "RETAINER": "عقد مستمر", "EMPLOYMENT": "توظيف", "ENTRY": "مبتدئ", "INTERMEDIATE": "متوسط", "EXPERT": "خبير", "AVAILABLE": "متاح", "LIMITED": "متاح جزئياً", "UNAVAILABLE": "غير متاح", "FINISH_TO_START": "من الإنهاء إلى البدء", "START_TO_START": "من البدء إلى البدء", "FINISH_TO_FINISH": "من الإنهاء إلى الإنهاء", "NO_TRAINING": "دون تدريب", "TENANT_ONLY": "للمؤسسة فقط", "STANDARD": "قياسي", "RETENTION_ENFORCE": "تطبيق الاحتفاظ", "SEARCH_INCREMENTAL": "بحث تزايدي", "NOTIFICATION_DELIVERY": "تسليم الإشعارات", "ORGANIZATION": "المؤسسة", "PROJECT": "المشروع", "FINANCE": "المالية", "AUDIT": "التدقيق", "SUSPENDED": "موقوف", "REACTIVATED": "معاد التفعيل", "ACTIVE_USER": "المستخدمون النشطون", "AI_TOKEN": "رموز الذكاء الاصطناعي", "STORAGE_BYTE": "بايتات التخزين", "API_CALL": "استدعاءات الواجهة", "REALTIME_CONNECTION_MINUTE": "دقائق الاتصال اللحظي", "DELIVERED": "تم التسليم", "RETRYING": "إعادة المحاولة", "BOUNCED": "مرتد"
   },
   "Footer": { "privacy": "الخصوصية", "terms": "الشروط", "security": "الأمن", "contact": "اتصل بنا", "tagline": "نظام تشغيل ذكي لمستقبل العمل." },
   "EnterpriseConsole": {
@@ -1021,6 +1022,41 @@
     "legalHoldDefaultBadge": "الحجز القانوني افتراضي",
     "standardRetention": "احتفاظ قياسي",
     "noRetention": "لا توجد سياسات احتفاظ."
+  },
+  "Administration": {
+    "eyebrow": "تحكم المؤسسة المتقدم",
+    "title": "إدارة المؤسسة",
+    "description": "إدارة الاشتراكات والمقاعد والأعضاء والهيكل التنظيمي وأدلة الوصول وتسليم البريد والأمان التكيفي من مساحة عمل محكومة واحدة.",
+    "subscription": "إدارة الاشتراك",
+    "renewal": "التجديد",
+    "seats": "المقاعد النشطة",
+    "plans": "الخطط المتاحة",
+    "renew": "تجديد",
+    "suspend": "إيقاف",
+    "reactivate": "إعادة التفعيل",
+    "members": "إدارة الأعضاء",
+    "bulkInvitations": "دعوات جماعية",
+    "emailAddresses": "عناوين البريد الإلكتروني",
+    "role": "الدور",
+    "bulkRoleChanges": "تغيير الأدوار جماعياً",
+    "notAvailable": "غير متاح",
+    "select": "اختر",
+    "structure": "الهيكل التنظيمي",
+    "departments": "الأقسام",
+    "teams": "الفرق",
+    "departmentName": "اسم القسم",
+    "teamName": "اسم الفريق",
+    "access": "ضمان الصلاحيات",
+    "permissionAudit": "تدقيق الصلاحيات",
+    "accessReviews": "مراجعات الوصول",
+    "emailOperations": "عمليات البريد الإلكتروني",
+    "attempts": "المحاولات",
+    "security": "الأمان التكيفي",
+    "riskDecisions": "قرارات المخاطر",
+    "devices": "الأجهزة",
+    "releaseLock": "رفع القفل",
+    "administrativeReason": "تمت المراجعة والموافقة من مسؤول مخول.",
+    "requestFailed": "تعذر إكمال العملية الإدارية."
   },
   "Errors": {
     "BAD_REQUEST": "تعذر فهم الطلب.",

@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/database/prisma";
@@ -12,6 +11,8 @@ import type {
   settingsSchema,
   updateOrganizationSchema,
 } from "@/lib/validation/organization";
+import { MemberAdministrationService } from "@/lib/services/member-administration.service";
+import { IdentityService } from "@/lib/services/identity.service";
 
 type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 type UpdateMembershipInput = z.infer<typeof membershipSchema>;
@@ -102,10 +103,21 @@ export class OrganizationDomainService {
     input: UpdateMembershipInput,
   ) {
     await assertOrganizationAccess(context, organizationId);
-
-    const membership = await prisma.membership.update({
+    const identity = new IdentityService();
+    if (input.roleId !== undefined) {
+      await identity.assignRole(context, membershipId, input.roleId);
+    }
+    if (input.status && input.status !== "INVITED") {
+      const action =
+        input.status === "ACTIVE"
+          ? "RESTORE"
+          : input.status === "SUSPENDED"
+            ? "SUSPEND"
+            : "REMOVE";
+      await identity.performMembershipAction(context, membershipId, action);
+    }
+    const membership = await prisma.membership.findFirstOrThrow({
       where: { id: membershipId, organizationId },
-      data: input,
     });
 
     await prisma.organizationActivity.create({
@@ -128,10 +140,11 @@ export class OrganizationDomainService {
     membershipId: string,
   ) {
     await assertOrganizationAccess(context, organizationId);
-
-    const membership = await prisma.membership.delete({
-      where: { id: membershipId, organizationId },
-    });
+    const membership = await new IdentityService().performMembershipAction(
+      context,
+      membershipId,
+      "REMOVE",
+    );
 
     await prisma.organizationActivity.create({
       data: {
@@ -162,35 +175,13 @@ export class OrganizationDomainService {
     input: InviteInput,
   ) {
     await assertOrganizationAccess(context, organizationId);
-
-    const developmentToken = randomBytes(32).toString("hex");
-    const tokenHash = createHash("sha256")
-      .update(developmentToken)
-      .digest("hex");
-
-    const invitation = await prisma.organizationInvitation.create({
-      data: {
-        organizationId,
-        email: input.email,
-        roleId: input.roleId,
-        tokenHash,
-        expiresAt: new Date(Date.now() + input.expiresInHours * 3_600_000),
-        createdById: context.userId,
-      },
-    });
-
-    await prisma.organizationActivity.create({
-      data: {
-        organizationId,
-        actorUserId: context.userId,
-        type: "INVITATION_CREATED",
-        resourceType: "OrganizationInvitation",
-        resourceId: invitation.id,
-        summary: `Invitation created for ${input.email}.`,
-      },
-    });
-
-    return { invitation, ...(process.env.NODE_ENV !== "production" && process.env.EXPOSE_DEVELOPMENT_TOKENS === "true" ? { developmentToken } : {}) };
+    const result = await new MemberAdministrationService().bulkInvite(context, [input]);
+    return {
+      invitation: result.invitations[0],
+      ...(result.developmentTokens?.[0]
+        ? { developmentToken: result.developmentTokens[0].token }
+        : {}),
+    };
   }
 
   async setInvitation(

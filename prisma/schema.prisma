@@ -74,6 +74,17 @@ model User {
   loginEvents                LoginEvent[]
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetTokens        PasswordResetToken[]
+  emailChangeTokens          EmailChangeToken[]
+  emailMessages              EmailMessage[]
+  verifiedDevices            VerifiedDevice[]
+  adaptiveRiskDecisions      AdaptiveRiskDecision[]    @relation("RiskSubject")
+  reviewedRiskDecisions      AdaptiveRiskDecision[]    @relation("RiskReviewer")
+  accountLocks               AccountLock[]             @relation("AccountLockSubject")
+  releasedAccountLocks       AccountLock[]             @relation("AccountLockReleaser")
+  subscriptionEvents         SubscriptionEvent[]       @relation("SubscriptionEventActor")
+  initiatedPermissionAudits  PermissionAudit[]         @relation("PermissionAuditInitiator")
+  createdAccessReviews       AccessReview[]            @relation("AccessReviewCreator")
+  decidedAccessReviewItems   AccessReviewItem[]        @relation("AccessReviewItemReviewer")
   projectMemberships         ProjectMembership[]
   assignedTasks              ProjectTask[]             @relation("TaskAssignee")
   createdTasks               ProjectTask[]             @relation("TaskCreator")
@@ -231,6 +242,17 @@ model Organization {
   workflowApprovals        WorkflowApproval[]
   talentMatches            TalentMatch[]
   rateLimitBuckets         RateLimitBucket[]
+  departments              Department[]
+  teams                    Team[]
+  permissionAudits         PermissionAudit[]
+  accessReviews            AccessReview[]
+  emailTemplates           EmailTemplate[]
+  emailMessages            EmailMessage[]
+  emailAuditEvents         EmailAuditEvent[]
+  adaptiveRiskDecisions    AdaptiveRiskDecision[]
+  accountLocks             AccountLock[]
+  subscriptionEvents       SubscriptionEvent[]
+  subscriptionSeats        SubscriptionSeat[]
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
   projectTemplates         ProjectTemplate[]
@@ -238,16 +260,21 @@ model Organization {
 }
 
 model Membership {
-  id             String           @id @default(cuid())
-  userId         String
-  organizationId String
-  roleId         String?
-  status         MembershipStatus @default(INVITED)
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role           Role?            @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id                 String             @id @default(cuid())
+  userId             String
+  organizationId     String
+  roleId             String?
+  status             MembershipStatus   @default(INVITED)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role               Role?              @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  subscriptionSeat   SubscriptionSeat?
+  managedDepartments Department[]       @relation("DepartmentManager")
+  managedTeams       Team[]             @relation("TeamManager")
+  teamMemberships    TeamMembership[]
+  accessReviewItems  AccessReviewItem[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@unique([userId, organizationId])
   @@index([organizationId, status])
@@ -448,6 +475,20 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId, expiresAt])
+}
+
+model EmailChangeToken {
+  id        String    @id @default(cuid())
+  userId    String
+  newEmail  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([newEmail, expiresAt])
 }
 
 model AuditEvent {
@@ -1085,6 +1126,7 @@ enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   PAUSED
+  SUSPENDED
   CANCELLED
   EXPIRED
 }
@@ -1096,6 +1138,89 @@ enum UsageUnit {
   PROJECT
   API_CALL
   REALTIME_CONNECTION_MINUTE
+}
+
+enum SubscriptionEventType {
+  TRIAL_STARTED
+  PLAN_CHANGED
+  BILLING_STATUS_CHANGED
+  RENEWAL_SCHEDULED
+  RENEWED
+  SUSPENDED
+  REACTIVATED
+  CANCELLATION_SCHEDULED
+  CANCELLED
+  SEAT_ASSIGNED
+  SEAT_RELEASED
+  ADMIN_OVERRIDE
+}
+
+enum SubscriptionSeatStatus {
+  ACTIVE
+  RELEASED
+}
+
+enum QuotaEnforcement {
+  SOFT
+  HARD
+}
+
+enum AccessReviewStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AccessReviewDecision {
+  PENDING
+  RETAIN
+  CHANGE_ROLE
+  SUSPEND
+  REMOVE
+}
+
+enum EmailMessageStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  RETRYING
+  FAILED
+  BOUNCED
+  CANCELLED
+}
+
+enum EmailDeliveryAttemptStatus {
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum EmailBounceType {
+  SOFT
+  HARD
+  COMPLAINT
+}
+
+enum DeviceTrustStatus {
+  PENDING
+  VERIFIED
+  REVOKED
+}
+
+enum RiskDecisionAction {
+  ALLOW
+  CHALLENGE
+  THROTTLE
+  LOCK
+  BLOCK
+}
+
+enum AccountLockStatus {
+  ACTIVE
+  RELEASED
+  EXPIRED
 }
 
 enum SupportCaseStatus {
@@ -2749,41 +2874,117 @@ model Refund {
 }
 
 model SubscriptionPlan {
-  id            String                     @id @default(cuid())
-  code          String                     @unique
-  name          String
-  description   String?
-  priceMinor    BigInt
-  currency      String                     @default("AED")
-  interval      String                     @default("MONTH")
-  entitlements  Json
-  isActive      Boolean                    @default(true)
-  subscriptions OrganizationSubscription[]
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
+  id                  String                     @id @default(cuid())
+  code                String                     @unique
+  name                String
+  description         String?
+  priceMinor          BigInt
+  currency            String                     @default("AED")
+  interval            String                     @default("MONTH")
+  entitlements        Json
+  isActive            Boolean                    @default(true)
+  subscriptions       OrganizationSubscription[]
+  featureEntitlements PlanFeatureEntitlement[]
+  usageQuotas         PlanUsageQuota[]
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   @@index([isActive, priceMinor])
 }
 
 model OrganizationSubscription {
-  id                      String             @id @default(cuid())
-  organizationId          String             @unique
+  id                      String              @id @default(cuid())
+  organizationId          String              @unique
   planId                  String
-  status                  SubscriptionStatus @default(TRIALING)
+  status                  SubscriptionStatus  @default(TRIALING)
   providerKey             String?
   providerCustomerRef     String?
   providerSubscriptionRef String?
   currentPeriodStart      DateTime
   currentPeriodEnd        DateTime
-  cancelAtPeriodEnd       Boolean            @default(false)
-  organization            Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan                    SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  trialStartedAt          DateTime?
+  trialEndsAt             DateTime?
+  renewAt                 DateTime?
+  renewedAt               DateTime?
+  suspendedAt             DateTime?
+  reactivatedAt           DateTime?
+  cancelledAt             DateTime?
+  suspensionReason        String?
+  cancellationReason      String?
+  cancelAtPeriodEnd       Boolean             @default(false)
+  version                 Int                 @default(1)
+  organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                    SubscriptionPlan    @relation(fields: [planId], references: [id], onDelete: Restrict)
   usageRecords            UsageRecord[]
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  seats                   SubscriptionSeat[]
+  events                  SubscriptionEvent[]
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   @@index([planId, status])
   @@index([status, currentPeriodEnd])
+}
+
+model PlanFeatureEntitlement {
+  id            String           @id @default(cuid())
+  planId        String
+  key           String
+  enabled       Boolean          @default(true)
+  configuration Json?
+  plan          SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([planId, key])
+  @@index([key, enabled])
+}
+
+model PlanUsageQuota {
+  id          String           @id @default(cuid())
+  planId      String
+  unit        UsageUnit
+  limit       BigInt
+  enforcement QuotaEnforcement @default(HARD)
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([planId, unit])
+  @@index([unit, enforcement])
+}
+
+model SubscriptionSeat {
+  id             String                   @id @default(cuid())
+  organizationId String
+  subscriptionId String
+  membershipId   String                   @unique
+  status         SubscriptionSeatStatus   @default(ACTIVE)
+  assignedAt     DateTime                 @default(now())
+  releasedAt     DateTime?
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription   OrganizationSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  membership     Membership               @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([subscriptionId, status])
+}
+
+model SubscriptionEvent {
+  id             String                   @id @default(cuid())
+  organizationId String
+  subscriptionId String
+  actorUserId    String?
+  type           SubscriptionEventType
+  reason         String?
+  metadata       Json?
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription   OrganizationSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  actor          User?                    @relation("SubscriptionEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime                 @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, createdAt])
+  @@index([type, createdAt])
 }
 
 model UsageRecord {
@@ -2950,6 +3151,282 @@ model OrganizationBranding {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model Department {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  name                String
+  description         String?
+  parentId            String?
+  managerMembershipId String?
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent              Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children            Department[] @relation("DepartmentHierarchy")
+  manager             Membership?  @relation("DepartmentManager", fields: [managerMembershipId], references: [id], onDelete: SetNull)
+  teams               Team[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, parentId])
+  @@index([managerMembershipId])
+}
+
+model Team {
+  id                  String           @id @default(cuid())
+  organizationId      String
+  departmentId        String?
+  managerMembershipId String?
+  name                String
+  description         String?
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department          Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  manager             Membership?      @relation("TeamManager", fields: [managerMembershipId], references: [id], onDelete: SetNull)
+  memberships         TeamMembership[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, departmentId])
+  @@index([managerMembershipId])
+}
+
+model TeamMembership {
+  teamId       String
+  membershipId String
+  team         Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([teamId, membershipId])
+  @@index([membershipId])
+}
+
+model PermissionAudit {
+  id             String       @id @default(cuid())
+  organizationId String
+  initiatedById  String
+  snapshot       Json
+  findings       Json
+  completedAt    DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  initiatedBy    User         @relation("PermissionAuditInitiator", fields: [initiatedById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([initiatedById, createdAt])
+}
+
+model AccessReview {
+  id             String             @id @default(cuid())
+  organizationId String
+  title          String
+  status         AccessReviewStatus @default(DRAFT)
+  dueAt          DateTime?
+  createdById    String
+  startedAt      DateTime?
+  completedAt    DateTime?
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User               @relation("AccessReviewCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  items          AccessReviewItem[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model AccessReviewItem {
+  id             String               @id @default(cuid())
+  accessReviewId String
+  membershipId   String
+  currentRoleId  String?
+  proposedRoleId String?
+  decision       AccessReviewDecision @default(PENDING)
+  reviewedById   String?
+  reviewNote     String?
+  reviewedAt     DateTime?
+  accessReview   AccessReview         @relation(fields: [accessReviewId], references: [id], onDelete: Cascade)
+  membership     Membership           @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reviewedBy     User?                @relation("AccessReviewItemReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([accessReviewId, membershipId])
+  @@index([membershipId, decision])
+  @@index([reviewedById, reviewedAt])
+}
+
+model EmailTemplate {
+  id             String        @id @default(cuid())
+  organizationId String?
+  scope          String        @default("platform")
+  key            String
+  locale         String
+  subject        String
+  textBody       String
+  htmlBody       String
+  branding       Json?
+  version        Int           @default(1)
+  isActive       Boolean       @default(true)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([scope, key, locale])
+  @@index([organizationId, isActive])
+}
+
+model EmailMessage {
+  id               String                 @id @default(cuid())
+  organizationId   String?
+  userId           String?
+  recipient        String
+  templateKey      String
+  locale           String                 @default("en-AE")
+  subject          String
+  textBody         String
+  htmlBody         String
+  status           EmailMessageStatus     @default(QUEUED)
+  attempts         Int                    @default(0)
+  maxAttempts      Int                    @default(8)
+  availableAt      DateTime               @default(now())
+  provider         String?
+  providerRef      String?                @unique
+  lastError        String?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  bouncedAt        DateTime?
+  metadata         Json?
+  organization     Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  deliveryAttempts EmailDeliveryAttempt[]
+  bounces          EmailBounce[]
+  auditEvents      EmailAuditEvent[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([status, availableAt])
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([recipient, createdAt])
+}
+
+model EmailDeliveryAttempt {
+  id          String                     @id @default(cuid())
+  messageId   String
+  attempt     Int
+  status      EmailDeliveryAttemptStatus @default(PROCESSING)
+  providerRef String?
+  error       String?
+  startedAt   DateTime                   @default(now())
+  finishedAt  DateTime?
+  message     EmailMessage               @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, attempt])
+  @@index([status, startedAt])
+}
+
+model EmailBounce {
+  id              String          @id @default(cuid())
+  messageId       String
+  providerEventId String          @unique
+  type            EmailBounceType
+  reason          String?
+  metadata        Json?
+  occurredAt      DateTime
+  message         EmailMessage    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt       DateTime        @default(now())
+
+  @@index([messageId, occurredAt])
+  @@index([type, occurredAt])
+}
+
+model EmailAuditEvent {
+  id             String        @id @default(cuid())
+  organizationId String?
+  messageId      String?
+  type           String
+  metadata       Json?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  message        EmailMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([messageId, createdAt])
+  @@index([type, createdAt])
+}
+
+model VerifiedDevice {
+  id                    String            @id @default(cuid())
+  userId                String
+  fingerprintHash       String
+  verificationTokenHash String?           @unique
+  verificationExpiresAt DateTime?
+  label                 String?
+  status                DeviceTrustStatus @default(PENDING)
+  riskScore             Int               @default(0)
+  lastIpAddress         String?
+  lastSeenAt            DateTime          @default(now())
+  verifiedAt            DateTime?
+  revokedAt             DateTime?
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@unique([userId, fingerprintHash])
+  @@index([userId, status])
+  @@index([status, riskScore])
+}
+
+model AdaptiveRiskDecision {
+  id                String             @id @default(cuid())
+  organizationId    String?
+  userId            String?
+  emailFingerprint  String
+  ipAddress         String?
+  deviceFingerprint String?
+  score             Int
+  action            RiskDecisionAction
+  reasons           String[]
+  metadata          Json?
+  reviewedAt        DateTime?
+  reviewedById      String?
+  reviewNote        String?
+  organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user              User?              @relation("RiskSubject", fields: [userId], references: [id], onDelete: SetNull)
+  reviewedBy        User?              @relation("RiskReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  accountLocks      AccountLock[]
+  createdAt         DateTime           @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, score, createdAt])
+  @@index([emailFingerprint, createdAt])
+}
+
+model AccountLock {
+  id             String                @id @default(cuid())
+  organizationId String?
+  userId         String
+  riskDecisionId String?
+  status         AccountLockStatus     @default(ACTIVE)
+  reason         String
+  lockedUntil    DateTime
+  releasedAt     DateTime?
+  releasedById   String?
+  releaseNote    String?
+  organization   Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User                  @relation("AccountLockSubject", fields: [userId], references: [id], onDelete: Cascade)
+  riskDecision   AdaptiveRiskDecision? @relation(fields: [riskDecisionId], references: [id], onDelete: SetNull)
+  releasedBy     User?                 @relation("AccountLockReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([userId, status, lockedUntil])
+  @@index([organizationId, status])
+  @@index([riskDecisionId])
 }
 
 model PolicyConfiguration {

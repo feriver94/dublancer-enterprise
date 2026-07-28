@@ -346,6 +346,7 @@ process.memoryUsage = safe;
 
   const applicationEnv = {
     DATABASE_URL: databaseUrl,
+    DATABASE_POOL_MAX: "1",
     APP_BASE_URL: baseUrl,
     REDIS_URL: `redis://127.0.0.1:${redisPort}`,
     AUTH_SECRET: `${randomUUID()}${randomUUID()}`,

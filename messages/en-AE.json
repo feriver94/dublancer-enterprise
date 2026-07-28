@@ -83,6 +83,7 @@
     "workspace": "Workspace",
     "contracts": "Contracts",
     "chat": "Chat",
+    "notifications": "Notifications",
     "pricing": "Pricing",
     "enterprise": "Enterprise",
     "organization": "Organization",
@@ -764,7 +765,7 @@
   },
   "Status": {
     "DRAFT": "Draft", "OPEN": "Open", "ACTIVE": "Active", "IN_PROGRESS": "In progress", "COMPLETED": "Completed", "CANCELLED": "Cancelled", "DISPUTED": "Disputed", "PENDING_SIGNATURES": "Pending signatures", "PAUSED": "Paused", "TERMINATED": "Terminated", "PLANNED": "Planned", "FUNDED": "Funded", "SUBMITTED": "Submitted", "IN_REVIEW": "In review", "REVISION_REQUESTED": "Revision requested", "ACCEPTED": "Accepted", "REJECTED": "Rejected", "RELEASE_PENDING": "Release pending", "RELEASED": "Released", "PROPOSED": "Proposed", "SUPERSEDED": "Superseded", "EVIDENCE_COLLECTION": "Evidence collection", "MEDIATION": "Mediation", "RESOLVED": "Resolved", "CLOSED": "Closed", "PUBLISHED": "Published", "HIDDEN": "Hidden", "REMOVED": "Removed", "APPROVED": "Approved", "LOCKED": "Locked", "UNDER_REVIEW": "Under review", "IMPLEMENTED": "Implemented", "MITIGATING": "Mitigating", "BLOCKED": "Blocked", "TODO": "To do", "BACKLOG": "Backlog", "IN_REVIEW_TASK": "In review", "DONE": "Done", "LOW": "Low", "MEDIUM": "Medium", "HIGH": "High", "CRITICAL": "Critical", "URGENT": "Urgent", "HEALTHY": "Healthy", "WATCH": "Watch", "AT_RISK": "At risk", "CLIENT": "Client", "PROVIDER": "Provider", "PENDING": "Pending", "PROCESSING": "Processing", "FAILED": "Failed", "DEAD_LETTER": "Dead letter", "QUEUED": "Queued", "RUNNING": "Running", "PENDING_APPROVAL": "Pending approval", "EXPIRED": "Expired", "CLEAN": "Clean", "INFECTED": "Infected", "SCANNING": "Scanning", "UPLOADING": "Uploading", "INVESTIGATING": "Investigating", "ACTIONED": "Actioned", "NORMAL": "Normal", "ONLINE": "Online", "AWAY": "Away", "OFFLINE": "Offline", "FRESH": "Fresh", "STALE": "Stale", "EMPTY": "Empty", "healthy": "Healthy", "ready": "Ready", "degraded": "Degraded", "unhealthy": "Unhealthy", "configured": "Configured", "not_configured": "Not configured"
-    , "NOT_CONFIGURED": "Not configured", "ISSUED": "Issued", "PARTIALLY_PAID": "Partially paid", "OVERDUE": "Overdue", "VOID": "Void", "PAID": "Paid", "CHARGE": "Charge", "REFUND": "Refund", "SUCCEEDED": "Succeeded", "SHORTLISTED": "Shortlisted", "WITHDRAWN": "Withdrawn", "AWARDED": "Awarded", "UNREAD": "Unread", "READ": "Read", "ARCHIVED": "Archived", "MANAGER": "Manager", "CONTRIBUTOR": "Contributor", "VIEWER": "Viewer", "FIXED_PRICE": "Fixed price", "HOURLY": "Hourly", "RETAINER": "Retainer", "EMPLOYMENT": "Employment", "ENTRY": "Entry", "INTERMEDIATE": "Intermediate", "EXPERT": "Expert", "AVAILABLE": "Available", "LIMITED": "Limited", "UNAVAILABLE": "Unavailable", "FINISH_TO_START": "Finish to start", "START_TO_START": "Start to start", "FINISH_TO_FINISH": "Finish to finish", "NO_TRAINING": "No training", "TENANT_ONLY": "Tenant only", "STANDARD": "Standard", "RETENTION_ENFORCE": "Retention enforcement", "SEARCH_INCREMENTAL": "Incremental search", "NOTIFICATION_DELIVERY": "Notification delivery", "ORGANIZATION": "Organization", "PROJECT": "Project", "FINANCE": "Finance", "AUDIT": "Audit"
+    , "NOT_CONFIGURED": "Not configured", "ISSUED": "Issued", "PARTIALLY_PAID": "Partially paid", "OVERDUE": "Overdue", "VOID": "Void", "PAID": "Paid", "CHARGE": "Charge", "REFUND": "Refund", "SUCCEEDED": "Succeeded", "SHORTLISTED": "Shortlisted", "WITHDRAWN": "Withdrawn", "AWARDED": "Awarded", "UNREAD": "Unread", "READ": "Read", "ARCHIVED": "Archived", "MANAGER": "Manager", "CONTRIBUTOR": "Contributor", "VIEWER": "Viewer", "FIXED_PRICE": "Fixed price", "HOURLY": "Hourly", "RETAINER": "Retainer", "EMPLOYMENT": "Employment", "ENTRY": "Entry", "INTERMEDIATE": "Intermediate", "EXPERT": "Expert", "AVAILABLE": "Available", "LIMITED": "Limited", "UNAVAILABLE": "Unavailable", "FINISH_TO_START": "Finish to start", "START_TO_START": "Start to start", "FINISH_TO_FINISH": "Finish to finish", "NO_TRAINING": "No training", "TENANT_ONLY": "Tenant only", "STANDARD": "Standard", "RETENTION_ENFORCE": "Retention enforcement", "SEARCH_INCREMENTAL": "Incremental search", "NOTIFICATION_DELIVERY": "Notification delivery", "ORGANIZATION": "Organization", "PROJECT": "Project", "FINANCE": "Finance", "AUDIT": "Audit", "SUSPENDED": "Suspended", "REACTIVATED": "Reactivated", "ACTIVE_USER": "Active users", "AI_TOKEN": "AI tokens", "STORAGE_BYTE": "Storage bytes", "API_CALL": "API calls", "REALTIME_CONNECTION_MINUTE": "Realtime minutes", "DELIVERED": "Delivered", "RETRYING": "Retrying", "BOUNCED": "Bounced"
   },
   "Footer": { "privacy": "Privacy", "terms": "Terms", "security": "Security", "contact": "Contact", "tagline": "AI operating system for the future of work." },
   "EnterpriseConsole": {
@@ -1021,6 +1022,41 @@
     "legalHoldDefaultBadge": "Legal hold default",
     "standardRetention": "Standard retention",
     "noRetention": "There are no retention policies."
+  },
+  "Administration": {
+    "eyebrow": "Enterprise organization control",
+    "title": "Organization administration",
+    "description": "Manage subscriptions, seats, members, organizational structure, access evidence, email delivery and adaptive security from one governed workspace.",
+    "subscription": "Subscription administration",
+    "renewal": "Renewal",
+    "seats": "Active seats",
+    "plans": "Available plans",
+    "renew": "Renew",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "members": "Member administration",
+    "bulkInvitations": "Bulk invitations",
+    "emailAddresses": "Email addresses",
+    "role": "Role",
+    "bulkRoleChanges": "Bulk role changes",
+    "notAvailable": "Not available",
+    "select": "Select",
+    "structure": "Organization hierarchy",
+    "departments": "Departments",
+    "teams": "Teams",
+    "departmentName": "Department name",
+    "teamName": "Team name",
+    "access": "Permission assurance",
+    "permissionAudit": "Permission audit",
+    "accessReviews": "Access reviews",
+    "emailOperations": "Email operations",
+    "attempts": "Attempts",
+    "security": "Adaptive security",
+    "riskDecisions": "Risk decisions",
+    "devices": "Devices",
+    "releaseLock": "Release lock",
+    "administrativeReason": "Reviewed and approved by an authorized administrator.",
+    "requestFailed": "The administrative operation could not be completed."
   },
   "Errors": {
     "BAD_REQUEST": "The request could not be understood.",
