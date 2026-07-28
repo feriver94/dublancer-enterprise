@@ -13,7 +13,13 @@ export async function getAuthenticatedContext() {
   catch { throw new AppError("UNAUTHORIZED", "Invalid or expired session.", 401); }
 
   const session = await prisma.authSession.findFirst({
-    where: { id: claims.sessionId, userId: claims.sub, status: "ACTIVE", expiresAt: { gt: new Date() } },
+    where: {
+      id: claims.sessionId,
+      userId: claims.sub,
+      status: "ACTIVE",
+      expiresAt: { gt: new Date() },
+      OR: [{ idleExpiresAt: null }, { idleExpiresAt: { gt: new Date() } }],
+    },
     include: { user: { select: { isPlatformAdmin: true } } },
   });
   if (!session) throw new AppError("UNAUTHORIZED", "Session is no longer active.", 401);
@@ -53,12 +59,51 @@ export async function getAuthenticatedContext() {
     }
   }
 
+  if (session.lastSeenAt.getTime() < Date.now() - 5 * 60_000) {
+    const policy = session.organizationId
+      ? await prisma.organizationIdentityPolicy.findUnique({
+          where: { organizationId: session.organizationId },
+          select: { sessionIdleMinutes: true },
+        })
+      : null;
+    await prisma.authSession.updateMany({
+      where: { id: session.id, status: "ACTIVE" },
+      data: {
+        lastSeenAt: new Date(),
+        idleExpiresAt: new Date(
+          Date.now() + (policy?.sessionIdleMinutes ?? 720) * 60_000,
+        ),
+      },
+    });
+  }
+
   return {
     sessionId: session.id,
     userId: claims.sub,
     organizationId: session.organizationId ?? "",
     isPlatformAdmin: session.user.isPlatformAdmin,
+    assuranceLevel: session.assuranceLevel,
+    authMethod: session.authMethod,
+    stepUpExpiresAt: session.stepUpExpiresAt,
+    trustedDeviceId: session.trustedDeviceId,
   };
+}
+
+export async function requireStepUpAuthentication() {
+  const context = await getAuthenticatedContext();
+  if (
+    context.assuranceLevel === "AAL1" ||
+    !context.stepUpExpiresAt ||
+    context.stepUpExpiresAt <= new Date()
+  ) {
+    throw new AppError(
+      "FORBIDDEN",
+      "Recent MFA verification is required for this action.",
+      403,
+      { code: "STEP_UP_REQUIRED" },
+    );
+  }
+  return context;
 }
 
 export async function getRequestMetadata() {

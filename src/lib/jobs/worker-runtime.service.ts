@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type BackgroundJob } from "@prisma/client";
 import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
+import {
+  incrementMetric,
+  observeMetric,
+} from "@/lib/observability/metrics";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 export const DEFAULT_LEASE_MS = 60_000;
@@ -100,6 +104,7 @@ export async function claimJob(input: {
   leaseMs?: number;
   version?: string;
   hostname?: string;
+  contentionAttempt?: number;
 }): Promise<ClaimedJob | null> {
   const now = new Date();
   const leaseMs = Math.max(5_000, Math.min(input.leaseMs ?? DEFAULT_LEASE_MS, 15 * 60_000));
@@ -131,7 +136,7 @@ export async function claimJob(input: {
 
   const leaseToken = randomUUID();
   const attemptNumber = candidate.attempts + 1;
-  return prisma.$transaction(async (tx) => {
+  const claimed = await prisma.$transaction(async (tx) => {
     const changed = await tx.backgroundJob.updateMany({
       where: {
         id: candidate.id,
@@ -189,6 +194,27 @@ export async function claimJob(input: {
     const job = await tx.backgroundJob.findUniqueOrThrow({ where: { id: candidate.id } });
     return { job, leaseToken };
   });
+  if (!claimed && (input.contentionAttempt ?? 0) < 2) {
+    incrementMetric("dublancer_queue_claim_contention_total", {
+      queue: candidate.queue,
+    });
+    return claimJob({
+      ...input,
+      contentionAttempt: (input.contentionAttempt ?? 0) + 1,
+    });
+  }
+  if (claimed) {
+    observeMetric(
+      "dublancer_queue_wait_duration_ms",
+      Math.max(0, now.getTime() - candidate.availableAt.getTime()),
+      { queue: candidate.queue, type: candidate.type },
+    );
+    incrementMetric("dublancer_queue_claims_total", {
+      queue: candidate.queue,
+      result: "claimed",
+    });
+  }
+  return claimed;
 }
 
 export async function heartbeatJob(input: {
@@ -272,6 +298,10 @@ export async function failJob(claim: ClaimedJob, error: unknown, diagnostics?: u
     });
     if (claim.job.lockedBy) await tx.workerHeartbeat.updateMany({ where: { workerId: claim.job.lockedBy }, data: { currentJobId: null, lastSeenAt: now } });
     if (exhausted) {
+      incrementMetric("dublancer_queue_jobs_total", {
+        queue: claim.job.queue,
+        result: "dead_letter",
+      });
       await tx.deadLetterJob.upsert({
         where: { originalJobId: claim.job.id },
         create: {

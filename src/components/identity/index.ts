@@ -9,3 +9,4 @@ export { default as AccessReviewCenter } from "./AccessReviewCenter";
 export { default as APIKeysServiceAccounts } from "./APIKeysServiceAccounts";
 export { default as IdentityAuditTrail } from "./IdentityAuditTrail";
 export { default as IdentityAI } from "./IdentityAI";
+export { EnterpriseIdentityClient } from "./EnterpriseIdentityClient";

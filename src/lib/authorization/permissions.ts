@@ -48,6 +48,11 @@ export const PLATFORM_PERMISSIONS = [
   "platform.operations.read",
   "platform.operations.manage",
   "audit.read",
+  "identity.read",
+  "identity.manage",
+  "identity.pam.approve",
+  "observability.read",
+  "observability.manage",
 ] as const;
 
 export type PlatformPermission = (typeof PLATFORM_PERMISSIONS)[number];

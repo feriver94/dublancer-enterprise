@@ -1,3 +1,24 @@
 import { Navbar, Footer, Container } from "@/components/layout";
-import { IdentityHeader, IdentityStats, OrganizationDirectory, UserDirectory, RolePermissionMatrix, SSOMFAPanel, SessionDeviceMonitor, AccessReviewCenter, APIKeysServiceAccounts, IdentityAuditTrail, IdentityAI } from "@/components/identity";
-export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><IdentityHeader/><IdentityStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><OrganizationDirectory/><UserDirectory/><RolePermissionMatrix/><SSOMFAPanel/></div><aside style={{display:"grid",gap:24}}><IdentityAI/><SessionDeviceMonitor/><AccessReviewCenter/><APIKeysServiceAccounts/></aside></section></main></Container><Footer/></>}
+import { EnterpriseIdentityClient } from "@/components/identity";
+import { getAuthenticatedContext } from "@/lib/auth/session";
+import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
+
+export default async function IdentityPage() {
+  const context = await getAuthenticatedContext();
+  const authorization = await resolveAuthorization(context);
+  const canManage =
+    authorization.isPlatformAdmin ||
+    authorization.permissions.includes("identity.manage");
+  return (
+    <>
+      <Navbar />
+      <Container>
+        <EnterpriseIdentityClient
+          organizationId={context.organizationId}
+          canManage={canManage}
+        />
+      </Container>
+      <Footer />
+    </>
+  );
+}

@@ -22,11 +22,13 @@ const phase4MigrationName = "20260720090000_enterprise_files_search_analytics";
 const phase5MigrationName = "20260722090000_ai_governance_enterprise_operations";
 const phase6MigrationName = "20260722180000_contract_workspace_localization";
 const phase7MigrationName = "20260723090000_subscriptions_members_email_security";
+const phase8MigrationName = "20260728120000_enterprise_identity_observability_scalability";
 const commercialSql = migrationSql[entries.indexOf(commercialMigrationName)];
 const phase4Sql = migrationSql[entries.indexOf(phase4MigrationName)];
 const phase5Sql = migrationSql[entries.indexOf(phase5MigrationName)];
 const phase6Sql = migrationSql[entries.indexOf(phase6MigrationName)];
 const phase7Sql = migrationSql[entries.indexOf(phase7MigrationName)];
+const phase8Sql = migrationSql[entries.indexOf(phase8MigrationName)];
 for (const table of ["WorkGraphNode", "WorkflowDefinition", "WorkflowRun", "WorkflowApproval", "TalentMatch", "RateLimitBucket"]) {
   if (!completeSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Migration history is missing ${table}.`);
 }
@@ -45,6 +47,9 @@ for (const table of ["DisputeEvent"]) {
 for (const table of ["PlanFeatureEntitlement", "SubscriptionSeat", "Department", "Team", "AccessReview", "EmailMessage", "EmailBounce", "VerifiedDevice", "AdaptiveRiskDecision", "AccountLock"]) {
   if (!phase7Sql?.includes(`CREATE TABLE "${table}"`)) throw new Error(`Phase 7 migration is missing ${table}.`);
 }
-if (entries.at(-1) !== phase7MigrationName) throw new Error("Phase 7 migration must be the latest chronological migration.");
+for (const table of ["IdentityProvider", "ExternalIdentity", "MfaFactor", "WebAuthnCredential", "ScimAccessToken", "ScimResource", "PrivilegedAccessGrant", "ServiceLevelObjective", "AlertHook", "AuditExportRun", "WorkerScalingPolicy", "PerformanceProfile", "LoadTestRun"]) {
+  if (!phase8Sql?.includes(`CREATE TABLE "${table}"`)) throw new Error(`Phase 8 migration is missing ${table}.`);
+}
+if (entries.at(-1) !== phase8MigrationName) throw new Error("Phase 8 migration must be the latest chronological migration.");
 if (/\bDROP\s+(TABLE|COLUMN|TYPE)\b/i.test(finalSql)) throw new Error("Final migration contains a destructive DROP statement.");
-console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial and Phase 4-7 migrations).`);
+console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial and Phase 4-8 migrations).`);

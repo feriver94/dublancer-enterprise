@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors/app-error";
 import { requirePermission, resolveAuthorization } from "@/lib/authorization/permission-resolver";
 import { enqueuePhase4Job, PHASE4_JOB_TYPES, runClaimedPhase4Job } from "@/lib/jobs/phase4-job.service";
 import type { TenantContext } from "@/lib/tenancy/context";
+import { distributedCache } from "@/lib/cache/distributed-cache";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const ENTITY_TYPES = ["PROJECT", "LISTING", "CONTRACT", "FILE"] as const;
@@ -145,6 +146,7 @@ export class SearchIndexService {
         prisma.searchIndexCheckpoint.update({ where: { organizationId }, data: { status: "IDLE", lastFullReindexAt: startedAt, lastIncrementalAt: startedAt, lastIndexedAt: new Date(), documentCount, lastError: null } }),
         prisma.realtimeEvent.create({ data: { organizationId, topic: `organization:${organizationId}`, eventType: "search.index.updated", aggregateType: "SearchIndexCheckpoint", aggregateId: organizationId, payload: json({ mode: "FULL", documentCount }) } }),
       ]);
+      await distributedCache.invalidateTenant(organizationId);
       return { generation, documentCount };
     } catch (error) {
       await prisma.searchIndexCheckpoint.update({ where: { organizationId }, data: { status: "FAILED", lastError: error instanceof Error ? error.message.slice(0, 2000) : "Unknown indexing error" } });
@@ -173,6 +175,7 @@ export class SearchIndexService {
         prisma.searchIndexCheckpoint.update({ where: { organizationId }, data: { status: "IDLE", lastIncrementalAt: until, lastIndexedAt: new Date(), documentCount, lastError: null } }),
         prisma.realtimeEvent.create({ data: { organizationId, topic: `organization:${organizationId}`, eventType: "search.index.updated", aggregateType: "SearchIndexCheckpoint", aggregateId: organizationId, payload: json({ mode: "INCREMENTAL", documentCount }) } }),
       ]);
+      await distributedCache.invalidateTenant(organizationId);
       return { indexed: projects.length + listings.length + contracts.length + files.length, documentCount };
     } catch (error) {
       await prisma.searchIndexCheckpoint.update({ where: { organizationId }, data: { status: "FAILED", lastError: error instanceof Error ? error.message.slice(0, 2000) : "Unknown indexing error" } });
@@ -244,42 +247,60 @@ export class SearchIndexService {
     const projectFilterClause = input.projectId ? Prisma.sql`AND "projectId" = ${input.projectId}` : Prisma.empty;
     const cursorClause = cursor ? Prisma.sql`AND (rank < ${cursor.rank} OR (rank = ${cursor.rank} AND ("indexedAt" < ${cursor.indexedAt} OR ("indexedAt" = ${cursor.indexedAt} AND "id" > ${cursor.id}))))` : Prisma.empty;
     const started = Date.now();
-    const rows = await prisma.$queryRaw<SearchRow[]>(Prisma.sql`
-      WITH query AS (SELECT websearch_to_tsquery('simple', ${input.q}) AS value),
-      ranked AS (
-        SELECT "id", "entityType", "entityId", "title", "body", "locale", "projectId", "fileNodeId", "metadata", "indexedAt",
-          ts_rank_cd("searchVector", query.value)::double precision AS rank,
-          ts_headline('simple', "body", query.value, 'StartSel=[[[, StopSel=]]], MaxFragments=2, MaxWords=24, MinWords=8') AS highlight
-        FROM "SearchDocument", query
-        WHERE "organizationId" = ${context.organizationId}
-          AND "deletedAt" IS NULL
-          AND "searchVector" @@ query.value
-          AND ${permissionClause}
-          AND ${projectClause}
-          AND ${fileClause}
-          ${entityClause}
-          ${localeClause}
-          ${projectFilterClause}
-      )
-      SELECT * FROM ranked
-      WHERE TRUE ${cursorClause}
-      ORDER BY rank DESC, "indexedAt" DESC, "id" ASC
-      LIMIT ${input.take + 1}
-    `);
-    const hasMore = rows.length > input.take;
-    if (hasMore) rows.pop();
-    const next = hasMore ? rows.at(-1) ?? null : null;
+    const cacheKey = `search:${distributedCache.key({
+      userId: context.userId,
+      permissions,
+      projectIds,
+      fileIds,
+      input,
+    })}`;
+    const cached = await distributedCache.getOrSet(
+      context.organizationId,
+      cacheKey,
+      30,
+      async () => {
+        const rows = await prisma.$queryRaw<SearchRow[]>(Prisma.sql`
+          WITH query AS (SELECT websearch_to_tsquery('simple', ${input.q}) AS value),
+          ranked AS (
+            SELECT "id", "entityType", "entityId", "title", "body", "locale", "projectId", "fileNodeId", "metadata", "indexedAt",
+              ts_rank_cd("searchVector", query.value)::double precision AS rank,
+              ts_headline('simple', "body", query.value, 'StartSel=[[[, StopSel=]]], MaxFragments=2, MaxWords=24, MinWords=8') AS highlight
+            FROM "SearchDocument", query
+            WHERE "organizationId" = ${context.organizationId}
+              AND "deletedAt" IS NULL
+              AND "searchVector" @@ query.value
+              AND ${permissionClause}
+              AND ${projectClause}
+              AND ${fileClause}
+              ${entityClause}
+              ${localeClause}
+              ${projectFilterClause}
+          )
+          SELECT * FROM ranked
+          WHERE TRUE ${cursorClause}
+          ORDER BY rank DESC, "indexedAt" DESC, "id" ASC
+          LIMIT ${input.take + 1}
+        `);
+        const hasMore = rows.length > input.take;
+        if (hasMore) rows.pop();
+        const next = hasMore ? rows.at(-1) ?? null : null;
+        return {
+          items: rows,
+          nextCursor: next ? cursorEncode(next) : null,
+        };
+      },
+    );
     await prisma.searchQueryLog.create({
       data: {
         organizationId: context.organizationId,
         userId: context.userId,
         scope: input.entityType ?? "all",
         queryHash: createHash("sha256").update(input.q.toLocaleLowerCase()).digest("hex"),
-        resultCount: rows.length,
+        resultCount: cached.value.items.length,
         durationMs: Date.now() - started,
-        filters: json({ entityType: input.entityType ?? "all", projectId: input.projectId ?? null, locale: input.locale ?? null }),
+        filters: json({ entityType: input.entityType ?? "all", projectId: input.projectId ?? null, locale: input.locale ?? null, cache: cached.cache }),
       },
     });
-    return { items: rows, nextCursor: next ? cursorEncode(next) : null };
+    return cached.value;
   }
 }

@@ -71,6 +71,19 @@ model User {
   createdInvites             OrganizationInvitation[]  @relation("InvitationCreator")
   activities                 OrganizationActivity[]    @relation("ActivityActor")
   sessions                   AuthSession[]
+  externalIdentities         ExternalIdentity[]
+  mfaFactors                 MfaFactor[]
+  mfaBackupCodes             MfaBackupCode[]
+  webAuthnCredentials        WebAuthnCredential[]
+  authenticationChallenges   AuthenticationChallenge[]
+  scimResources              ScimResource[]
+  requestedPamAccess         PrivilegedAccessRequest[] @relation("PamRequester")
+  reviewedPamAccess          PrivilegedAccessRequest[] @relation("PamReviewer")
+  privilegedAccessGrants     PrivilegedAccessGrant[]   @relation("PamGrantee")
+  grantedPrivilegedAccess    PrivilegedAccessGrant[]   @relation("PamGrantApprover")
+  revokedPrivilegedAccess    PrivilegedAccessGrant[]   @relation("PamGrantRevoker")
+  requestedAuditExports      AuditExportRun[]
+  requestedLoadTests         LoadTestRun[]
   loginEvents                LoginEvent[]
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetTokens        PasswordResetToken[]
@@ -176,10 +189,10 @@ model User {
 }
 
 model Organization {
-  id                       String                    @id @default(cuid())
+  id                       String                        @id @default(cuid())
   name                     String
-  slug                     String                    @unique
-  status                   OrganizationStatus        @default(ACTIVE)
+  slug                     String                        @unique
+  status                   OrganizationStatus            @default(ACTIVE)
   memberships              Membership[]
   projects                 Project[]
   roles                    Role[]
@@ -191,13 +204,13 @@ model Organization {
   companyProfile           CompanyProfile?
   marketplaceListings      MarketplaceListing[]
   talentPools              TalentPool[]
-  vendorOnboardings        VendorOnboarding[]        @relation("VendorClientOrganization")
-  vendorRegistrations      VendorOnboarding[]        @relation("VendorOrganization")
-  clientContracts          Contract[]                @relation("ContractClientOrganization")
-  providerContracts        Contract[]                @relation("ContractProviderOrganization")
+  vendorOnboardings        VendorOnboarding[]            @relation("VendorClientOrganization")
+  vendorRegistrations      VendorOnboarding[]            @relation("VendorOrganization")
+  clientContracts          Contract[]                    @relation("ContractClientOrganization")
+  providerContracts        Contract[]                    @relation("ContractProviderOrganization")
   contractAcceptances      ContractAcceptance[]
-  submittedProposals       Proposal[]                @relation("ProposalProviderOrganization")
-  reviewSubjects           Review[]                  @relation("ReviewSubjectOrganization")
+  submittedProposals       Proposal[]                    @relation("ProposalProviderOrganization")
+  reviewSubjects           Review[]                      @relation("ReviewSubjectOrganization")
   fileNodes                FileNode[]
   fileUploadIntents        FileUploadIntent[]
   aiConfig                 AiTenantConfig?
@@ -211,7 +224,7 @@ model Organization {
   savedSearches            SavedSearch[]
   searchQueryLogs          SearchQueryLog[]
   invoices                 Invoice[]
-  billedInvoices           Invoice[]                 @relation("InvoiceBillToOrganization")
+  billedInvoices           Invoice[]                     @relation("InvoiceBillToOrganization")
   financialTransactions    FinancialTransaction[]
   refunds                  Refund[]
   subscription             OrganizationSubscription?
@@ -233,7 +246,7 @@ model Organization {
   jobSchedules             JobSchedule[]
   workerHeartbeats         WorkerHeartbeat[]
   idempotencyRecords       IdempotencyRecord[]
-  verifiedCredentials      VerifiedCredential[]      @relation("CredentialSubjectOrganization")
+  verifiedCredentials      VerifiedCredential[]          @relation("CredentialSubjectOrganization")
   webhookReceipts          WebhookReceipt[]
   workGraphNodes           WorkGraphNode[]
   workGraphEdges           WorkGraphEdge[]
@@ -253,8 +266,24 @@ model Organization {
   accountLocks             AccountLock[]
   subscriptionEvents       SubscriptionEvent[]
   subscriptionSeats        SubscriptionSeat[]
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
+  identityPolicy           OrganizationIdentityPolicy?
+  identityProviders        IdentityProvider[]
+  identityLoginAttempts    IdentityLoginAttempt[]
+  scimAccessTokens         ScimAccessToken[]
+  scimResources            ScimResource[]
+  scimProvisioningEvents   ScimProvisioningEvent[]
+  privilegedAccessRequests PrivilegedAccessRequest[]
+  privilegedAccessGrants   PrivilegedAccessGrant[]
+  serviceLevelObjectives   ServiceLevelObjective[]
+  alertHooks               AlertHook[]
+  auditExportDestinations  AuditExportDestination[]
+  auditExportRuns          AuditExportRun[]
+  workerScalingPolicies    WorkerScalingPolicy[]
+  scalingRecommendations   WorkerScalingRecommendation[]
+  performanceProfiles      PerformanceProfile[]
+  loadTestRuns             LoadTestRun[]
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
   projectTemplates         ProjectTemplate[]
   aiBudgetReservations     AiBudgetReservation[]
 }
@@ -268,6 +297,7 @@ model Membership {
   user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   role               Role?              @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  scimResources      ScimResource[]
   subscriptionSeat   SubscriptionSeat?
   managedDepartments Department[]       @relation("DepartmentManager")
   managedTeams       Team[]             @relation("TeamManager")
@@ -416,24 +446,33 @@ model OrganizationActivity {
 }
 
 model AuthSession {
-  id                   String        @id @default(cuid())
+  id                   String                 @id @default(cuid())
   userId               String
   organizationId       String?
-  status               SessionStatus @default(ACTIVE)
-  refreshTokenHash     String        @unique
+  status               SessionStatus          @default(ACTIVE)
+  refreshTokenHash     String                 @unique
   userAgent            String?
   ipAddress            String?
   deviceLabel          String?
+  authMethod           AuthenticationMethod   @default(PASSWORD)
+  assuranceLevel       IdentityAssuranceLevel @default(AAL1)
+  mfaVerifiedAt        DateTime?
+  stepUpExpiresAt      DateTime?
+  idleExpiresAt        DateTime?
+  trustedDeviceId      String?
   expiresAt            DateTime
-  lastSeenAt           DateTime      @default(now())
+  lastSeenAt           DateTime               @default(now())
   revokedAt            DateTime?
   rotatedFromSessionId String?
-  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trustedDevice        VerifiedDevice?        @relation(fields: [trustedDeviceId], references: [id], onDelete: SetNull)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@index([userId, status])
   @@index([organizationId, status])
+  @@index([trustedDeviceId, status])
+  @@index([userId, assuranceLevel, status])
   @@index([expiresAt])
 }
 
@@ -3372,6 +3411,7 @@ model VerifiedDevice {
   verifiedAt            DateTime?
   revokedAt             DateTime?
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions              AuthSession[]
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -3427,6 +3467,654 @@ model AccountLock {
   @@index([userId, status, lockedUntil])
   @@index([organizationId, status])
   @@index([riskDecisionId])
+}
+
+enum IdentityProviderType {
+  SAML
+  OIDC
+}
+
+enum IdentityProviderStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+}
+
+enum AuthenticationMethod {
+  PASSWORD
+  SAML
+  OIDC
+  PASSKEY
+  BACKUP_CODE
+}
+
+enum IdentityAssuranceLevel {
+  AAL1
+  AAL2
+  AAL3
+}
+
+enum MfaFactorType {
+  TOTP
+  PASSKEY
+}
+
+enum MfaFactorStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum AuthenticationChallengeType {
+  LOGIN_MFA
+  TOTP_ENROLLMENT
+  WEBAUTHN_REGISTRATION
+  WEBAUTHN_AUTHENTICATION
+  STEP_UP
+}
+
+enum AuthenticationChallengeStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  CONSUMED
+}
+
+enum IdentityLoginAttemptStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum ScimProvisioningAction {
+  CREATE
+  UPDATE
+  DEACTIVATE
+  REACTIVATE
+  DELETE
+}
+
+enum ScimProvisioningStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum PrivilegedAccessStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+  EXPIRED
+  REVOKED
+}
+
+enum SloIndicatorType {
+  AVAILABILITY
+  LATENCY
+  ERROR_RATE
+  QUEUE_AGE
+}
+
+enum SloWindow {
+  ROLLING_1H
+  ROLLING_24H
+  ROLLING_7D
+  ROLLING_30D
+}
+
+enum SloMeasurementStatus {
+  HEALTHY
+  AT_RISK
+  BREACHED
+  NO_DATA
+}
+
+enum AlertHookType {
+  WEBHOOK
+  EMAIL
+}
+
+enum AlertDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  RETRY_SCHEDULED
+}
+
+enum AuditExportDestinationType {
+  WEBHOOK
+  OBJECT_STORAGE
+}
+
+enum AuditExportRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ScalingRecommendationStatus {
+  OPEN
+  APPLIED
+  DISMISSED
+  EXPIRED
+}
+
+enum PerformanceProfileStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum LoadTestRunStatus {
+  PLANNED
+  RUNNING
+  PASSED
+  FAILED
+  CANCELLED
+}
+
+model OrganizationIdentityPolicy {
+  id                      String                 @id @default(cuid())
+  organizationId          String                 @unique
+  requireMfa              Boolean                @default(false)
+  requireMfaForPrivileged Boolean                @default(true)
+  allowPasswordLogin      Boolean                @default(true)
+  allowPasskeyLogin       Boolean                @default(true)
+  requireTrustedDevice    Boolean                @default(false)
+  jitProvisioningEnabled  Boolean                @default(false)
+  allowedEmailDomains     String[]               @default([])
+  defaultRoleId           String?
+  sessionMaxAgeMinutes    Int                    @default(43200)
+  sessionIdleMinutes      Int                    @default(720)
+  stepUpDurationMinutes   Int                    @default(15)
+  minimumAssuranceLevel   IdentityAssuranceLevel @default(AAL1)
+  organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  @@index([requireMfa, requireTrustedDevice])
+}
+
+model IdentityProvider {
+  id                      String                 @id @default(cuid())
+  organizationId          String
+  type                    IdentityProviderType
+  status                  IdentityProviderStatus @default(DRAFT)
+  name                    String
+  slug                    String
+  issuer                  String
+  entryPoint              String?
+  callbackUrl             String
+  idpCertificate          String?
+  oidcDiscoveryUrl        String?
+  oidcClientId            String?
+  oidcClientSecretCipher  String?
+  scopes                  String[]               @default(["openid", "email", "profile"])
+  requiredAcr             String?
+  assuranceLevel          IdentityAssuranceLevel @default(AAL1)
+  attributeMapping        Json?
+  allowedEmailDomains     String[]               @default([])
+  jitProvisioningEnabled  Boolean                @default(false)
+  defaultRoleId           String?
+  wantAssertionsSigned    Boolean                @default(true)
+  wantAuthnResponseSigned Boolean                @default(true)
+  validateInResponseTo    Boolean                @default(true)
+  organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  externalIdentities      ExternalIdentity[]
+  loginAttempts           IdentityLoginAttempt[]
+  scimTokens              ScimAccessToken[]
+  scimResources           ScimResource[]
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, slug])
+  @@index([organizationId, status, type])
+}
+
+model ExternalIdentity {
+  id                  String           @id @default(cuid())
+  providerId          String
+  userId              String
+  subject             String
+  email               String
+  claims              Json?
+  sessionIndex        String?
+  lastAuthenticatedAt DateTime         @default(now())
+  provider            IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([providerId, subject])
+  @@unique([providerId, userId])
+  @@index([userId, lastAuthenticatedAt])
+  @@index([email])
+}
+
+model IdentityLoginAttempt {
+  id                 String                     @id @default(cuid())
+  providerId         String
+  organizationId     String
+  stateHash          String                     @unique
+  nonceHash          String?
+  codeVerifierCipher String?
+  samlRequestId      String?                    @unique
+  returnTo           String?
+  status             IdentityLoginAttemptStatus @default(PENDING)
+  failureReason      String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  provider           IdentityProvider           @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@index([providerId, status, expiresAt])
+  @@index([organizationId, createdAt])
+}
+
+model MfaFactor {
+  id           String          @id @default(cuid())
+  userId       String
+  type         MfaFactorType
+  status       MfaFactorStatus @default(PENDING)
+  label        String?
+  secretCipher String?
+  verifiedAt   DateTime?
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  backupCodes  MfaBackupCode[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([userId, status, type])
+}
+
+model MfaBackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  factorId  String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  factor    MfaFactor @relation(fields: [factorId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
+  @@index([factorId, usedAt])
+}
+
+model WebAuthnCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      BigInt    @default(0)
+  transports   String[]  @default([])
+  deviceType   String
+  backedUp     Boolean   @default(false)
+  aaguid       String?
+  label        String?
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId, revokedAt])
+}
+
+model AuthenticationChallenge {
+  id             String                        @id @default(cuid())
+  userId         String
+  organizationId String?
+  type           AuthenticationChallengeType
+  status         AuthenticationChallengeStatus @default(PENDING)
+  challengeHash  String                        @unique
+  payload        Json?
+  attempts       Int                           @default(0)
+  expiresAt      DateTime
+  verifiedAt     DateTime?
+  consumedAt     DateTime?
+  user           User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  @@index([userId, status, expiresAt])
+  @@index([organizationId, status, expiresAt])
+}
+
+model ScimAccessToken {
+  id             String                  @id @default(cuid())
+  organizationId String
+  providerId     String?
+  name           String
+  tokenPrefix    String
+  tokenHash      String                  @unique
+  scopes         String[]                @default(["Users.read", "Users.write"])
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       IdentityProvider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  resources      ScimResource[]
+  events         ScimProvisioningEvent[]
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, revokedAt, expiresAt])
+}
+
+model ScimResource {
+  id             String            @id @default(cuid())
+  organizationId String
+  tokenId        String?
+  providerId     String?
+  externalId     String
+  userId         String
+  membershipId   String
+  active         Boolean           @default(true)
+  attributes     Json?
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  token          ScimAccessToken?  @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  provider       IdentityProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership     Membership        @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([organizationId, externalId])
+  @@unique([organizationId, userId])
+  @@index([membershipId])
+  @@index([tokenId, updatedAt])
+}
+
+model ScimProvisioningEvent {
+  id             String                 @id @default(cuid())
+  organizationId String
+  tokenId        String
+  resourceId     String?
+  externalId     String?
+  action         ScimProvisioningAction
+  status         ScimProvisioningStatus @default(PROCESSING)
+  requestId      String                 @unique
+  request        Json?
+  response       Json?
+  error          String?
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  token          ScimAccessToken        @relation(fields: [tokenId], references: [id], onDelete: Restrict)
+  createdAt      DateTime               @default(now())
+  completedAt    DateTime?
+
+  @@index([organizationId, createdAt])
+  @@index([tokenId, status, createdAt])
+  @@index([resourceId])
+}
+
+model PrivilegedAccessRequest {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  requestedById    String
+  reviewedById     String?
+  permissions      String[]
+  reason           String
+  requestedMinutes Int
+  status           PrivilegedAccessStatus @default(PENDING)
+  reviewedAt       DateTime?
+  reviewNote       String?
+  expiresAt        DateTime
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy      User                   @relation("PamRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy       User?                  @relation("PamReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  grant            PrivilegedAccessGrant?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([requestedById, status, expiresAt])
+}
+
+model PrivilegedAccessGrant {
+  id             String                  @id @default(cuid())
+  organizationId String
+  requestId      String                  @unique
+  userId         String
+  approvedById   String
+  revokedById    String?
+  permissions    String[]
+  status         PrivilegedAccessStatus  @default(APPROVED)
+  startsAt       DateTime                @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokeReason   String?
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  request        PrivilegedAccessRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user           User                    @relation("PamGrantee", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy     User                    @relation("PamGrantApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  revokedBy      User?                   @relation("PamGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([organizationId, status, expiresAt])
+  @@index([userId, status, expiresAt])
+}
+
+model ServiceLevelObjective {
+  id                 String           @id @default(cuid())
+  organizationId     String?
+  key                String
+  name               String
+  description        String?
+  indicatorType      SloIndicatorType
+  service            String
+  target             Float
+  latencyThresholdMs Int?
+  window             SloWindow        @default(ROLLING_30D)
+  alertThreshold     Float            @default(0.1)
+  enabled            Boolean          @default(true)
+  organization       Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  measurements       SloMeasurement[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId, enabled])
+  @@index([service, indicatorType])
+}
+
+model SloMeasurement {
+  id              String                @id @default(cuid())
+  objectiveId     String
+  windowStartedAt DateTime
+  windowEndedAt   DateTime
+  goodEvents      BigInt                @default(0)
+  totalEvents     BigInt                @default(0)
+  observedValue   Float?
+  errorBudgetUsed Float?
+  status          SloMeasurementStatus  @default(NO_DATA)
+  objective       ServiceLevelObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  createdAt       DateTime              @default(now())
+
+  @@unique([objectiveId, windowStartedAt, windowEndedAt])
+  @@index([objectiveId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AlertHook {
+  id             String          @id @default(cuid())
+  organizationId String?
+  name           String
+  type           AlertHookType
+  endpoint       String
+  secretCipher   String?
+  eventTypes     String[]        @default([])
+  enabled        Boolean         @default(true)
+  maxAttempts    Int             @default(5)
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries     AlertDelivery[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, enabled])
+}
+
+model AlertDelivery {
+  id           String              @id @default(cuid())
+  hookId       String
+  eventType    String
+  payload      Json
+  status       AlertDeliveryStatus @default(PENDING)
+  attempts     Int                 @default(0)
+  availableAt  DateTime            @default(now())
+  responseCode Int?
+  lastError    String?
+  deliveredAt  DateTime?
+  hook         AlertHook           @relation(fields: [hookId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([status, availableAt])
+  @@index([hookId, createdAt])
+}
+
+model AuditExportDestination {
+  id              String                     @id @default(cuid())
+  organizationId  String
+  name            String
+  type            AuditExportDestinationType
+  endpoint        String
+  secretCipher    String?
+  enabled         Boolean                    @default(true)
+  cursorCreatedAt DateTime?
+  cursorId        String?
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs            AuditExportRun[]
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, enabled])
+}
+
+model AuditExportRun {
+  id             String                 @id @default(cuid())
+  organizationId String
+  destinationId  String
+  requestedById  String?
+  status         AuditExportRunStatus   @default(PENDING)
+  eventCount     Int                    @default(0)
+  firstEventAt   DateTime?
+  lastEventAt    DateTime?
+  checksumSha256 String?
+  responseCode   Int?
+  error          String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  destination    AuditExportDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  requestedBy    User?                  @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([destinationId, createdAt])
+}
+
+model WorkerScalingPolicy {
+  id                   String                        @id @default(cuid())
+  organizationId       String?
+  queue                String
+  minWorkers           Int                           @default(1)
+  maxWorkers           Int                           @default(20)
+  targetJobsPerWorker  Int                           @default(10)
+  targetOldestJobAgeMs Int                           @default(30000)
+  scaleDownCooldownMs  Int                           @default(300000)
+  enabled              Boolean                       @default(true)
+  organization         Organization?                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recommendations      WorkerScalingRecommendation[]
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  @@unique([organizationId, queue])
+  @@index([enabled, queue])
+}
+
+model WorkerScalingRecommendation {
+  id             String                      @id @default(cuid())
+  organizationId String?
+  policyId       String
+  queue          String
+  currentWorkers Int
+  desiredWorkers Int
+  pendingJobs    Int
+  oldestJobAgeMs Int
+  reason         String
+  status         ScalingRecommendationStatus @default(OPEN)
+  expiresAt      DateTime
+  appliedAt      DateTime?
+  organization   Organization?               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  policy         WorkerScalingPolicy         @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([queue, status, expiresAt])
+}
+
+model PerformanceProfile {
+  id              String                   @id @default(cuid())
+  organizationId  String?
+  operation       String
+  correlationId   String?
+  status          PerformanceProfileStatus @default(RUNNING)
+  durationMs      Int?
+  cpuUserMicros   BigInt?
+  cpuSystemMicros BigInt?
+  heapDeltaBytes  BigInt?
+  metadata        Json?
+  error           String?
+  organization    Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  startedAt       DateTime                 @default(now())
+  completedAt     DateTime?
+
+  @@index([organizationId, operation, startedAt])
+  @@index([status, startedAt])
+  @@index([durationMs])
+}
+
+model LoadTestRun {
+  id              String            @id @default(cuid())
+  organizationId  String?
+  requestedById   String?
+  name            String
+  targetUrl       String
+  scenario        String
+  status          LoadTestRunStatus @default(PLANNED)
+  concurrency     Int
+  durationSeconds Int
+  requests        Int               @default(0)
+  failures        Int               @default(0)
+  p50LatencyMs    Int?
+  p95LatencyMs    Int?
+  p99LatencyMs    Int?
+  maxLatencyMs    Int?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  report          Json?
+  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy     User?             @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([requestedById, createdAt])
 }
 
 model PolicyConfiguration {

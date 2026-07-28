@@ -2,5 +2,5 @@ import type { ReactNode } from "react";
 import ProductRouteGuard from "@/components/layout/ProductRouteGuard";
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return <ProductRouteGuard returnTo="/identity" permission="organization.read">{children}</ProductRouteGuard>;
+  return <ProductRouteGuard returnTo="/identity" permission="identity.read">{children}</ProductRouteGuard>;
 }

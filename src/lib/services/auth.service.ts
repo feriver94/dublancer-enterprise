@@ -3,6 +3,10 @@ import { AppError } from "@/lib/errors/app-error";
 import { AUTH_CONFIG } from "@/lib/auth/config";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createRefreshToken, hashRefreshToken, signAccessToken } from "@/lib/auth/tokens";
+import type {
+  AuthenticationMethod,
+  IdentityAssuranceLevel,
+} from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { DEFAULT_ROLES } from "@/lib/authorization/default-roles";
 import { PLATFORM_PERMISSIONS } from "@/lib/authorization/permissions";
@@ -19,6 +23,9 @@ export class AuthService {
       const user = await tx.user.create({ data:{ email:input.email, displayName:input.displayName, passwordHash }, select:{id:true,email:true,displayName:true,isPlatformAdmin:true} });
       const baseSlug = input.displayName.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "workspace";
       const organization = await tx.organization.create({ data: { name: `${input.displayName}'s Workspace`, slug: `${baseSlug}-${randomBytes(4).toString("hex")}`, settings: { create: { timezone: "Asia/Dubai", defaultCurrency: "AED", defaultLocale: "en-AE", supportedLocales: ["en-AE", "ar-AE"], dataRegion: "UAE" } } } });
+      await tx.organizationIdentityPolicy.create({
+        data: { organizationId: organization.id },
+      });
       const permissionIds = new Map<string, string>();
       for (const key of PLATFORM_PERMISSIONS) { const permission = await tx.permission.upsert({ where: { key }, create: { key, description: `Dublancer permission: ${key}` }, update: {}, select: { id: true } }); permissionIds.set(key, permission.id); }
       let ownerRoleId = "";
@@ -81,20 +88,178 @@ export class AuthService {
       );
     }
     const organizationId = input.organizationId ?? user.memberships[0]?.organizationId ?? null;
+    const [policy, activeFactors, activePasskeys] = await Promise.all([
+      organizationId
+        ? prisma.organizationIdentityPolicy.findUnique({
+            where: { organizationId },
+          })
+        : null,
+      prisma.mfaFactor.count({
+        where: { userId: user.id, status: "ACTIVE" },
+      }),
+      prisma.webAuthnCredential.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ]);
+    if (policy && !policy.allowPasswordLogin) {
+      throw new AppError(
+        "FORBIDDEN",
+        "Password login is disabled for this organization.",
+        403,
+      );
+    }
+    const device = await abuse.recordSuccess(
+      user,
+      organizationId,
+      meta,
+      input.deviceLabel,
+    );
+    if (policy?.requireTrustedDevice && device.status !== "VERIFIED") {
+      throw new AppError(
+        "FORBIDDEN",
+        "This device must be verified before sign-in can continue.",
+        403,
+        { code: "DEVICE_VERIFICATION_REQUIRED", deviceId: device.id },
+      );
+    }
+    if (activeFactors > 0 || activePasskeys > 0 || policy?.requireMfa) {
+      if (activeFactors === 0 && activePasskeys === 0) {
+        throw new AppError(
+          "FORBIDDEN",
+          "MFA enrollment is required before this policy can be satisfied.",
+          403,
+          { code: "MFA_ENROLLMENT_REQUIRED" },
+        );
+      }
+      const { MfaPasskeyService } = await import(
+        "@/lib/services/mfa-passkey.service"
+      );
+      const challenge = await new MfaPasskeyService().createLoginChallenge({
+        userId: user.id,
+        organizationId,
+        authMethod: "PASSWORD",
+        metadata: meta,
+        deviceLabel: input.deviceLabel,
+        trustedDeviceId: device.status === "VERIFIED" ? device.id : undefined,
+      });
+      await prisma.loginEvent.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          outcome: "CHALLENGE",
+          reason: "MFA_REQUIRED",
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        },
+      });
+      return {
+        mfaRequired: true as const,
+        ...challenge,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          isPlatformAdmin: user.isPlatformAdmin,
+        },
+        organizationId,
+      };
+    }
+    const session = await this.createAuthenticatedSession({
+      userId: user.id,
+      organizationId,
+      authMethod: "PASSWORD",
+      assuranceLevel: "AAL1",
+      metadata: meta,
+      deviceLabel: input.deviceLabel,
+      trustedDeviceId: device.status === "VERIFIED" ? device.id : undefined,
+    });
+    await prisma.loginEvent.create({data:{userId:user.id,email:user.email,outcome:"SUCCESS",ipAddress:meta.ipAddress,userAgent:meta.userAgent}});
+    return { mfaRequired: false as const, ...session };
+  }
+
+  async createAuthenticatedSession(input: {
+    userId: string;
+    organizationId: string | null;
+    authMethod: AuthenticationMethod;
+    assuranceLevel: IdentityAssuranceLevel;
+    mfaVerifiedAt?: Date;
+    metadata: { ipAddress: string | null; userAgent: string | null };
+    deviceLabel?: string;
+    trustedDeviceId?: string;
+  }) {
+    const [user, policy] = await Promise.all([
+      prisma.user.findUniqueOrThrow({
+        where: { id: input.userId },
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          isPlatformAdmin: true,
+        },
+      }),
+      input.organizationId
+        ? prisma.organizationIdentityPolicy.findUnique({
+            where: { organizationId: input.organizationId },
+          })
+        : null,
+    ]);
+    if (input.trustedDeviceId) {
+      const device = await prisma.verifiedDevice.findFirst({
+        where: {
+          id: input.trustedDeviceId,
+          userId: input.userId,
+          status: "VERIFIED",
+        },
+      });
+      if (!device) {
+        throw new AppError("FORBIDDEN", "Trusted device validation failed.", 403);
+      }
+    }
+    const maxAgeMs =
+      Math.min(
+        policy?.sessionMaxAgeMinutes ??
+          Math.floor(AUTH_CONFIG.refreshTokenTtlSeconds / 60),
+        Math.floor(AUTH_CONFIG.refreshTokenTtlSeconds / 60),
+      ) *
+      60_000;
+    const idleMs = (policy?.sessionIdleMinutes ?? 720) * 60_000;
     const refreshToken = createRefreshToken();
+    const now = new Date();
     const session = await prisma.authSession.create({
-      data:{
-        userId:user.id, organizationId, refreshTokenHash:hashRefreshToken(refreshToken),
-        userAgent:meta.userAgent, ipAddress:meta.ipAddress, deviceLabel:input.deviceLabel,
-        expiresAt:new Date(Date.now()+AUTH_CONFIG.refreshTokenTtlSeconds*1000),
+      data: {
+        userId: input.userId,
+        organizationId: input.organizationId,
+        refreshTokenHash: hashRefreshToken(refreshToken),
+        userAgent: input.metadata.userAgent,
+        ipAddress: input.metadata.ipAddress,
+        deviceLabel: input.deviceLabel,
+        authMethod: input.authMethod,
+        assuranceLevel: input.assuranceLevel,
+        mfaVerifiedAt: input.mfaVerifiedAt,
+        stepUpExpiresAt: input.mfaVerifiedAt
+          ? new Date(
+              now.getTime() +
+                (policy?.stepUpDurationMinutes ?? 15) * 60_000,
+            )
+          : null,
+        idleExpiresAt: new Date(now.getTime() + idleMs),
+        trustedDeviceId: input.trustedDeviceId,
+        expiresAt: new Date(now.getTime() + maxAgeMs),
       },
     });
     const accessToken = await signAccessToken({
-      sub:user.id, sessionId:session.id, organizationId, isPlatformAdmin:user.isPlatformAdmin,
+      sub: user.id,
+      sessionId: session.id,
+      organizationId: input.organizationId,
+      isPlatformAdmin: user.isPlatformAdmin,
     });
-    await prisma.loginEvent.create({data:{userId:user.id,email:user.email,outcome:"SUCCESS",ipAddress:meta.ipAddress,userAgent:meta.userAgent}});
-    await abuse.recordSuccess(user, organizationId, meta, input.deviceLabel);
-    return { user:{id:user.id,email:user.email,displayName:user.displayName,isPlatformAdmin:user.isPlatformAdmin}, sessionId:session.id, organizationId, accessToken, refreshToken };
+    return {
+      user,
+      sessionId: session.id,
+      organizationId: input.organizationId,
+      accessToken,
+      refreshToken,
+    };
   }
 
   async refresh(raw:string, organizationId?:string) {
@@ -115,7 +280,11 @@ export class AuthService {
       });
     };
 
-    if (current.status !== "ACTIVE" || current.expiresAt <= new Date()) {
+    if (
+      current.status !== "ACTIVE" ||
+      current.expiresAt <= new Date() ||
+      (current.idleExpiresAt && current.idleExpiresAt <= new Date())
+    ) {
       await revokeActiveSessions();
       throw new AppError(
         "UNAUTHORIZED",
@@ -154,6 +323,11 @@ export class AuthService {
     }
 
     const nextRaw = createRefreshToken();
+    const policy = nextOrganizationId
+      ? await prisma.organizationIdentityPolicy.findUnique({
+          where: { organizationId: nextOrganizationId },
+        })
+      : null;
     let next: { id: string; organizationId: string | null };
 
     try {
@@ -180,7 +354,14 @@ export class AuthService {
           userId:current.userId, organizationId:nextOrganizationId,
           refreshTokenHash:hashRefreshToken(nextRaw), userAgent:current.userAgent, ipAddress:current.ipAddress,
           deviceLabel:current.deviceLabel, rotatedFromSessionId:current.id,
-          expiresAt:new Date(Date.now()+AUTH_CONFIG.refreshTokenTtlSeconds*1000),
+          authMethod:current.authMethod, assuranceLevel:current.assuranceLevel,
+          mfaVerifiedAt:current.mfaVerifiedAt, stepUpExpiresAt:current.stepUpExpiresAt,
+          trustedDeviceId:current.trustedDeviceId,
+          idleExpiresAt:new Date(Date.now()+(policy?.sessionIdleMinutes??720)*60_000),
+          expiresAt:new Date(Math.min(
+            current.expiresAt.getTime(),
+            Date.now()+AUTH_CONFIG.refreshTokenTtlSeconds*1000,
+          )),
         }});
       });
     } catch (error) {

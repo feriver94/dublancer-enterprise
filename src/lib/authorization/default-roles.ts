@@ -50,6 +50,8 @@ export const DEFAULT_ROLES: Array<{
       "moderation.manage", "compliance.manage", "platform.operations.read",
       "platform.operations.manage",
       "audit.read",
+      "identity.read", "identity.manage", "identity.pam.approve",
+      "observability.read", "observability.manage",
     ],
   },
   {
@@ -97,6 +99,8 @@ export const DEFAULT_ROLES: Array<{
       "moderation.manage", "compliance.manage", "platform.operations.read",
       "platform.operations.manage",
       "audit.read",
+      "identity.read", "identity.manage", "identity.pam.approve",
+      "observability.read", "observability.manage",
     ],
   },
   {
@@ -131,6 +135,7 @@ export const DEFAULT_ROLES: Array<{
       "orchestration.read", "orchestration.run", "orchestration.approve",
       "workgraph.read", "matching.manage", "billing.manage", "moderation.manage",
       "platform.operations.read",
+      "identity.read", "observability.read",
     ],
   },
   {

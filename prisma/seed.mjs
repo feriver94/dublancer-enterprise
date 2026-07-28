@@ -131,6 +131,48 @@ try {
       });
     }
   }
+  const objectives = [
+    {
+      key: "platform-availability",
+      name: "Platform availability",
+      description: "Successful request ratio across Dublancer server workloads.",
+      indicatorType: "AVAILABILITY",
+      service: "dublancer-enterprise",
+      target: 0.999,
+      window: "ROLLING_30D",
+    },
+    {
+      key: "platform-error-rate",
+      name: "Platform error rate",
+      description: "Server-error ratio across Dublancer server workloads.",
+      indicatorType: "ERROR_RATE",
+      service: "dublancer-enterprise",
+      target: 0.001,
+      window: "ROLLING_24H",
+    },
+    {
+      key: "default-queue-age",
+      name: "Default queue age",
+      description: "Maximum acceptable age of the oldest pending default queue job.",
+      indicatorType: "QUEUE_AGE",
+      service: "default",
+      target: 30000,
+      window: "ROLLING_1H",
+    },
+  ];
+  for (const objective of objectives) {
+    const existing = await prisma.serviceLevelObjective.findFirst({
+      where: { organizationId: null, key: objective.key },
+    });
+    if (existing) {
+      await prisma.serviceLevelObjective.update({
+        where: { id: existing.id },
+        data: { ...objective, enabled: true },
+      });
+    } else {
+      await prisma.serviceLevelObjective.create({ data: objective });
+    }
+  }
   console.log("Dublancer reference data seeded.");
 } finally {
   await prisma.$disconnect();

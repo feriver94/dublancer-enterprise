@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { AppError, isAppError } from "@/lib/errors/app-error";
 import { logger } from "@/lib/observability/logger";
 import { randomUUID } from "node:crypto";
+import { incrementMetric } from "@/lib/observability/metrics";
 
 function responseHeaders() { return { "Cache-Control": "no-store", "X-Request-Id": randomUUID() }; }
 
@@ -36,6 +37,10 @@ export function apiSuccess<T>(
   status = 200,
   meta?: Record<string, unknown>,
 ) {
+  incrementMetric("dublancer_http_responses_total", {
+    status,
+    outcome: "success",
+  });
   return NextResponse.json(
     {
       data: serializeForJson(data),
@@ -50,6 +55,10 @@ export function apiSuccess<T>(
 
 export function apiError(error: unknown) {
   if (error instanceof ZodError) {
+    incrementMetric("dublancer_http_responses_total", {
+      status: 422,
+      outcome: "validation_error",
+    });
     return NextResponse.json(
       {
         error: {
@@ -66,6 +75,10 @@ export function apiError(error: unknown) {
   }
 
   if (isAppError(error)) {
+    incrementMetric("dublancer_http_responses_total", {
+      status: error.statusCode,
+      outcome: error.code,
+    });
     return NextResponse.json(
       {
         error: {
@@ -84,6 +97,10 @@ export function apiError(error: unknown) {
   }
 
   logger.error("api.unhandled_error", { error });
+  incrementMetric("dublancer_http_responses_total", {
+    status: 500,
+    outcome: "unhandled_error",
+  });
 
   return NextResponse.json(
     {

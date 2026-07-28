@@ -25,6 +25,7 @@ const exemptions = new Map([
   ["internal/notifications/create/route.ts", "internal"],
   ["internal/notifications/process/route.ts", "internal"],
   ["internal/notifications/route.ts", "internal"],
+  ["internal/observability/evaluate/route.ts", "internal"],
   ["internal/workers/ai/route.ts", "internal"],
   ["internal/workers/analytics/route.ts", "internal"],
   ["internal/workers/files/route.ts", "internal"],
@@ -34,6 +35,9 @@ const exemptions = new Map([
   ["realtime/publish/route.ts", "internal"],
   ["webhooks/file-scan/[providerKey]/route.ts", "webhook"],
   ["webhooks/payments/[providerKey]/route.ts", "webhook"],
+  ["auth/sso/saml/[providerId]/callback/route.ts", "federated"],
+  ["scim/v2/Users/route.ts", "scim"],
+  ["scim/v2/Users/[resourceId]/route.ts", "scim"],
 ]);
 
 for (const filePath of routes) {
@@ -76,6 +80,17 @@ for (const filePath of routes) {
     !/verify|signature|webhook/i.test(source)
   ) {
     throw new Error(`Webhook signature verification missing in ${route}.`);
+  }
+
+  if (
+    exemption === "federated" &&
+    (!source.includes("completeSaml") || !/RelayState|state/.test(source))
+  ) {
+    throw new Error(`Federated callback verification missing in ${route}.`);
+  }
+
+  if (exemption === "scim" && !source.includes(".authenticate(")) {
+    throw new Error(`SCIM bearer authentication missing in ${route}.`);
   }
 }
 

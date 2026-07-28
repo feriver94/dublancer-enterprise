@@ -15,6 +15,8 @@ const navItems = [
   { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },
   { key: "chat", href: "/communications/chat", permission: "chat.read" },
   { key: "notifications", href: "/notifications", authenticated: true },
+  { key: "identity", href: "/identity", permission: "identity.read" },
+  { key: "observability", href: "/observability", permission: "observability.read" },
   { key: "pricing", href: "/pricing" },
   { key: "enterprise", href: "/enterprise", permission: "organization.read" },
 ];
