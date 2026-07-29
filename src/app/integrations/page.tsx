@@ -1,3 +1,13 @@
 import { Navbar, Footer, Container } from "@/components/layout";
-import { IntegrationsHeader, IntegrationsStats, ConnectorCatalog, ConnectionManager, WebhookOperations, CredentialManagement, SyncOrchestration, ConnectorObservability, IntegrationGovernance, DeveloperPlatform, IntegrationsAI } from "@/components/integrations";
-export default function Page(){return <><Navbar/><Container><main style={{padding:"72px 0 96px",display:"grid",gap:28}}><IntegrationsHeader/><IntegrationsStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28}}><div style={{display:"grid",gap:28}}><ConnectorCatalog/><ConnectionManager/><WebhookOperations/><SyncOrchestration/></div><aside style={{display:"grid",gap:24}}><IntegrationsAI/><CredentialManagement/><ConnectorObservability/><IntegrationGovernance/></aside></section></main></Container><Footer/></>}
+import { EnterpriseIntegrationsClient } from "@/components/integrations";
+import { getAuthenticatedContext } from "@/lib/auth/session";
+import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
+
+export default async function Page() {
+  const authorization = await resolveAuthorization(await getAuthenticatedContext());
+  const canManage =
+    authorization.isPlatformAdmin || authorization.permissions.includes("integrations.manage");
+  const canExecute =
+    authorization.isPlatformAdmin || authorization.permissions.includes("integrations.execute");
+  return <><Navbar/><Container><EnterpriseIntegrationsClient canManage={canManage} canExecute={canExecute}/></Container><Footer/></>;
+}

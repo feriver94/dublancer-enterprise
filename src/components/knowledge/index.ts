@@ -7,3 +7,4 @@ export { default as RetrievalPipeline } from "./RetrievalPipeline";
 export { default as KnowledgeGovernance } from "./KnowledgeGovernance";
 export { default as MemoryAuditTrail } from "./MemoryAuditTrail";
 export { default as KnowledgeAI } from "./KnowledgeAI";
+export { KnowledgeManagementClient } from "./KnowledgeManagementClient";

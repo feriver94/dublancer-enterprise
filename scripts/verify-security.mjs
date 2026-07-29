@@ -22,6 +22,7 @@ const mutationPattern = /export\s+async\s+function\s+(POST|PUT|PATCH|DELETE)/;
 const exemptions = new Map([
   ["internal/chat/retention/route.ts", "internal"],
   ["internal/email/process/route.ts", "internal"],
+  ["internal/integrations/process/route.ts", "internal"],
   ["internal/notifications/create/route.ts", "internal"],
   ["internal/notifications/process/route.ts", "internal"],
   ["internal/notifications/route.ts", "internal"],
@@ -36,6 +37,7 @@ const exemptions = new Map([
   ["webhooks/file-scan/[providerKey]/route.ts", "webhook"],
   ["webhooks/payments/[providerKey]/route.ts", "webhook"],
   ["auth/sso/saml/[providerId]/callback/route.ts", "federated"],
+  ["integrations/rest/events/route.ts", "apiKey"],
   ["scim/v2/Users/route.ts", "scim"],
   ["scim/v2/Users/[resourceId]/route.ts", "scim"],
 ]);
@@ -91,6 +93,10 @@ for (const filePath of routes) {
 
   if (exemption === "scim" && !source.includes(".authenticate(")) {
     throw new Error(`SCIM bearer authentication missing in ${route}.`);
+  }
+
+  if (exemption === "apiKey" && !source.includes(".authenticateApiKey(")) {
+    throw new Error(`Integration API-key authentication missing in ${route}.`);
   }
 }
 

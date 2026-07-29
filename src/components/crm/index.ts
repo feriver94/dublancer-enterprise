@@ -7,3 +7,4 @@ export { default as Customer360 } from "./Customer360";
 export { default as HealthScoring } from "./HealthScoring";
 export { default as RenewalExpansion } from "./RenewalExpansion";
 export { default as CRMAI } from "./CRMAI";
+export { EnterpriseCrmClient } from "./EnterpriseCrmClient";

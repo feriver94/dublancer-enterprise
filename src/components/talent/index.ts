@@ -7,3 +7,4 @@ export { default as FreelancerCloud } from "./FreelancerCloud";
 export { default as SkillsIntelligence } from "./SkillsIntelligence";
 export { default as PerformanceReviews } from "./PerformanceReviews";
 export { default as TalentAI } from "./TalentAI";
+export { TalentResourceClient } from "./TalentResourceClient";

@@ -52,6 +52,9 @@ export const DEFAULT_ROLES: Array<{
       "audit.read",
       "identity.read", "identity.manage", "identity.pam.approve",
       "observability.read", "observability.manage",
+      "crm.read", "crm.manage", "talent.read", "talent.manage",
+      "knowledge.read", "knowledge.manage", "knowledge.approve",
+      "integrations.read", "integrations.manage", "integrations.execute",
     ],
   },
   {
@@ -101,6 +104,9 @@ export const DEFAULT_ROLES: Array<{
       "audit.read",
       "identity.read", "identity.manage", "identity.pam.approve",
       "observability.read", "observability.manage",
+      "crm.read", "crm.manage", "talent.read", "talent.manage",
+      "knowledge.read", "knowledge.manage", "knowledge.approve",
+      "integrations.read", "integrations.manage", "integrations.execute",
     ],
   },
   {
@@ -136,6 +142,9 @@ export const DEFAULT_ROLES: Array<{
       "workgraph.read", "matching.manage", "billing.manage", "moderation.manage",
       "platform.operations.read",
       "identity.read", "observability.read",
+      "crm.read", "crm.manage", "talent.read", "talent.manage",
+      "knowledge.read", "knowledge.manage", "knowledge.approve",
+      "integrations.read", "integrations.execute",
     ],
   },
   {
@@ -161,6 +170,8 @@ export const DEFAULT_ROLES: Array<{
       "analytics.read",
       "search.use",
       "orchestration.read", "orchestration.run", "workgraph.read",
+      "crm.read", "talent.read", "knowledge.read", "knowledge.manage",
+      "integrations.read",
     ],
   },
   {
@@ -177,6 +188,7 @@ export const DEFAULT_ROLES: Array<{
       "analytics.read",
       "search.use",
       "orchestration.read", "workgraph.read",
+      "crm.read", "talent.read", "knowledge.read", "integrations.read",
     ],
   },
 ];

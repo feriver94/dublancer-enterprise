@@ -1,3 +1,14 @@
 import { Navbar, Footer, Container } from "@/components/layout";
-import { KnowledgeHeader, KnowledgeStats, KnowledgeSources, MemoryGraph, SemanticSearchPanel, RetrievalPipeline, KnowledgeGovernance, MemoryAuditTrail, KnowledgeAI } from "@/components/knowledge";
-export default function KnowledgePage(){return <><Navbar/><Container><main style={{padding:"72px 0 96px"}}><KnowledgeHeader/><KnowledgeStats/><section style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 380px",gap:28,alignItems:"start"}}><div style={{display:"grid",gap:28}}><KnowledgeSources/><MemoryGraph/><SemanticSearchPanel/><RetrievalPipeline/></div><aside style={{display:"grid",gap:24}}><KnowledgeAI/><KnowledgeGovernance/><MemoryAuditTrail/></aside></section></main></Container><Footer/></>}
+import { KnowledgeManagementClient } from "@/components/knowledge";
+import { getAuthenticatedContext } from "@/lib/auth/session";
+import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
+
+export default async function KnowledgePage() {
+  const context = await getAuthenticatedContext();
+  const authorization = await resolveAuthorization(context);
+  const canManage =
+    authorization.isPlatformAdmin || authorization.permissions.includes("knowledge.manage");
+  const canApprove =
+    authorization.isPlatformAdmin || authorization.permissions.includes("knowledge.approve");
+  return <><Navbar/><Container><KnowledgeManagementClient currentUserId={context.userId} canManage={canManage} canApprove={canApprove}/></Container><Footer/></>;
+}

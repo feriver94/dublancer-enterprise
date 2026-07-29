@@ -22,6 +22,10 @@ const flags = [
   ["workgraph.enabled", "Tenant work graph and lineage"],
   ["matching.enabled", "Explainable opportunity matching"],
   ["compliance.retention.enabled", "Enterprise retention controls"],
+  ["crm.enabled", "Enterprise customer relationship management"],
+  ["talent.enabled", "Talent and resource planning"],
+  ["knowledge.enabled", "Governed enterprise knowledge management"],
+  ["integrations.enabled", "Enterprise integration and event delivery framework"],
 ];
 
 try {

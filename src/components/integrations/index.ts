@@ -10,6 +10,7 @@ export { default as IntegrationGovernance } from "./IntegrationGovernance";
 export { default as DeveloperPlatform } from "./DeveloperPlatform";
 export { default as IntegrationsAI } from "./IntegrationsAI";
 export { default as IntegrationHeader } from "./IntegrationHeader";
+export { EnterpriseIntegrationsClient } from "./EnterpriseIntegrationsClient";
 export { default as IntegrationStats } from "./IntegrationStats";
 export { default as WebhookManager } from "./WebhookManager";
 export { default as EventBusDashboard } from "./EventBusDashboard";

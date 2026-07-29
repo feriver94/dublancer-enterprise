@@ -53,6 +53,16 @@ export const PLATFORM_PERMISSIONS = [
   "identity.pam.approve",
   "observability.read",
   "observability.manage",
+  "crm.read",
+  "crm.manage",
+  "talent.read",
+  "talent.manage",
+  "knowledge.read",
+  "knowledge.manage",
+  "knowledge.approve",
+  "integrations.read",
+  "integrations.manage",
+  "integrations.execute",
 ] as const;
 
 export type PlatformPermission = (typeof PLATFORM_PERMISSIONS)[number];

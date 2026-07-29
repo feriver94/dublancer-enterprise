@@ -84,6 +84,22 @@ model User {
   revokedPrivilegedAccess    PrivilegedAccessGrant[]   @relation("PamGrantRevoker")
   requestedAuditExports      AuditExportRun[]
   requestedLoadTests         LoadTestRun[]
+  createdCrmActivities       CrmActivity[]             @relation("CrmActivityCreator")
+  createdCrmNotes            CrmNote[]                 @relation("CrmNoteAuthor")
+  createdCrmQuotes           CrmQuote[]                @relation("CrmQuoteCreator")
+  ownedResourcePlans         ResourcePlan[]            @relation("ResourcePlanOwner")
+  allocatedStaffing          StaffingAssignment[]      @relation("StaffingAllocator")
+  reviewedPerformance        TalentPerformanceRecord[] @relation("TalentPerformanceReviewer")
+  ownedKnowledgeArticles     KnowledgeArticle[]        @relation("KnowledgeArticleOwner")
+  createdArticleVersions     KnowledgeArticleVersion[] @relation("KnowledgeVersionCreator")
+  reviewedKnowledgeApprovals KnowledgeApproval[]       @relation("KnowledgeApprovalReviewer")
+  createdKnowledgeFaqs       KnowledgeFaq[]            @relation("KnowledgeFaqCreator")
+  knowledgeRetrievals        KnowledgeRetrievalLog[]
+  createdIntegrationConnectors IntegrationConnector[]  @relation("IntegrationConnectorCreator")
+  createdIntegrationApiKeys  IntegrationApiKey[]       @relation("IntegrationApiKeyCreator")
+  connectedOAuthIntegrations OAuthIntegration[]        @relation("OAuthIntegrationConnector")
+  createdWebhookEndpoints    IntegrationWebhookEndpoint[] @relation("IntegrationWebhookCreator")
+  requestedIntegrationRuns  IntegrationRun[]          @relation("IntegrationRunRequester")
   loginEvents                LoginEvent[]
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetTokens        PasswordResetToken[]
@@ -282,6 +298,34 @@ model Organization {
   scalingRecommendations   WorkerScalingRecommendation[]
   performanceProfiles      PerformanceProfile[]
   loadTestRuns             LoadTestRun[]
+  crmPipelines             CrmPipeline[]
+  crmLeads                 CrmLead[]
+  crmAccounts              CrmAccount[]
+  crmContacts              CrmContact[]
+  crmOpportunities         CrmOpportunity[]
+  crmActivities            CrmActivity[]
+  crmNotes                 CrmNote[]
+  crmQuotes                CrmQuote[]
+  crmHealthSnapshots       CrmCustomerHealthSnapshot[]
+  crmCustomerMetrics       CrmCustomerMetric[]
+  talentProfiles           TalentProfile[]
+  resourcePlans            ResourcePlan[]
+  staffingAssignments      StaffingAssignment[]
+  capacitySnapshots        TalentCapacitySnapshot[]
+  benchEntries             TalentBenchEntry[]
+  talentPerformanceRecords TalentPerformanceRecord[]
+  knowledgeCategories      KnowledgeCategory[]
+  knowledgeArticles        KnowledgeArticle[]
+  knowledgeFaqs            KnowledgeFaq[]
+  knowledgeRetrievalLogs   KnowledgeRetrievalLog[]
+  integrationConnectors    IntegrationConnector[]
+  integrationApiKeys       IntegrationApiKey[]
+  oauthIntegrations        OAuthIntegration[]
+  integrationWebhooks      IntegrationWebhookEndpoint[]
+  integrationSubscriptions IntegrationEventSubscription[]
+  integrationEvents        IntegrationEvent[]
+  integrationDeliveries    IntegrationWebhookDelivery[]
+  integrationRuns          IntegrationRun[]
   createdAt                DateTime                      @default(now())
   updatedAt                DateTime                      @updatedAt
   projectTemplates         ProjectTemplate[]
@@ -303,6 +347,11 @@ model Membership {
   managedTeams       Team[]             @relation("TeamManager")
   teamMemberships    TeamMembership[]
   accessReviewItems  AccessReviewItem[]
+  crmAccountsOwned   CrmAccount[]         @relation("CrmAccountOwner")
+  crmLeadsAssigned   CrmLead[]            @relation("CrmLeadAssignee")
+  crmContactsOwned   CrmContact[]         @relation("CrmContactOwner")
+  crmOpportunitiesOwned CrmOpportunity[]  @relation("CrmOpportunityOwner")
+  talentProfile      TalentProfile?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -386,6 +435,8 @@ model Project {
   knowledgeSources     KnowledgeSource[]
   analyticsEvents      AnalyticsEvent[]
   workGraphNodes       WorkGraphNode[]
+  resourcePlans        ResourcePlan[]
+  staffingAssignments StaffingAssignment[]
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
@@ -1626,6 +1677,8 @@ model Skill {
   isActive    Boolean           @default(true)
   freelancers FreelancerSkill[]
   listings    ListingSkill[]
+  talentProfileSkills TalentProfileSkill[]
+  staffingRequirements StaffingRequirement[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
@@ -4115,6 +4168,1095 @@ model LoadTestRun {
 
   @@index([organizationId, status, createdAt])
   @@index([requestedById, createdAt])
+}
+
+enum CrmLeadStatus {
+  NEW
+  QUALIFIED
+  DISQUALIFIED
+  CONVERTED
+}
+
+enum CrmAccountStatus {
+  PROSPECT
+  ACTIVE
+  INACTIVE
+  CHURNED
+}
+
+enum CrmOpportunityStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum CrmStageCategory {
+  OPEN
+  WON
+  LOST
+}
+
+enum CrmActivityType {
+  CALL
+  EMAIL
+  MEETING
+  TASK
+  NOTE
+  SYSTEM
+}
+
+enum CrmQuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum CrmCustomerHealthBand {
+  HEALTHY
+  WATCH
+  AT_RISK
+  CRITICAL
+}
+
+enum TalentProfileStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+}
+
+enum TalentProficiencyLevel {
+  FOUNDATION
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum TalentCertificationStatus {
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  REVOKED
+}
+
+enum ResourcePlanStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum StaffingRequirementStatus {
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+}
+
+enum StaffingAssignmentStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TalentAvailabilityStatus {
+  AVAILABLE
+  PARTIAL
+  UNAVAILABLE
+}
+
+enum TalentBenchStatus {
+  ON_BENCH
+  PARTIALLY_ALLOCATED
+  ASSIGNED
+  EXITED
+}
+
+enum TalentPerformanceRating {
+  BELOW_EXPECTATIONS
+  MEETS_EXPECTATIONS
+  EXCEEDS_EXPECTATIONS
+  EXCEPTIONAL
+}
+
+enum KnowledgeArticleStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum KnowledgeApprovalDecision {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum IntegrationConnectorType {
+  REST
+  IMPORT
+  EXPORT
+}
+
+enum IntegrationAuthType {
+  NONE
+  API_KEY
+  BEARER
+  BASIC
+  OAUTH2
+}
+
+enum IntegrationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  FAILED
+  DISABLED
+}
+
+enum IntegrationApiKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum OAuthIntegrationStatus {
+  PENDING
+  ACTIVE
+  REFRESH_REQUIRED
+  REVOKED
+  FAILED
+}
+
+enum IntegrationWebhookStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum IntegrationEventStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  PARTIAL
+  FAILED
+  DEAD_LETTER
+}
+
+enum IntegrationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  RETRYING
+  FAILED
+  DEAD_LETTER
+}
+
+enum IntegrationRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum IntegrationAttemptStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+}
+
+model CrmPipeline {
+  id             String             @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  isDefault      Boolean            @default(false)
+  isActive       Boolean            @default(true)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages         CrmPipelineStage[]
+  opportunities  CrmOpportunity[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+}
+
+model CrmPipelineStage {
+  id            String           @id @default(cuid())
+  pipelineId    String
+  name          String
+  position      Int
+  probability   Int              @default(0)
+  category      CrmStageCategory @default(OPEN)
+  pipeline      CrmPipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities CrmOpportunity[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([pipelineId, position])
+  @@unique([pipelineId, name])
+  @@index([pipelineId, category])
+}
+
+model CrmLead {
+  id                     String        @id @default(cuid())
+  organizationId         String
+  assignedToMembershipId String?
+  source                 String?
+  status                 CrmLeadStatus @default(NEW)
+  firstName              String
+  lastName               String
+  email                  String?
+  phone                  String?
+  companyName            String?
+  jobTitle               String?
+  score                  Int           @default(0)
+  convertedAt            DateTime?
+  convertedAccountId     String?
+  convertedContactId     String?
+  convertedOpportunityId String?
+  metadata               Json?
+  organization           Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedTo             Membership?   @relation("CrmLeadAssignee", fields: [assignedToMembershipId], references: [id], onDelete: SetNull)
+  convertedAccount       CrmAccount?   @relation("ConvertedLeadAccount", fields: [convertedAccountId], references: [id], onDelete: SetNull)
+  convertedContact       CrmContact?   @relation("ConvertedLeadContact", fields: [convertedContactId], references: [id], onDelete: SetNull)
+  convertedOpportunity   CrmOpportunity? @relation("ConvertedLeadOpportunity", fields: [convertedOpportunityId], references: [id], onDelete: SetNull)
+  activities             CrmActivity[]
+  notes                  CrmNote[]
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, email])
+  @@index([assignedToMembershipId, status])
+}
+
+model CrmAccount {
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  ownerMembershipId      String?
+  parentAccountId        String?
+  name                   String
+  status                 CrmAccountStatus          @default(PROSPECT)
+  industry               String?
+  website                String?
+  phone                  String?
+  countryCode            String                    @default("AE")
+  annualRevenueMinor     BigInt?
+  currency               String                    @default("AED")
+  externalReference      String?
+  metadata               Json?
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner                  Membership?               @relation("CrmAccountOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  parentAccount          CrmAccount?               @relation("CrmAccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  childAccounts          CrmAccount[]              @relation("CrmAccountHierarchy")
+  contacts               CrmContact[]
+  opportunities          CrmOpportunity[]
+  activities             CrmActivity[]
+  notes                  CrmNote[]
+  quotes                 CrmQuote[]
+  healthSnapshots        CrmCustomerHealthSnapshot[]
+  customerMetrics        CrmCustomerMetric[]
+  convertedLeads         CrmLead[]                 @relation("ConvertedLeadAccount")
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status, updatedAt])
+  @@index([ownerMembershipId, status])
+  @@index([parentAccountId])
+}
+
+model CrmContact {
+  id                String           @id @default(cuid())
+  organizationId    String
+  accountId         String
+  ownerMembershipId String?
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  jobTitle          String?
+  isPrimary         Boolean          @default(false)
+  metadata          Json?
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account           CrmAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  owner             Membership?      @relation("CrmContactOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  opportunities     CrmOpportunity[]
+  activities        CrmActivity[]
+  notes             CrmNote[]
+  quotes            CrmQuote[]
+  convertedLeads    CrmLead[]        @relation("ConvertedLeadContact")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@unique([organizationId, accountId, email])
+  @@index([organizationId, accountId, isPrimary])
+  @@index([organizationId, email])
+  @@index([ownerMembershipId])
+}
+
+model CrmOpportunity {
+  id                String               @id @default(cuid())
+  organizationId    String
+  accountId         String
+  primaryContactId  String?
+  pipelineId        String
+  stageId           String
+  ownerMembershipId String?
+  name              String
+  status            CrmOpportunityStatus @default(OPEN)
+  amountMinor       BigInt
+  currency          String               @default("AED")
+  probability       Int                  @default(0)
+  expectedCloseAt   DateTime?
+  closedAt          DateTime?
+  lostReason        String?
+  metadata          Json?
+  version           Int                  @default(1)
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account           CrmAccount           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  primaryContact    CrmContact?          @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
+  pipeline          CrmPipeline          @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage             CrmPipelineStage     @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner             Membership?          @relation("CrmOpportunityOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  activities        CrmActivity[]
+  notes             CrmNote[]
+  quotes            CrmQuote[]
+  convertedLeads    CrmLead[]            @relation("ConvertedLeadOpportunity")
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([organizationId, status, expectedCloseAt])
+  @@index([organizationId, pipelineId, stageId])
+  @@index([accountId, status])
+  @@index([ownerMembershipId, status])
+}
+
+model CrmActivity {
+  id             String          @id @default(cuid())
+  organizationId String
+  createdById    String
+  accountId      String?
+  contactId      String?
+  opportunityId  String?
+  leadId         String?
+  type           CrmActivityType
+  subject        String
+  details        String?
+  dueAt          DateTime?
+  completedAt    DateTime?
+  occurredAt     DateTime        @default(now())
+  metadata       Json?
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User            @relation("CrmActivityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  account        CrmAccount?     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact        CrmContact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  opportunity    CrmOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  lead           CrmLead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([organizationId, occurredAt])
+  @@index([accountId, occurredAt])
+  @@index([contactId, occurredAt])
+  @@index([opportunityId, occurredAt])
+  @@index([leadId, occurredAt])
+  @@index([dueAt, completedAt])
+}
+
+model CrmNote {
+  id             String          @id @default(cuid())
+  organizationId String
+  authorId       String
+  accountId      String?
+  contactId      String?
+  opportunityId  String?
+  leadId         String?
+  body           String
+  isPinned       Boolean         @default(false)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author         User            @relation("CrmNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  account        CrmAccount?     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact        CrmContact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  opportunity    CrmOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  lead           CrmLead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([accountId, isPinned, createdAt])
+  @@index([contactId, createdAt])
+  @@index([opportunityId, createdAt])
+  @@index([leadId, createdAt])
+}
+
+model CrmQuote {
+  id               String         @id @default(cuid())
+  organizationId   String
+  opportunityId    String
+  accountId        String
+  contactId        String?
+  createdById      String
+  quoteNumber      String
+  status           CrmQuoteStatus @default(DRAFT)
+  currency         String         @default("AED")
+  subtotalMinor    BigInt
+  discountMinor    BigInt         @default(0)
+  taxMinor         BigInt         @default(0)
+  totalMinor       BigInt
+  validUntil       DateTime?
+  terms            String?
+  version          Int            @default(1)
+  sentAt           DateTime?
+  acceptedAt       DateTime?
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  opportunity      CrmOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  account          CrmAccount     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact          CrmContact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdBy        User           @relation("CrmQuoteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  lines            CrmQuoteLine[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([organizationId, quoteNumber])
+  @@index([organizationId, status, createdAt])
+  @@index([opportunityId, status])
+  @@index([accountId, createdAt])
+}
+
+model CrmQuoteLine {
+  id             String   @id @default(cuid())
+  quoteId        String
+  position       Int
+  description    String
+  quantity       Int      @default(1)
+  unitPriceMinor BigInt
+  totalMinor     BigInt
+  metadata       Json?
+  quote          CrmQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([quoteId, position])
+  @@index([quoteId])
+}
+
+model CrmCustomerHealthSnapshot {
+  id             String                @id @default(cuid())
+  organizationId String
+  accountId      String
+  score          Int
+  band           CrmCustomerHealthBand
+  signals        Json
+  source         String                @default("RULE_ENGINE")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account        CrmAccount            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  capturedAt     DateTime              @default(now())
+
+  @@index([organizationId, band, capturedAt])
+  @@index([accountId, capturedAt])
+}
+
+model CrmCustomerMetric {
+  id             String       @id @default(cuid())
+  organizationId String
+  accountId      String
+  key            String
+  value          Float
+  periodStart    DateTime
+  periodEnd      DateTime
+  metadata       Json?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account        CrmAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([accountId, key, periodStart, periodEnd])
+  @@index([organizationId, key, periodEnd])
+  @@index([accountId, periodEnd])
+}
+
+model TalentProfile {
+  id                       String              @id @default(cuid())
+  organizationId           String
+  membershipId             String              @unique
+  title                    String
+  summary                  String?
+  status                   TalentProfileStatus @default(ACTIVE)
+  location                 String?
+  timezone                 String              @default("Asia/Dubai")
+  hireDate                 DateTime?
+  costRateMinor            BigInt?
+  billRateMinor            BigInt?
+  currency                 String              @default("AED")
+  targetUtilizationPercent Int                 @default(80)
+  organization             Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership               Membership          @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  skills                   TalentProfileSkill[]
+  certifications           TalentCertification[]
+  availability             TalentAvailability[]
+  staffingAssignments      StaffingAssignment[]
+  capacitySnapshots        TalentCapacitySnapshot[]
+  benchEntries             TalentBenchEntry[]
+  performanceHistory       TalentPerformanceRecord[]
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, title])
+}
+
+model TalentProfileSkill {
+  talentProfileId String
+  skillId         String
+  proficiency     TalentProficiencyLevel @default(INTERMEDIATE)
+  yearsExperience Int                    @default(0)
+  endorsedAt      DateTime?
+  verifiedAt      DateTime?
+  talentProfile   TalentProfile          @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  skill           Skill                  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@id([talentProfileId, skillId])
+  @@index([skillId, proficiency])
+}
+
+model TalentCertification {
+  id              String                    @id @default(cuid())
+  talentProfileId String
+  name            String
+  issuer          String
+  credentialId    String?
+  credentialUrl   String?
+  status          TalentCertificationStatus @default(ACTIVE)
+  issuedAt        DateTime
+  expiresAt       DateTime?
+  talentProfile   TalentProfile             @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([talentProfileId, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+model ResourcePlan {
+  id             String             @id @default(cuid())
+  organizationId String
+  projectId      String?
+  ownerId        String
+  name           String
+  description    String?
+  status         ResourcePlanStatus @default(DRAFT)
+  startsAt       DateTime
+  endsAt         DateTime
+  budgetHours    Int?
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  owner          User               @relation("ResourcePlanOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  requirements   StaffingRequirement[]
+  assignments    StaffingAssignment[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status, startsAt, endsAt])
+  @@index([projectId, status])
+}
+
+model StaffingRequirement {
+  id               String                    @id @default(cuid())
+  resourcePlanId   String
+  skillId          String?
+  roleTitle        String
+  requiredProfiles Int                       @default(1)
+  filledProfiles   Int                       @default(0)
+  hoursPerWeek     Int                       @default(40)
+  minProficiency   TalentProficiencyLevel?
+  startsAt         DateTime
+  endsAt           DateTime
+  status           StaffingRequirementStatus @default(OPEN)
+  resourcePlan     ResourcePlan              @relation(fields: [resourcePlanId], references: [id], onDelete: Cascade)
+  skill            Skill?                    @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  assignments      StaffingAssignment[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@index([resourcePlanId, status])
+  @@index([skillId, status])
+  @@index([startsAt, endsAt])
+}
+
+model StaffingAssignment {
+  id                   String                   @id @default(cuid())
+  organizationId       String
+  resourcePlanId       String
+  requirementId        String?
+  talentProfileId      String
+  projectId            String?
+  allocatedById        String
+  allocationPercent    Int
+  hoursPerWeek         Int
+  startsAt             DateTime
+  endsAt               DateTime
+  status               StaffingAssignmentStatus @default(PLANNED)
+  organization         Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resourcePlan         ResourcePlan             @relation(fields: [resourcePlanId], references: [id], onDelete: Cascade)
+  requirement          StaffingRequirement?     @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  talentProfile        TalentProfile            @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  project              Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  allocatedBy          User                     @relation("StaffingAllocator", fields: [allocatedById], references: [id], onDelete: Restrict)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@unique([resourcePlanId, talentProfileId, startsAt])
+  @@index([organizationId, status, startsAt, endsAt])
+  @@index([talentProfileId, status, startsAt, endsAt])
+  @@index([projectId, status])
+}
+
+model TalentAvailability {
+  id              String                   @id @default(cuid())
+  talentProfileId String
+  status          TalentAvailabilityStatus @default(AVAILABLE)
+  startsAt        DateTime
+  endsAt          DateTime
+  capacityPercent Int                      @default(100)
+  reason          String?
+  talentProfile   TalentProfile            @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([talentProfileId, startsAt, endsAt])
+  @@index([status, startsAt, endsAt])
+}
+
+model TalentCapacitySnapshot {
+  id                 String        @id @default(cuid())
+  organizationId     String
+  talentProfileId    String
+  periodStart        DateTime
+  periodEnd          DateTime
+  availableHours     Int
+  allocatedHours     Int
+  utilizationPercent Int
+  source             String        @default("RESOURCE_PLANNER")
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  talentProfile      TalentProfile @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  capturedAt         DateTime      @default(now())
+
+  @@unique([talentProfileId, periodStart, periodEnd])
+  @@index([organizationId, periodEnd, utilizationPercent])
+  @@index([talentProfileId, periodEnd])
+}
+
+model TalentBenchEntry {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  talentProfileId    String
+  status             TalentBenchStatus @default(ON_BENCH)
+  reason             String?
+  startedAt          DateTime          @default(now())
+  endedAt            DateTime?
+  nextAssignmentDate DateTime?
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  talentProfile      TalentProfile     @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([organizationId, status, startedAt])
+  @@index([talentProfileId, status])
+}
+
+model TalentPerformanceRecord {
+  id                 String                  @id @default(cuid())
+  organizationId     String
+  talentProfileId    String
+  reviewerId         String
+  periodStart        DateTime
+  periodEnd          DateTime
+  rating             TalentPerformanceRating
+  utilizationPercent Int?
+  deliveryScore      Int?
+  feedback           String?
+  goals              Json?
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  talentProfile      TalentProfile           @relation(fields: [talentProfileId], references: [id], onDelete: Cascade)
+  reviewer           User                    @relation("TalentPerformanceReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@unique([talentProfileId, periodStart, periodEnd])
+  @@index([organizationId, periodEnd, rating])
+  @@index([reviewerId, periodEnd])
+}
+
+model KnowledgeCategory {
+  id             String              @id @default(cuid())
+  organizationId String
+  parentId       String?
+  name           String
+  slug           String
+  description    String?
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         KnowledgeCategory?  @relation("KnowledgeCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children       KnowledgeCategory[] @relation("KnowledgeCategoryHierarchy")
+  articles       KnowledgeArticle[]
+  faqs           KnowledgeFaq[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, parentId, name])
+}
+
+model KnowledgeArticle {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  categoryId       String?
+  ownerId          String
+  slug             String
+  title            String
+  summary          String?
+  locale           String                 @default("en-AE")
+  status           KnowledgeArticleStatus @default(DRAFT)
+  currentVersion   Int                    @default(1)
+  publishedVersion Int?
+  isInternal       Boolean                @default(true)
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  metadata         Json?
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category         KnowledgeCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  owner            User                   @relation("KnowledgeArticleOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  versions         KnowledgeArticleVersion[]
+  approvals        KnowledgeApproval[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, categoryId, status])
+  @@index([ownerId, status])
+}
+
+model KnowledgeArticleVersion {
+  id            String           @id @default(cuid())
+  articleId     String
+  version       Int
+  title         String
+  body          String
+  changeSummary String?
+  createdById   String
+  article       KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  createdBy     User             @relation("KnowledgeVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvals     KnowledgeApproval[]
+  createdAt     DateTime         @default(now())
+
+  @@unique([articleId, version])
+  @@index([articleId, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model KnowledgeApproval {
+  id         String                    @id @default(cuid())
+  articleId  String
+  versionId  String
+  reviewerId String
+  decision   KnowledgeApprovalDecision @default(PENDING)
+  comment    String?
+  decidedAt  DateTime?
+  article    KnowledgeArticle          @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  version    KnowledgeArticleVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  reviewer   User                      @relation("KnowledgeApprovalReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+
+  @@unique([versionId, reviewerId])
+  @@index([articleId, decision, createdAt])
+  @@index([reviewerId, decision])
+}
+
+model KnowledgeFaq {
+  id             String                 @id @default(cuid())
+  organizationId String
+  categoryId     String?
+  createdById    String
+  question       String
+  answer         String
+  locale         String                 @default("en-AE")
+  status         KnowledgeArticleStatus @default(DRAFT)
+  sortOrder      Int                    @default(0)
+  publishedAt    DateTime?
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category       KnowledgeCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy      User                   @relation("KnowledgeFaqCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, status, sortOrder])
+  @@index([organizationId, categoryId, status])
+}
+
+model KnowledgeRetrievalLog {
+  id               String       @id @default(cuid())
+  organizationId   String
+  userId           String
+  query            String
+  answer           String?
+  sourceArticleIds String[]
+  confidence       Float?
+  mode             String       @default("GROUNDED_SEARCH")
+  aiRunId          String?
+  latencyMs        Int
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([aiRunId])
+}
+
+model IntegrationConnector {
+  id                     String                   @id @default(cuid())
+  organizationId         String
+  createdById            String
+  name                   String
+  key                    String
+  type                   IntegrationConnectorType
+  status                 IntegrationStatus        @default(DRAFT)
+  baseUrl                String
+  method                 String                    @default("POST")
+  path                   String                    @default("/")
+  authType               IntegrationAuthType       @default(NONE)
+  authConfigEncrypted    String?
+  defaultHeadersEncrypted String?
+  requestTimeoutMs       Int                       @default(15000)
+  maxAttempts            Int                       @default(5)
+  mapping                Json?
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy              User                      @relation("IntegrationConnectorCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  oauthIntegrations      OAuthIntegration[]
+  runs                   IntegrationRun[]
+  subscriptions          IntegrationEventSubscription[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId, type, status])
+  @@index([status, updatedAt])
+}
+
+model IntegrationApiKey {
+  id             String                  @id @default(cuid())
+  organizationId String
+  createdById    String
+  name           String
+  prefix         String
+  secretHash     String
+  scopes         String[]
+  status         IntegrationApiKeyStatus @default(ACTIVE)
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                    @relation("IntegrationApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime                @default(now())
+
+  @@unique([prefix])
+  @@index([organizationId, status, createdAt])
+  @@index([status, expiresAt])
+}
+
+model OAuthIntegration {
+  id                       String                 @id @default(cuid())
+  organizationId           String
+  connectorId              String?
+  connectedById            String
+  provider                 String
+  name                     String
+  clientId                 String
+  clientSecretEncrypted    String?
+  authorizationUrl         String?
+  tokenUrl                 String?
+  scopes                   String[]
+  status                   OAuthIntegrationStatus @default(PENDING)
+  accessTokenEncrypted     String?
+  refreshTokenEncrypted    String?
+  tokenExpiresAt           DateTime?
+  externalAccountReference String?
+  lastRefreshedAt          DateTime?
+  lastError                String?
+  organization             Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connector                IntegrationConnector?  @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+  connectedBy              User                   @relation("OAuthIntegrationConnector", fields: [connectedById], references: [id], onDelete: Restrict)
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  @@unique([organizationId, provider, name])
+  @@index([organizationId, status, updatedAt])
+  @@index([connectorId, status])
+}
+
+model IntegrationWebhookEndpoint {
+  id              String                   @id @default(cuid())
+  organizationId  String
+  createdById     String
+  name            String
+  url             String
+  secretEncrypted String
+  status          IntegrationWebhookStatus @default(ACTIVE)
+  eventTypes      String[]
+  maxAttempts     Int                      @default(5)
+  timeoutMs       Int                      @default(10000)
+  lastSuccessAt   DateTime?
+  lastFailureAt   DateTime?
+  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User                     @relation("IntegrationWebhookCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  subscriptions   IntegrationEventSubscription[]
+  deliveries      IntegrationWebhookDelivery[]
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([organizationId, status, updatedAt])
+}
+
+model IntegrationEventSubscription {
+  id             String                     @id @default(cuid())
+  organizationId String
+  endpointId     String?
+  connectorId    String?
+  eventType      String
+  enabled        Boolean                    @default(true)
+  filters        Json?
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  endpoint       IntegrationWebhookEndpoint? @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  connector      IntegrationConnector?      @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  @@unique([organizationId, endpointId, connectorId, eventType])
+  @@index([organizationId, eventType, enabled])
+  @@index([endpointId, enabled])
+  @@index([connectorId, enabled])
+}
+
+model IntegrationEvent {
+  id             String                 @id @default(cuid())
+  organizationId String
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  payload        Json
+  status         IntegrationEventStatus @default(PENDING)
+  correlationId  String?
+  occurredAt     DateTime               @default(now())
+  deliveredAt    DateTime?
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries     IntegrationWebhookDelivery[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, eventType, occurredAt])
+  @@index([status, occurredAt])
+  @@index([correlationId])
+}
+
+model IntegrationWebhookDelivery {
+  id             String                    @id @default(cuid())
+  organizationId String
+  eventId        String
+  endpointId     String
+  status         IntegrationDeliveryStatus @default(PENDING)
+  attempts       Int                       @default(0)
+  maxAttempts    Int                       @default(5)
+  nextAttemptAt  DateTime                  @default(now())
+  responseCode   Int?
+  lastError      String?
+  deliveredAt    DateTime?
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event          IntegrationEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint       IntegrationWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  deliveryAttempts IntegrationWebhookDeliveryAttempt[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@unique([eventId, endpointId])
+  @@index([organizationId, status, nextAttemptAt])
+  @@index([endpointId, status, createdAt])
+}
+
+model IntegrationWebhookDeliveryAttempt {
+  id           String                   @id @default(cuid())
+  deliveryId   String
+  attempt      Int
+  status       IntegrationAttemptStatus
+  responseCode Int?
+  durationMs   Int?
+  error        String?
+  delivery     IntegrationWebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  startedAt    DateTime                 @default(now())
+  completedAt  DateTime?
+
+  @@unique([deliveryId, attempt])
+  @@index([status, startedAt])
+}
+
+model IntegrationRun {
+  id             String               @id @default(cuid())
+  organizationId String
+  connectorId    String
+  requestedById  String?
+  status         IntegrationRunStatus @default(PENDING)
+  idempotencyKey String
+  direction      IntegrationConnectorType
+  requestPayload Json?
+  responsePayload Json?
+  recordsRead    Int                  @default(0)
+  recordsWritten Int                  @default(0)
+  attempts       Int                  @default(0)
+  maxAttempts    Int                  @default(5)
+  availableAt    DateTime             @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  lastError      String?
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connector      IntegrationConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  requestedBy    User?                @relation("IntegrationRunRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  runAttempts    IntegrationRunAttempt[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@index([status, availableAt])
+  @@index([connectorId, createdAt])
+}
+
+model IntegrationRunAttempt {
+  id           String                   @id @default(cuid())
+  runId        String
+  attempt      Int
+  status       IntegrationAttemptStatus
+  request      Json?
+  response     Json?
+  responseCode Int?
+  durationMs   Int?
+  error        String?
+  run          IntegrationRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  startedAt    DateTime                 @default(now())
+  completedAt  DateTime?
+
+  @@unique([runId, attempt])
+  @@index([status, startedAt])
 }
 
 model PolicyConfiguration {
