@@ -10,7 +10,9 @@ Phase 10 begins at authoritative Phase 9 commit `5270e948dfbb570ca5ec8acb2f606ee
 2. Multi-region performance and capacity controls — GitHub commit `bada40cd98efe788d3e22cc27e48c0a60ac14894`.
 3. Frontend, member administration, accessibility and browser consolidation — GitHub commit `9af241734ae81babe1882a6dbc20240ed6f9d489`.
 4. Dependency and supply-chain hardening — GitHub commit `f92c2336dac79333bfbc49c044313e3c12c33758`.
-5. v1.0 release package — documented in the required release artifacts and finalized by the Phase 10 release commit.
+5. v1.0 release package — GitHub commit `89ce8c1c53cafa2b6f57dedb6665824993bf935c`.
+6. Fresh-database production runtime verification — GitHub commit `05c4ec5ce638f6a1ada6782ce2e0ab22616ceff9`.
+7. Final report-complete release — published over parent `05c4ec5ce638f6a1ada6782ce2e0ab22616ceff9` with the required subject `feat: implement Phase 10 enterprise production readiness and v1.0 release`. The final GitHub SHA and tree are content-addressed publication outputs and are recorded in the release response and repository history rather than self-referenced inside the commit object.
 
 ## Enterprise production readiness
 
@@ -63,22 +65,46 @@ Phase 10 begins at authoritative Phase 9 commit `5270e948dfbb570ca5ec8acb2f606ee
 
 ## Verification evidence
 
-Milestone verification completed before this report:
+The final release gate completed on the report-complete Phase 10 tree:
 
-- Static tests: 58/58 passed.
-- Prisma 7.9.1 validate/generate: passed.
-- Migration-order verifier: 18 migrations passed.
+- Prisma 7.9.1 validate and generate: passed.
+- Migration-order verifier: all 18 chronological migrations passed; the Phase 10 migration is last.
+- Fresh database and seed: the dedicated Phase 10 runtime applied all 18 migrations to an empty database and completed the real `prisma/seed.mjs` seed. Every Phase 3–9 compatibility runtime independently repeated fresh migration and seed.
+- Static tests: 59/59 passed.
 - TypeScript and ESLint: passed.
-- Localization: 1,366 messages per locale, exact key parity.
-- API security: 200 routes, 21 explicit non-cookie exemptions.
-- Secret scan: 1,273 text source files passed before release-document additions.
-- UI consistency: four compatibility aliases, live orchestration, member administration, three browser engines.
-- Browser discovery: 36 Playwright scenarios; actual engine execution is delegated to GitHub Actions because the implementation container does not include browser binaries.
-- Supply chain: 741 registry packages, 6 integrity-covered bundled packages, 8 reviewed lifecycle scripts.
-- npm audit: 0 vulnerabilities.
-- Production build: Next.js 16.2.12, build-time TypeScript passed, 301/301 generation units.
+- Localization: 1,366 messages per locale with exact key parity.
+- API security: 200 route files passed, including 21 explicit constant-time-authenticated/non-cookie exemptions.
+- Secret scan: 1,284 text source files passed.
+- Supply chain: 741 registry packages, 6 integrity-covered bundled packages, 8 reviewed lifecycle scripts, and lock SHA-256 `1abcd3b88ca7bfb047fa285436e4906c032bfa7020b3d594eae987ce3e7181c2`.
+- Dependency audits: full development/production graph and production-only graph both reported 0 vulnerabilities.
+- Production environment validation: 17 required controls and two distinct regions passed.
+- Backup artifact verification: encrypted manifest freshness, SHA-256, region, and final migration passed.
+- Production configuration: 15 deployment/operations artifacts passed.
+- UI consistency: four compatibility aliases, live orchestration, member administration, and three desktop browser engines passed static verification.
+- Browser automation: 36 Playwright scenarios were discovered for Chromium, Firefox, WebKit, and mobile Chromium. Browser binaries are not installed in this implementation container; the repository CI matrix installs and executes them independently.
+- Production build: Next.js 16.2.12 compiled successfully, build-time TypeScript passed, page data collected, and 301/301 generation units completed.
 
-The report is updated after the final fresh-database and all-phase runtime gate with exact runtime, seed, build, file, parent, tree, and final commit evidence.
+### Runtime regression summary
+
+- Phase 10: member picker and role lifecycle, owner immutability, tenant isolation, authenticated loop-safe regional cache invalidation, outbound peer delivery, filtered external search federation, bounded worker batches, capacity reporting, and legacy redirects passed.
+- Phase 9: CRM, customer timeline/health/analytics, talent staffing/capacity/bench/performance, knowledge approval/search/AI retrieval, integrations/webhooks/retries, permission enforcement, tenant isolation, and performance thresholds passed.
+- Phase 8: OIDC/JIT, MFA/backup codes, sessions, SCIM, PAM, cache failover, metrics/tracing/health/SLOs, audit export, scaling, and tenant isolation passed.
+- Phase 7: subscriptions, seats, member administration, access review, email retry/bounce/audit, adaptive abuse controls, and tenant isolation passed.
+- Phase 6: contract lifecycle, counterparty amendments, disputes, reviews, advanced delivery, timesheets, localization/RTL, permissions, and tenant isolation passed.
+- Phase 5: AI governance, provider recovery, shared-worker leasing/heartbeat/retry/dead-letter controls, administration, permissions, and tenant isolation passed.
+- Phase 4: governed files, storage/scanner failure handling, search, analytics, workers, tenant isolation, and its embedded Phase 2 commercial regression passed.
+- Phase 3 production runtime: authenticated routing, chat/messages/threads/reactions, notification lifecycle, Redis degradation/recovery, and its embedded Phase 2 concurrency/settlement regression passed against the optimized production build.
+- Phase 2 commercial behavior: atomic award, contract acceptance, milestone decision concurrency, charges, invoices, webhook replay, refunds, reconciliation, permissions, and tenant isolation passed through both compatibility runtimes.
+
+The Phase 3 runtime was intentionally executed in its supported production-server mode. In this container, Next development-webpack on-demand discovery omitted one deeply nested reaction route even though the optimized production manifest and server included it; the production runtime exercised the real release artifact and passed that route end to end.
+
+## Release inventory
+
+- Authoritative Phase 10 parent: `5270e948dfbb570ca5ec8acb2f606ee9a48497f3`.
+- Final publication parent: `05c4ec5ce638f6a1ada6782ce2e0ab22616ceff9`.
+- Phase 10 report-complete release scope: 83 changed files, 5,224 insertions, and 528 deletions.
+- Required release reports: nine artifacts, including `PHASE10_IMPLEMENTATION_REPORT.md`, indexed by `ENTERPRISE_RELEASE_PACKAGE_v1.0.md`.
+- Final publication is a guarded, non-forced fast-forward of `master`; its SHA/tree and final diff totals are verified after GitHub creates the immutable commit.
 
 ## Compatibility and scope
 
