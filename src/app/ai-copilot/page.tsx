@@ -1,1 +1,5 @@
-import{EnterpriseModulePage}from"@/components/platform/enterprise-module-page";export default function Page(){return<EnterpriseModulePage module="ai"/>}
+import { redirect } from "next/navigation";
+
+export default function AiCopilotAliasPage() {
+  redirect("/ai-platform");
+}

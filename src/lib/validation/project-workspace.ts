@@ -5,6 +5,14 @@ export const addProjectMemberSchema = z.object({
   role: z.enum(["OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER"]).default("CONTRIBUTOR"),
 });
 
+export const updateProjectMemberRoleSchema = z.object({
+  role: z.enum(["OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER"]),
+});
+
+export const removeProjectMemberSchema = z.object({
+  confirmation: z.literal("REMOVE"),
+});
+
 export const createMilestoneSchema = z.object({
   title: z.string().trim().min(2).max(160),
   description: z.string().trim().max(4000).optional(),

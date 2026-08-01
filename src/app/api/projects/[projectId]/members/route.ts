@@ -8,6 +8,16 @@ import { ProjectWorkspaceService } from "@/lib/services/project-workspace.servic
 const service = new ProjectWorkspaceService();
 type Context = { params: Promise<{ projectId: string }> };
 
+export async function GET(_request: NextRequest, route: Context) {
+  try {
+    const context = await getAuthenticatedContext();
+    const { projectId } = await route.params;
+    return apiSuccess(await service.memberOptions(context, projectId));
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
 export async function POST(request: NextRequest, route: Context) {
   try {
     await requireCsrfToken(request);

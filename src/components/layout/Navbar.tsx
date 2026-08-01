@@ -9,7 +9,7 @@ import Container from "./Container";
 
 const navItems = [
   { key: "dashboard", href: "/dashboard", authenticated: true },
-  { key: "aiWorkspace", href: "/ai-copilot", permission: "ai.use" },
+  { key: "aiWorkspace", href: "/ai-platform", permission: "ai.use" },
   { key: "marketplace", href: "/marketplace", permission: "marketplace.listing.read" },
   { key: "workspace", href: "/workspace", permission: "project.read" },
   { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },

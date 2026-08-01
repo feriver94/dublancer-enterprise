@@ -12,7 +12,7 @@ const arKeys = flatten(ar);
 if (JSON.stringify(enKeys) !== JSON.stringify(arKeys)) throw new Error("Locale keys do not match.");
 const arText = JSON.stringify(ar);
 if (!/[\u0600-\u06ff]/.test(arText)) throw new Error("Arabic locale does not contain Arabic text.");
-for (const namespace of ["Dashboard", "Marketplace", "Files", "Analytics", "Search", "Notifications", "Chat", "Finance", "Contracts", "Workspace", "AiGovernance", "Operations", "Administration", "Status", "Errors"]) {
+for (const namespace of ["Dashboard", "Marketplace", "Files", "Analytics", "Search", "Notifications", "Chat", "Finance", "Contracts", "Workspace", "AiGovernance", "Operations", "Administration", "Orchestration", "Status", "Errors"]) {
   if (!en[namespace] || !ar[namespace]) throw new Error(`Required locale namespace ${namespace} is missing.`);
 }
 const rootLayout = await readFile(new URL("../src/app/layout.tsx", import.meta.url), "utf8");
@@ -40,6 +40,8 @@ const canonicalClients = [
   "src/components/contracts/ContractsClient.tsx",
   "src/components/workspace/WorkspaceClient.tsx",
   "src/components/workspace/AdvancedDeliveryClient.tsx",
+  "src/components/workspace/ProjectMemberManagement.tsx",
+  "src/components/orchestration/OrchestrationClient.tsx",
 ];
 for (const file of canonicalClients) {
   const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");

@@ -71,3 +71,40 @@ test("Phase 10 migration adds only measured hot-path indexes", () => {
   ]) assert.match(migration, new RegExp(index));
   assert.match(schema, /@@index\(\[organizationId, queue, status, priority, availableAt\]\)/);
 });
+
+test("Phase 10 consolidates legacy product routes and completes project member administration", () => {
+  for (const [route, destination] of [
+    ["platform", "/admin"],
+    ["admin-control", "/admin"],
+    ["billing", "/payments"],
+    ["ai-copilot", "/ai-platform"],
+  ]) {
+    const source = read(`src/app/${route}/page.tsx`);
+    assert.match(source, new RegExp(`redirect\\(\\"${destination}\\"\\)`));
+    assert.doesNotMatch(source, /enterprise-module-page/);
+  }
+  assert.match(read("src/app/orchestration/page.tsx"), /OrchestrationClient/);
+  const navigation = read("src/components/layout/Navbar.tsx");
+  assert.match(navigation, /href: "\/ai-platform"/);
+  assert.doesNotMatch(navigation, /href: "\/ai-copilot"/);
+  const members = read("src/components/workspace/ProjectMemberManagement.tsx");
+  assert.match(members, /memberPicker/);
+  assert.match(members, /updateRole/);
+  assert.match(members, /removeMember/);
+  const route = read("src/app/api/projects/[projectId]/members/[userId]/route.ts");
+  assert.match(route, /export async function PATCH/);
+  assert.match(route, /export async function DELETE/);
+});
+
+test("Phase 10 automates accessibility responsive and cross-browser verification", () => {
+  const browser = read("tests/browser/accessibility.spec.ts");
+  const config = read("playwright.config.ts");
+  const workflow = read(".github/workflows/browser-compatibility.yml");
+  assert.match(browser, /AxeBuilder/);
+  assert.match(browser, /scrollWidth/);
+  assert.match(browser, /keyboard\.press\(\"Tab\"\)/);
+  for (const engine of ["chromium", "firefox", "webkit"]) {
+    assert.match(config, new RegExp(`name: \\"${engine}\\"`));
+    assert.match(workflow, new RegExp(engine));
+  }
+});

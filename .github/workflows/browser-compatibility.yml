@@ -1,0 +1,32 @@
+name: Browser compatibility and accessibility
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: ${{ matrix.browser }} accessibility and responsive checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      DATABASE_URL: postgresql://dublancer_test:dublancer_test@127.0.0.1:5432/dublancer_test
+      AUTH_SECRET: browser-compatibility-validation-only-not-production
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:browser -- --project=${{ matrix.browser }}

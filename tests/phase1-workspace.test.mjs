@@ -16,17 +16,19 @@ test("dashboard quick actions execute existing APIs", async () => {
 });
 
 test("workspace pages are protected, route-driven, and use project aggregate APIs", async () => {
-  const [index, detail, client, repository] = await Promise.all([
+  const [index, detail, client, memberManagement, repository] = await Promise.all([
     read("src/app/workspace/page.tsx"),
     read("src/app/workspace/project/[id]/page.tsx"),
     read("src/components/workspace/WorkspaceClient.tsx"),
+    read("src/components/workspace/ProjectMemberManagement.tsx"),
     read("src/lib/repositories/project.repository.ts"),
   ]);
   assert.match(index, /AuthenticatedShell/);
   assert.match(detail, /params:Promise<\{id:string\}>/);
   assert.match(detail, /projectId=\{id\}/);
   for (const route of ["milestones", "tasks", "comments", "members"]) {
-    assert.match(client, new RegExp(`/api/projects/\\$\\{projectId\\}/${route}`));
+    const source = route === "members" ? memberManagement : client;
+    assert.match(source, new RegExp(`/api/projects/\\$\\{(?:encodeURIComponent\\()?projectId(?:\\))?\\}/${route}`));
   }
   assert.match(client, /\/api\/files/);
   for (const relation of ["milestones", "tasks", "comments", "memberships", "attachments", "activities"]) {

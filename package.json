@@ -17,6 +17,8 @@
     "test:phase7:runtime": "node scripts/verify-phase7-runtime.mjs",
     "test:phase8:runtime": "node scripts/verify-phase8-runtime.mjs",
     "test:phase9:runtime": "node scripts/verify-phase9-runtime.mjs",
+    "test:browser": "playwright test",
+    "test:browser:list": "playwright test --list",
     "load:test": "node scripts/load-test.mjs",
     "verify:locales": "node scripts/verify-locales.mjs",
     "verify:security": "node scripts/verify-security.mjs",
@@ -25,6 +27,7 @@
     "verify:environment": "node scripts/validate-environment.mjs",
     "verify:production-config": "node scripts/verify-production-config.mjs",
     "verify:backup": "node scripts/verify-backup.mjs",
+    "verify:ui": "node scripts/verify-ui-consistency.mjs",
     "verify:supply-chain": "node scripts/verify-supply-chain.mjs",
     "verify:release": "prisma validate && prisma generate && npm run verify:migrations && npm run verify:locales && npm run verify:security && npm run verify:secrets && npm test && tsc --noEmit && eslint --quiet && next build",
     "seed": "node prisma/seed.mjs"
@@ -52,8 +55,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@electric-sql/pglite": "0.4.1",
     "@electric-sql/pglite-socket": "0.1.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
     "@types/react": "latest",

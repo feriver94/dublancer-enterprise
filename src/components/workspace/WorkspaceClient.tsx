@@ -14,6 +14,7 @@ import {
   formatUaeDateTime,
 } from "@/lib/locale/formatters";
 import AdvancedDeliveryClient from "./AdvancedDeliveryClient";
+import ProjectMemberManagement from "./ProjectMemberManagement";
 
 type ProjectSummary = {
   id: string;
@@ -41,6 +42,7 @@ type Task = {
   assignee?: User | null;
 };
 type Project = ProjectSummary & {
+  owner: User;
   milestones: Milestone[];
   tasks: Task[];
   comments: Array<{
@@ -493,41 +495,12 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
         </Card>
         <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("members")}</h2>
-          <form
-            className="enterprise-form mb-5"
-            onSubmit={(event) =>
-              void formMutation(
-                event,
-                "member",
-                `/api/projects/${projectId}/members`,
-                (form) => ({
-                  userId: form.get("userId"),
-                  role: form.get("role"),
-                }),
-              )
-            }
-          >
-            <label>
-              {t("userId")}
-              <input name="userId" required />
-            </label>
-            <label>
-              {t("projectRole")}
-              <select name="role">
-                {["MANAGER", "CONTRIBUTOR", "VIEWER"].map((value) => <option key={value} value={value}>{label(value)}</option>)}
-              </select>
-            </label>
-            <Button>{t("addMember")}</Button>
-          </form>
-          <List empty={t("noMembers")}>
-            {data.memberships.map((item) => (
-              <Item
-                key={item.id}
-                title={item.user.displayName}
-                detail={`${item.user.email ?? ""} · ${label(item.role)}`}
-              />
-            ))}
-          </List>
+          <ProjectMemberManagement
+            projectId={projectId}
+            owner={data.owner}
+            members={data.memberships}
+            onChanged={() => project.refresh()}
+          />
         </Card>
         <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("files")}</h2>

@@ -6,6 +6,168 @@ import { requireProjectAccess } from "@/lib/authorization/project-access";
 import { EnterpriseFileProductService } from "@/lib/services/enterprise-file.service";
 
 export class ProjectWorkspaceService {
+  async memberOptions(context: TenantContext, projectId: string) {
+    const access = await requireProjectAccess(context, projectId, [
+      "OWNER",
+      "MANAGER",
+    ]);
+    const organizationId = access.project.organizationId;
+    const [project, organizationMembers] = await Promise.all([
+      prisma.project.findFirst({
+        where: { id: projectId, organizationId },
+        include: {
+          owner: { select: { id: true, displayName: true, email: true } },
+          memberships: {
+            include: {
+              user: { select: { id: true, displayName: true, email: true } },
+            },
+            orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+          },
+        },
+      }),
+      prisma.membership.findMany({
+        where: { organizationId, status: "ACTIVE" },
+        include: {
+          user: { select: { id: true, displayName: true, email: true } },
+          role: { select: { name: true } },
+        },
+        orderBy: [
+          { user: { displayName: "asc" } },
+          { user: { email: "asc" } },
+        ],
+        take: 1_000,
+      }),
+    ]);
+    if (!project) throw new AppError("NOT_FOUND", "Project not found.", 404);
+    const assigned = new Set([
+      project.ownerId,
+      ...project.memberships.map((membership) => membership.userId),
+    ]);
+    return {
+      owner: project.owner,
+      members: project.memberships,
+      eligible: organizationMembers
+        .filter((membership) => !assigned.has(membership.userId))
+        .map((membership) => ({
+          membershipId: membership.id,
+          userId: membership.userId,
+          displayName: membership.user.displayName,
+          email: membership.user.email,
+          organizationRole: membership.role?.name ?? null,
+        })),
+    };
+  }
+
+  private async assertManagedMemberSafe(
+    projectId: string,
+    userId: string,
+    nextRole: "OWNER" | "MANAGER" | "CONTRIBUTOR" | "VIEWER" | null,
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true, organizationId: true },
+    });
+    if (!project) throw new AppError("NOT_FOUND", "Project not found.", 404);
+    if (project.ownerId === userId) {
+      throw new AppError(
+        "CONFLICT",
+        "The project owner cannot be changed through member management.",
+        409,
+      );
+    }
+    const current = await prisma.projectMembership.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+    });
+    if (!current) throw new AppError("NOT_FOUND", "Project member not found.", 404);
+    if (
+      ["OWNER", "MANAGER"].includes(current.role) &&
+      (!nextRole || !["OWNER", "MANAGER"].includes(nextRole))
+    ) {
+      const activeManagers = await prisma.projectMembership.count({
+        where: {
+          projectId,
+          userId: { not: userId },
+          role: { in: ["OWNER", "MANAGER"] },
+          user: {
+            memberships: {
+              some: { organizationId: project.organizationId, status: "ACTIVE" },
+            },
+          },
+        },
+      });
+      const activeOwner = await prisma.membership.count({
+        where: {
+          organizationId: project.organizationId,
+          userId: project.ownerId,
+          status: "ACTIVE",
+        },
+      });
+      if (activeManagers + activeOwner === 0) {
+        throw new AppError(
+          "CONFLICT",
+          "At least one active project owner or manager must remain.",
+          409,
+        );
+      }
+    }
+    return current;
+  }
+
+  async updateMemberRole(
+    context: TenantContext,
+    projectId: string,
+    userId: string,
+    role: "OWNER" | "MANAGER" | "CONTRIBUTOR" | "VIEWER",
+  ) {
+    await requireProjectAccess(context, projectId, ["OWNER", "MANAGER"]);
+    const current = await this.assertManagedMemberSafe(projectId, userId, role);
+    if (current.role === role) return current;
+    return prisma.$transaction(async (tx) => {
+      const membership = await tx.projectMembership.update({
+        where: { projectId_userId: { projectId, userId } },
+        data: { role },
+      });
+      await tx.projectActivity.create({
+        data: {
+          projectId,
+          actorUserId: context.userId,
+          type: "PROJECT_UPDATED",
+          resourceType: "ProjectMembership",
+          resourceId: membership.id,
+          summary: "Project member role updated.",
+          metadata: { userId, previousRole: current.role, role },
+        },
+      });
+      return membership;
+    });
+  }
+
+  async removeMember(
+    context: TenantContext,
+    projectId: string,
+    userId: string,
+  ) {
+    await requireProjectAccess(context, projectId, ["OWNER", "MANAGER"]);
+    const current = await this.assertManagedMemberSafe(projectId, userId, null);
+    return prisma.$transaction(async (tx) => {
+      await tx.projectMembership.delete({
+        where: { projectId_userId: { projectId, userId } },
+      });
+      await tx.projectActivity.create({
+        data: {
+          projectId,
+          actorUserId: context.userId,
+          type: "MEMBER_REMOVED",
+          resourceType: "ProjectMembership",
+          resourceId: current.id,
+          summary: "Project member removed.",
+          metadata: { userId, previousRole: current.role },
+        },
+      });
+      return { removed: true, userId };
+    });
+  }
+
   async addMember(
     context: TenantContext,
     projectId: string,
@@ -18,11 +180,19 @@ export class ProjectWorkspaceService {
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { organizationId: true },
+      select: { organizationId: true, ownerId: true },
     });
 
     if (!project) {
       throw new AppError("NOT_FOUND", "Project not found.", 404);
+    }
+
+    if (project.ownerId === input.userId) {
+      throw new AppError(
+        "CONFLICT",
+        "The project owner already has owner access.",
+        409,
+      );
     }
 
     const organizationMembership = await prisma.membership.findFirst({

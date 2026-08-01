@@ -87,6 +87,7 @@ export class ProjectRepository {
         organizationId,
       },
       include: {
+        owner: { select: { id: true, displayName: true, email: true } },
         milestones: { orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }] },
         tasks: {
           orderBy: [{ position: "asc" }, { createdAt: "asc" }],
