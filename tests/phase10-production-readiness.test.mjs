@@ -124,3 +124,26 @@ test("Phase 10 locks compatible dependency upgrades and enforces supply-chain pr
   assert.match(verifier, /installScriptAllowlist/);
   assert.match(read(".github/workflows/supply-chain.yml"), /npm ci --ignore-scripts/);
 });
+
+test("Phase 10 v1.0 release package documents deployment operations recovery security performance and audit", () => {
+  const documents = [
+    "RELEASE_NOTES_v1.0.md",
+    "DEPLOYMENT_GUIDE.md",
+    "OPERATIONS_RUNBOOK.md",
+    "DISASTER_RECOVERY.md",
+    "SECURITY_BASELINE.md",
+    "PERFORMANCE_REPORT.md",
+    "FINAL_ENTERPRISE_AUDIT.md",
+    "ENTERPRISE_RELEASE_PACKAGE_v1.0.md",
+    "PHASE10_IMPLEMENTATION_REPORT.md",
+  ];
+  for (const document of documents) {
+    assert.match(read(document), /^# Dublancer Enterprise|^# Phase 10/m);
+  }
+  const phase10 = read("PHASE10_IMPLEMENTATION_REPORT.md");
+  assert.match(phase10, /20260730150000_enterprise_production_performance/);
+  assert.match(phase10, /0 vulnerabilities/);
+  const finalAudit = read("FINAL_ENTERPRISE_AUDIT.md");
+  assert.match(finalAudit, /FA-001–003/);
+  assert.match(finalAudit, /No Phase 11 work is included/);
+});
