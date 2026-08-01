@@ -355,6 +355,29 @@ export class PlatformReliabilityService {
       checkDatabaseHealth(),
       pingRedis(),
     ]);
+    const capacity = await this.capacityReport(context);
+    const responses = responseCounters();
+    const latencySamples = capacity.operations
+      .map((operation) => operation.p95LatencyMs)
+      .filter((value): value is number => value !== null);
+    if (capacity.search.p95LatencyMs !== null) latencySamples.push(capacity.search.p95LatencyMs);
+    const queueTotals = capacity.queues.reduce(
+      (totals, queue) => ({
+        pending: totals.pending + queue.pending,
+        processing: totals.processing + queue.processing,
+        deadLetters: totals.deadLetters + queue.deadLetters,
+        oldestJobAgeMs: Math.max(totals.oldestJobAgeMs, queue.oldestJobAgeMs),
+      }),
+      { pending: 0, processing: 0, deadLetters: 0, oldestJobAgeMs: 0 },
+    );
+    const activeWorkerCount = Number(capacity.workers.ACTIVE ?? 0);
+    const availabilityPercent = responses.total
+      ? (responses.good / responses.total) * 100
+      : database.status === "healthy" && redis
+        ? 100
+        : database.status === "healthy"
+          ? 99
+          : 0;
     return {
       health: {
         database,
@@ -363,6 +386,17 @@ export class PlatformReliabilityService {
         activeWorkers,
       },
       metrics: metricsSnapshot(),
+      live: {
+        requestCount: responses.total,
+        errorCount: responses.errors,
+        errorRatePercent: responses.total ? (responses.errors / responses.total) * 100 : 0,
+        availabilityPercent,
+        p95LatencyMs: latencySamples.length ? Math.max(...latencySamples) : 0,
+        workers: { active: activeWorkerCount, total: Object.values(capacity.workers).reduce((sum, count) => sum + Number(count), 0) },
+        queue: queueTotals,
+        collectingSamples: responses.total === 0 || latencySamples.length === 0,
+        collectedAt: new Date().toISOString(),
+      },
       queueGroups,
       objectives,
       hooks,

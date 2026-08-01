@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, Card } from "@/components/ui";
 import { apiMutation } from "@/lib/client/api-client";
@@ -8,6 +8,17 @@ import { useApiResource } from "@/lib/client/use-api-resource";
 import { brand } from "@/constants/design";
 
 type Dashboard = {
+  live: {
+    requestCount: number;
+    errorCount: number;
+    errorRatePercent: number;
+    availabilityPercent: number;
+    p95LatencyMs: number;
+    workers: { active: number; total: number };
+    queue: { pending: number; processing: number; deadLetters: number; oldestJobAgeMs: number };
+    collectingSamples: boolean;
+    collectedAt: string;
+  };
   health: {
     database: { status: string; latencyMs: number };
     redis: { status: string };
@@ -89,6 +100,11 @@ export function ReliabilityDashboardClient({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    const interval = window.setInterval(() => void dashboard.refresh(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [dashboard.refresh]);
+
   async function mutate(label: string, operation: () => Promise<unknown>) {
     setPending(label);
     setError("");
@@ -158,6 +174,12 @@ export function ReliabilityDashboardClient({
       )}
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16 }}>
         {[
+          [t("requestVolume"), dashboard.data?.live.requestCount ?? 0],
+          [t("errorRate"), `${(dashboard.data?.live.errorRatePercent ?? 0).toFixed(2)}%`],
+          [t("availability"), `${(dashboard.data?.live.availabilityPercent ?? 0).toFixed(2)}%`],
+          [t("latencyP95"), `${Math.round(dashboard.data?.live.p95LatencyMs ?? 0)} ms`],
+          [t("queueDepth"), dashboard.data?.live.queue.pending ?? 0],
+          [t("workerCapacity"), `${dashboard.data?.live.workers.active ?? 0}/${dashboard.data?.live.workers.total ?? 0}`],
           [t("database"), health?.database.status ?? "unknown"],
           [t("redis"), health?.redis.status ?? "unknown"],
           [t("cache"), health?.cache.circuitOpen ? t("failover") : t("primary")],
@@ -171,6 +193,7 @@ export function ReliabilityDashboardClient({
           </Card>
         ))}
       </section>
+      {dashboard.data?.live.collectingSamples ? <p role="status" style={{ color: brand.colors.muted }}>{t("collecting")}</p> : null}
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 20 }}>
         <Card variant="elevated">
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
@@ -183,7 +206,7 @@ export function ReliabilityDashboardClient({
               return (
                 <div key={objective.id} style={{ padding: 12, border: `1px solid ${brand.colors.border}`, borderRadius: brand.radius.md }}>
                   <strong style={{ color: brand.colors.navy }}>{objective.name}</strong>
-                  <div style={{ color: brand.colors.muted }}>{objective.indicatorType} · {t("target")} {objective.target} · {measurement?.status ?? "NO_DATA"}</div>
+                  <div style={{ color: brand.colors.muted }}>{objective.indicatorType} · {t("target")} {objective.target} · {measurement?.status === "NO_DATA" || !measurement ? t("collecting") : measurement.status}</div>
                 </div>
               );
             })}

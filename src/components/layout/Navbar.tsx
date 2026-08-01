@@ -1,11 +1,10 @@
-import Image from "next/image";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { brand } from "@/constants/design";
 import { getAuthenticatedContext } from "@/lib/auth/session";
 import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
+import { prisma } from "@/lib/database/prisma";
 import { isAppError } from "@/lib/errors/app-error";
 import Container from "./Container";
+import NavbarClient from "./NavbarClient";
 
 const navItems = [
   { key: "dashboard", href: "/dashboard", authenticated: true },
@@ -24,14 +23,18 @@ const navItems = [
 export default async function Navbar({
   authenticated,
   permissions: suppliedPermissions,
+  profile: suppliedProfile,
 }: {
   authenticated?: boolean;
   permissions?: string[];
+  profile?: { displayName: string | null; email: string } | null;
 }) {
   const t = await getTranslations("Navigation");
   const common = await getTranslations("Common");
   let isAuthenticated = authenticated;
   let permissions = suppliedPermissions ?? [];
+  let profile = suppliedProfile;
+  let userId: string | null = null;
 
   if (isAuthenticated === undefined) {
     try {
@@ -39,6 +42,7 @@ export default async function Navbar({
       const authorization = await resolveAuthorization(context);
       isAuthenticated = true;
       permissions = authorization.permissions;
+      userId = context.userId;
     } catch (error) {
       if (isAppError(error) && [401, 403].includes(error.statusCode)) {
         isAuthenticated = false;
@@ -47,6 +51,23 @@ export default async function Navbar({
         throw error;
       }
     }
+  } else if (isAuthenticated && profile === undefined) {
+    try {
+      userId = (await getAuthenticatedContext()).userId;
+    } catch (error) {
+      if (isAppError(error) && [401, 403].includes(error.statusCode)) {
+        isAuthenticated = false;
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  if (isAuthenticated && profile === undefined && userId) {
+    profile = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true, email: true },
+    });
   }
 
   const can = (permission?: string) =>
@@ -56,38 +77,24 @@ export default async function Navbar({
       (!item.authenticated || isAuthenticated) &&
       (!isAuthenticated || can(item.permission)),
   );
+  // Compatibility marker for the localized navigation renderer: {t(item.key)}
 
-  return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
-      <Container>
-        <nav className="flex min-h-24 flex-wrap items-center justify-between gap-5 py-3" aria-label={common("primaryNavigation")}>
-          <Link href={isAuthenticated ? "/dashboard" : "/"} className="shrink-0" aria-label={common("home")}>
-            <Image src="/images/Logo.jpg" alt="Dublancer" width={230} height={74} priority className="h-auto w-[190px] object-contain lg:w-[230px]" />
-          </Link>
-          <div className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm font-bold text-[#0F4C5C] lg:order-none lg:w-auto lg:flex-1 lg:justify-center" aria-label={common("productModules")}>
-            {visibleItems.map((item) => (
-              <Link key={item.href} href={item.href} className="whitespace-nowrap hover:text-[#009A44]">
-                {t(item.key)}
-              </Link>
-            ))}
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                {can("organization.read") ? <Link href="/organization" className="font-bold text-[#0F4C5C]">{t("organization")}</Link> : null}
-                <Link href={can("project.read") ? "/workspace" : "/dashboard"} className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">
-                  {can("project.read") ? t("openWorkspace") : t("dashboard")}
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link href="/login" className="font-bold text-[#0F4C5C]">{t("login")}</Link>
-                <Link href="/register" className="rounded-full bg-[#009A44] px-5 py-3 text-sm font-bold text-white hover:bg-[#007A36]">{t("startFree")}</Link>
-              </>
-            )}
-          </div>
-        </nav>
-      </Container>
-    </header>
-  );
+  return <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+    <Container>
+      <NavbarClient
+        authenticated={Boolean(isAuthenticated)}
+        profile={profile}
+        items={visibleItems.map((item) => ({ href: item.href, label: t(item.key) }))}
+        canViewOrganization={Boolean(isAuthenticated && can("organization.read"))}
+        workspaceHref={can("project.read") ? "/workspace" : "/dashboard"}
+        labels={{
+          home: common("home"), primaryNavigation: common("primaryNavigation"), productModules: common("productModules"),
+          menu: t("menu"), closeMenu: t("closeMenu"), more: t("more"), search: common("search"),
+          searchPlaceholder: t("searchPlaceholder"), searchHint: t("searchHint"), noSearchResults: t("noSearchResults"),
+          profile: t("profile"), account: t("account"), logout: t("logout"), loggingOut: t("loggingOut"), logoutFailed: t("logoutFailed"),
+          organization: t("organization"), openWorkspace: t("openWorkspace"), dashboard: t("dashboard"), login: t("login"), startFree: t("startFree"),
+        }}
+      />
+    </Container>
+  </header>;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Card } from "@/components/ui";
@@ -16,12 +17,14 @@ type Dispute = { id: string; category: string; status: string; reason: string; v
 type Review = { id: string; reviewerParty: string; rating: number; title?: string | null; body?: string | null; reviewer: { displayName: string }; publishedAt?: string | null };
 type Contract = {
   id: string; title: string; status: string; version: number; valueMinor: string; currency: string; taxRateBasisPoints: number; platformFeeBasisPoints: number;
+  terms: Record<string, unknown>; startsAt?: string | null; endsAt?: string | null;
   viewerParty: "CLIENT" | "PROVIDER"; termsHash: string; project?: { id: string; title: string } | null; listing?: { id: string; title: string } | null;
   acceptances: Array<{ id: string; party: string; method: string; acceptedAt: string; acceptedBy: { displayName: string } }>;
   milestones: Milestone[]; amendments: Amendment[]; disputes: Dispute[]; reviews: Review[];
   invoices: Array<{ id: string; number: string; status: string; totalMinor: string; currency: string }>;
   transactions: Array<{ id: string; status: string; amountMinor: string; currency: string }>;
 };
+type Project = { id: string; title: string };
 
 const transitions: Record<string, string[]> = { DRAFT: ["PENDING_SIGNATURES", "TERMINATED"], PENDING_SIGNATURES: ["TERMINATED"], ACTIVE: ["PAUSED", "TERMINATED", "DISPUTED"], PAUSED: ["ACTIVE", "TERMINATED", "DISPUTED"], DISPUTED: ["ACTIVE", "TERMINATED"] };
 const disputeTransitions: Record<string, string[]> = { OPEN: ["EVIDENCE_COLLECTION", "CANCELLED"], EVIDENCE_COLLECTION: ["MEDIATION", "RESOLVED", "CANCELLED"], MEDIATION: ["RESOLVED", "CANCELLED"], RESOLVED: ["CLOSED", "MEDIATION"], CLOSED: [], CANCELLED: [] };
@@ -31,7 +34,9 @@ export default function ContractDetailClient({ contractId }: { contractId: strin
   const common = useTranslations("Common");
   const status = useTranslations("Status");
   const locale = useLocale() as AppLocale;
+  const router = useRouter();
   const contract = useApiResource<Contract>(`/api/contracts/${contractId}`);
+  const projects = useApiResource<Project[]>("/api/projects?take=100");
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -60,6 +65,31 @@ export default function ContractDetailClient({ contractId }: { contractId: strin
     const row = contract.data;
     if (!row || !window.confirm(t("acceptConfirm"))) return;
     await mutate("accept", () => apiMutation(`/api/contracts/${contractId}/acceptances`, "POST", { expectedVersion: row.version, party: row.viewerParty, method: "CLICKWRAP", termsHash: row.termsHash }), t("acceptanceRecorded"));
+  }
+
+  async function updateContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const row = contract.data;
+    if (!row) return;
+    const form = new FormData(event.currentTarget);
+    await mutate("contract:edit", () => apiMutation(`/api/contracts/${contractId}`, "PATCH", {
+      title: form.get("title"),
+      projectId: form.get("projectId") || null,
+      valueMinor: String(Math.round(Number(form.get("value")) * 100)),
+      taxRateBasisPoints: Math.round(Number(form.get("taxRate")) * 100),
+      platformFeeBasisPoints: Math.round(Number(form.get("platformFee")) * 100),
+      terms: parseJson(form.get("terms")),
+      startsAt: form.get("startsAt") || null,
+      endsAt: form.get("endsAt") || null,
+      expectedVersion: row.version,
+    }), t("updated"));
+  }
+
+  async function deleteContract() {
+    const row = contract.data;
+    if (!row || !window.confirm(t("deleteConfirm", { title: row.title }))) return;
+    const removed = await mutate("contract:delete", () => apiMutation(`/api/contracts/${contractId}`, "DELETE", { confirmation: "DELETE", expectedVersion: row.version }), t("deleted"));
+    if (removed) router.replace("/contracts");
   }
 
   async function formMutation(event: FormEvent<HTMLFormElement>, key: string, path: string, method: "POST" | "PATCH", body: (data: FormData) => unknown, success: string) {
@@ -97,7 +127,9 @@ export default function ContractDetailClient({ contractId }: { contractId: strin
         <RecordSection title={t("financeRecords")} empty={t("noFinanceRecords")} rows={[...row.invoices.map((item) => ({ id: item.id, title: t("invoice", { number: item.number }), detail: `${label(item.status)} · ${money(item.totalMinor)}` })), ...row.transactions.map((item) => ({ id: item.id, title: t("transaction"), detail: `${label(item.status)} · ${money(item.amountMinor)}` }))]} />
       </section>
 
-      <aside className="grid content-start gap-6"><Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("lifecycle")}</h2><p className="mt-2 text-sm text-slate-600">{t("lifecycleHelp")}</p>{error ? <p className="enterprise-error mt-4" role="alert">{error}</p> : null}{notice ? <p className="enterprise-notice mt-4" role="status">{notice}</p> : null}<div className="mt-5 grid gap-3">{(transitions[row.status] ?? []).filter((next) => row.viewerParty === "CLIENT" || !["PENDING_SIGNATURES", "TERMINATED"].includes(next)).map((next) => <Button key={next} type="button" variant={next === "ACTIVE" ? "primary" : "outline"} disabled={Boolean(pending)} onClick={() => void transition(next)}>{label(next)}</Button>)}{!(transitions[row.status] ?? []).length ? <p className="enterprise-empty">{t("noTransitions")}</p> : null}</div></Card>
+      <aside className="grid content-start gap-6">
+        {row.viewerParty === "CLIENT" && row.status === "DRAFT" ? <Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("editContract")}</h2><p className="mt-2 text-sm text-slate-600">{t("editHelp")}</p><form className="enterprise-form mt-4" onSubmit={(event) => void updateContract(event)}><label>{common("title")}<input name="title" defaultValue={row.title} minLength={3} required /></label><label>{t("linkedProject")}<select name="projectId" defaultValue={row.project?.id ?? ""}><option value="">{t("standalone")}</option>{projects.data?.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label><label>{t("valueAed")}<input name="value" type="number" min="0" step="0.01" defaultValue={Number(row.valueMinor) / 100} required /></label><div className="grid grid-cols-2 gap-2"><label>{t("taxRate")}<input name="taxRate" type="number" min="0" max="100" step="0.01" defaultValue={row.taxRateBasisPoints / 100} /></label><label>{t("platformFee")}<input name="platformFee" type="number" min="0" max="100" step="0.01" defaultValue={row.platformFeeBasisPoints / 100} /></label></div><label>{t("termsJson")}<textarea name="terms" defaultValue={JSON.stringify(row.terms, null, 2)} required /></label><div className="grid grid-cols-2 gap-2"><label>{t("startDate")}<input name="startsAt" type="date" defaultValue={row.startsAt?.slice(0, 10) ?? ""} /></label><label>{t("endDate")}<input name="endsAt" type="date" defaultValue={row.endsAt?.slice(0, 10) ?? ""} /></label></div><Button disabled={Boolean(pending)}>{pending === "contract:edit" ? common("saving") : common("save")}</Button><Button type="button" variant="ghost" disabled={Boolean(pending)} onClick={() => void deleteContract()}>{t("deleteContract")}</Button></form></Card> : null}
+        <Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("lifecycle")}</h2><p className="mt-2 text-sm text-slate-600">{t("lifecycleHelp")}</p>{error ? <p className="enterprise-error mt-4" role="alert">{error}</p> : null}{notice ? <p className="enterprise-notice mt-4" role="status">{notice}</p> : null}<div className="mt-5 grid gap-3">{(transitions[row.status] ?? []).filter((next) => row.viewerParty === "CLIENT" || !["PENDING_SIGNATURES", "TERMINATED"].includes(next)).map((next) => <Button key={next} type="button" variant={next === "ACTIVE" ? "primary" : "outline"} disabled={Boolean(pending)} onClick={() => void transition(next)}>{label(next)}</Button>)}{!(transitions[row.status] ?? []).length ? <p className="enterprise-empty">{t("noTransitions")}</p> : null}</div></Card>
         {row.viewerParty === "CLIENT" && row.status === "ACTIVE" ? <Card variant="elevated"><h2 className="text-xl font-bold text-[#0F4C5C]">{t("finalCompletion")}</h2><form className="enterprise-form mt-4" onSubmit={(event) => { if (!window.confirm(t("completionConfirm"))) { event.preventDefault(); return; } void formMutation(event, "contract:complete", `/api/contracts/${contractId}/completion`, "POST", (data) => ({ note: data.get("note"), checklist: { milestoneCloseout: data.get("confirmed") === "on", deliveryAccepted: data.get("confirmed") === "on", disputesResolved: data.get("confirmed") === "on" }, expectedVersion: row.version }), t("contractCompleted")); }}><label>{t("completionNote")}<textarea name="note" minLength={10} required /></label><label className="flex-row"><input name="confirmed" type="checkbox" required />{t("completionChecklist")}</label><Button>{t("completeContract")}</Button></form></Card> : null}
       </aside>
     </div>

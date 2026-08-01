@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/auth/session";
 import { resolveAuthorization } from "@/lib/authorization/permission-resolver";
 import { isAppError } from "@/lib/errors/app-error";
+import { prisma } from "@/lib/database/prisma";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 
@@ -20,9 +21,13 @@ export default async function AuthenticatedShell({
   returnTo: string;
 }) {
   let permissions: string[];
+  let profile: { displayName: string | null; email: string } | null;
   try {
     const context = await getAuthenticatedContext();
-    permissions = (await resolveAuthorization(context)).permissions;
+    [permissions, profile] = await Promise.all([
+      resolveAuthorization(context).then((authorization) => authorization.permissions),
+      prisma.user.findUnique({ where: { id: context.userId }, select: { displayName: true, email: true } }),
+    ]);
   } catch (error) {
     if (isAppError(error) && [401, 403].includes(error.statusCode)) {
       redirect(`/login?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`);
@@ -32,7 +37,7 @@ export default async function AuthenticatedShell({
 
   return (
     <>
-      <Navbar authenticated permissions={permissions} />
+      <Navbar authenticated permissions={permissions} profile={profile} />
       {children}
       <Footer />
     </>

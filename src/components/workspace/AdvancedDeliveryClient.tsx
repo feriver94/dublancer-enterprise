@@ -203,7 +203,7 @@ export default function AdvancedDeliveryClient({
             </Badge>
           </div>
           <p className="mt-5 text-4xl font-bold text-[#0F4C5C]">
-            {data.health.current.score}/100
+            {data.health.current.score}%
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
             {Object.entries(data.health.current.signals).map(([key, value]) => (

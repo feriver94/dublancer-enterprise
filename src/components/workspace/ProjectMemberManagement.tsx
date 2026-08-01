@@ -214,7 +214,6 @@ export default function ProjectMemberManagement({
             </div>
           </article>
         ))}
-        {!members.length ? <p className="enterprise-empty">{t("noMembers")}</p> : null}
       </div>
     </div>
   );

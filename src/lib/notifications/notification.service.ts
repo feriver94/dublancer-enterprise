@@ -24,6 +24,7 @@ export type CreateNotificationInput = {
   metadata?: Record<string, unknown>;
   expiresAt?: Date;
   channels: NotificationChannelInput[];
+  actorUserId?: string;
 };
 
 export type ListNotificationsInput = {
@@ -33,9 +34,10 @@ export type ListNotificationsInput = {
   take: number;
 };
 
-export class NotificationService {
-  async create(input: CreateNotificationInput) {
-    return prisma.$transaction(async (tx) => {
+export async function createNotificationInTransaction(
+  tx: Prisma.TransactionClient,
+  input: CreateNotificationInput,
+) {
       if (input.dedupeKey) {
         const existing = await tx.userNotification.findUnique({
           where: { dedupeKey: input.dedupeKey },
@@ -110,10 +112,10 @@ export class NotificationService {
           organizationId: input.organizationId ?? "platform",
           projectId: input.projectId,
           topic: REALTIME_TOPICS.user(input.userId),
-          eventType: "notification.created",
+          eventType: REALTIME_EVENTS.NOTIFICATION_CREATED,
           aggregateType: "UserNotification",
           aggregateId: notification.id,
-          actorUserId: input.userId,
+          actorUserId: input.actorUserId ?? input.userId,
           payload: {
             notificationId: notification.id,
             type: notification.type,
@@ -128,7 +130,11 @@ export class NotificationService {
       });
 
       return notification;
-    });
+}
+
+export class NotificationService {
+  async create(input: CreateNotificationInput) {
+    return prisma.$transaction((tx) => createNotificationInTransaction(tx, input));
   }
 
   async list(context: TenantContext, input: ListNotificationsInput) {

@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors/app-error";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { requireProjectAccess } from "@/lib/authorization/project-access";
 import { EnterpriseFileProductService } from "@/lib/services/enterprise-file.service";
+import { createNotificationInTransaction } from "@/lib/notifications/notification.service";
 
 export class ProjectWorkspaceService {
   async memberOptions(context: TenantContext, projectId: string) {
@@ -349,18 +350,20 @@ export class ProjectWorkspaceService {
       });
 
       if (task.assigneeId && task.assigneeId !== context.userId) {
-        await tx.userNotification.create({
-          data: {
-            userId: task.assigneeId,
-            organizationId: context.organizationId,
-            projectId,
-            type: "TASK_ASSIGNED",
-            title: "You were assigned a task",
-            body: task.title,
-            metadata: {
-              taskId: task.id,
-            },
-          },
+        await createNotificationInTransaction(tx, {
+          userId: task.assigneeId,
+          actorUserId: context.userId,
+          organizationId: context.organizationId,
+          projectId,
+          type: "TASK_ASSIGNED",
+          category: "PROJECT",
+          priority: task.priority === "URGENT" ? "URGENT" : task.priority === "HIGH" ? "HIGH" : "NORMAL",
+          title: "You were assigned a task",
+          body: task.title,
+          actionUrl: `/workspace/project/${projectId}?taskId=${encodeURIComponent(task.id)}`,
+          dedupeKey: `project:${projectId}:task:${task.id}:assigned:${task.assigneeId}`,
+          metadata: { taskId: task.id },
+          channels: ["IN_APP"],
         });
       }
 

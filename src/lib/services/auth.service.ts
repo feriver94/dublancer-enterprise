@@ -225,8 +225,19 @@ export class AuthService {
     const idleMs = (policy?.sessionIdleMinutes ?? 720) * 60_000;
     const refreshToken = createRefreshToken();
     const now = new Date();
-    const session = await prisma.authSession.create({
-      data: {
+    const session = await prisma.$transaction(async (tx) => {
+      await tx.authSession.updateMany({
+        where: {
+          userId: input.userId,
+          organizationId: input.organizationId,
+          status: "ACTIVE",
+          userAgent: input.metadata.userAgent,
+          ipAddress: input.metadata.ipAddress,
+          ...(input.trustedDeviceId ? { trustedDeviceId: input.trustedDeviceId } : {}),
+        },
+        data: { status: "REVOKED", revokedAt: now },
+      });
+      return tx.authSession.create({ data: {
         userId: input.userId,
         organizationId: input.organizationId,
         refreshTokenHash: hashRefreshToken(refreshToken),
@@ -245,7 +256,7 @@ export class AuthService {
         idleExpiresAt: new Date(now.getTime() + idleMs),
         trustedDeviceId: input.trustedDeviceId,
         expiresAt: new Date(now.getTime() + maxAgeMs),
-      },
+      } });
     });
     const accessToken = await signAccessToken({
       sub: user.id,

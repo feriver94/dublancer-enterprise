@@ -9,7 +9,7 @@ import { distributedCache } from "@/lib/cache/distributed-cache";
 import { federatedSearch } from "@/lib/services/federated-search.service";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-const ENTITY_TYPES = ["PROJECT", "LISTING", "CONTRACT", "FILE"] as const;
+const ENTITY_TYPES = ["PROJECT", "TASK", "USER", "FILE", "CONTRACT", "ORGANIZATION", "LISTING"] as const;
 type SearchEntityType = (typeof ENTITY_TYPES)[number];
 
 type SearchRow = {
@@ -92,8 +92,45 @@ export class SearchIndexService {
       if (!project) return this.deleteEntity(organizationId, entityType, entityId);
       return prisma.searchDocument.upsert({
         where: { organizationId_entityType_entityId: { organizationId, entityType, entityId } },
-        create: { organizationId, entityType, entityId, title: project.title, body: sourceBody([project.description, project.status, project.slug]), projectId: project.id, requiredPermission: "project.read", sourceUpdatedAt: project.updatedAt, generation, metadata: json({ status: project.status, href: `/workspace/${project.id}` }) },
-        update: { title: project.title, body: sourceBody([project.description, project.status, project.slug]), projectId: project.id, requiredPermission: "project.read", sourceUpdatedAt: project.updatedAt, indexedAt: new Date(), deletedAt: null, generation, metadata: json({ status: project.status, href: `/workspace/${project.id}` }) },
+        create: { organizationId, entityType, entityId, title: project.title, body: sourceBody([project.description, project.status, project.slug]), projectId: project.id, requiredPermission: "project.read", sourceUpdatedAt: project.updatedAt, generation, metadata: json({ status: project.status, href: `/workspace/project/${project.id}` }) },
+        update: { title: project.title, body: sourceBody([project.description, project.status, project.slug]), projectId: project.id, requiredPermission: "project.read", sourceUpdatedAt: project.updatedAt, indexedAt: new Date(), deletedAt: null, generation, metadata: json({ status: project.status, href: `/workspace/project/${project.id}` }) },
+      });
+    }
+
+    if (entityType === "TASK") {
+      const task = await prisma.projectTask.findFirst({
+        where: { id: entityId, project: { organizationId } },
+        include: { project: { select: { id: true, title: true } }, assignee: { select: { displayName: true, email: true } } },
+      });
+      if (!task) return this.deleteEntity(organizationId, entityType, entityId);
+      return prisma.searchDocument.upsert({
+        where: { organizationId_entityType_entityId: { organizationId, entityType, entityId } },
+        create: { organizationId, entityType, entityId, title: task.title, body: sourceBody([task.description, task.status, task.priority, task.project.title, task.assignee?.displayName, task.assignee?.email]), projectId: task.projectId, requiredPermission: "project.read", sourceUpdatedAt: task.updatedAt, generation, metadata: json({ status: task.status, priority: task.priority, href: `/workspace/project/${task.projectId}?taskId=${task.id}` }) },
+        update: { title: task.title, body: sourceBody([task.description, task.status, task.priority, task.project.title, task.assignee?.displayName, task.assignee?.email]), projectId: task.projectId, fileNodeId: null, requiredPermission: "project.read", sourceUpdatedAt: task.updatedAt, indexedAt: new Date(), deletedAt: null, generation, metadata: json({ status: task.status, priority: task.priority, href: `/workspace/project/${task.projectId}?taskId=${task.id}` }) },
+      });
+    }
+
+    if (entityType === "USER") {
+      const membership = await prisma.membership.findFirst({
+        where: { organizationId, userId: entityId, status: "ACTIVE" },
+        include: { user: { select: { id: true, displayName: true, email: true, updatedAt: true } }, role: { select: { name: true } } },
+      });
+      if (!membership) return this.deleteEntity(organizationId, entityType, entityId);
+      const updatedAt = membership.updatedAt > membership.user.updatedAt ? membership.updatedAt : membership.user.updatedAt;
+      return prisma.searchDocument.upsert({
+        where: { organizationId_entityType_entityId: { organizationId, entityType, entityId } },
+        create: { organizationId, entityType, entityId, title: membership.user.displayName || membership.user.email, body: sourceBody([membership.user.email, membership.role?.name, membership.status]), requiredPermission: "organization.members.read", sourceUpdatedAt: updatedAt, generation, metadata: json({ role: membership.role?.name ?? null, href: `/organization/members?userId=${membership.user.id}` }) },
+        update: { title: membership.user.displayName || membership.user.email, body: sourceBody([membership.user.email, membership.role?.name, membership.status]), projectId: null, fileNodeId: null, requiredPermission: "organization.members.read", sourceUpdatedAt: updatedAt, indexedAt: new Date(), deletedAt: null, generation, metadata: json({ role: membership.role?.name ?? null, href: `/organization/members?userId=${membership.user.id}` }) },
+      });
+    }
+
+    if (entityType === "ORGANIZATION") {
+      const organization = await prisma.organization.findFirst({ where: { id: entityId, status: { not: "ARCHIVED" } } });
+      if (!organization || organization.id !== organizationId) return this.deleteEntity(organizationId, entityType, entityId);
+      return prisma.searchDocument.upsert({
+        where: { organizationId_entityType_entityId: { organizationId, entityType, entityId } },
+        create: { organizationId, entityType, entityId, title: organization.name, body: sourceBody([organization.slug, organization.status]), requiredPermission: "organization.read", sourceUpdatedAt: organization.updatedAt, generation, metadata: json({ status: organization.status, href: "/enterprise" }) },
+        update: { title: organization.name, body: sourceBody([organization.slug, organization.status]), projectId: null, fileNodeId: null, requiredPermission: "organization.read", sourceUpdatedAt: organization.updatedAt, indexedAt: new Date(), deletedAt: null, generation, metadata: json({ status: organization.status, href: "/enterprise" }) },
       });
     }
 
@@ -136,6 +173,9 @@ export class SearchIndexService {
     try {
       const sources: Array<[SearchEntityType, () => Promise<string[]>]> = [
         ["PROJECT", async () => (await prisma.project.findMany({ where: { organizationId }, select: { id: true } })).map((row) => row.id)],
+        ["TASK", async () => (await prisma.projectTask.findMany({ where: { project: { organizationId } }, select: { id: true } })).map((row) => row.id)],
+        ["USER", async () => (await prisma.membership.findMany({ where: { organizationId, status: "ACTIVE" }, select: { userId: true } })).map((row) => row.userId)],
+        ["ORGANIZATION", async () => [organizationId]],
         ["LISTING", async () => (await prisma.marketplaceListing.findMany({ where: { organizationId, status: { not: "CANCELLED" } }, select: { id: true } })).map((row) => row.id)],
         ["CONTRACT", async () => (await prisma.contract.findMany({ where: { OR: [{ organizationId }, { providerOrganizationId: organizationId }] }, select: { id: true } })).map((row) => row.id)],
         ["FILE", async () => (await prisma.fileNode.findMany({ where: { organizationId, type: "FILE", deletedAt: null }, select: { id: true } })).map((row) => row.id)],
@@ -161,13 +201,19 @@ export class SearchIndexService {
     const since = checkpoint?.lastIncrementalAt ? new Date(checkpoint.lastIncrementalAt.getTime() - 1_000) : new Date(0);
     await prisma.searchIndexCheckpoint.upsert({ where: { organizationId }, create: { organizationId, status: "RUNNING" }, update: { status: "RUNNING", lastError: null } });
     try {
-      const [projects, listings, contracts, files] = await Promise.all([
+      const [projects, tasks, users, organizations, listings, contracts, files] = await Promise.all([
         prisma.project.findMany({ where: { organizationId, updatedAt: { gte: since, lte: until } }, select: { id: true } }),
+        prisma.projectTask.findMany({ where: { project: { organizationId }, updatedAt: { gte: since, lte: until } }, select: { id: true } }),
+        prisma.user.findMany({ where: { memberships: { some: { organizationId, status: "ACTIVE" } }, updatedAt: { gte: since, lte: until } }, select: { id: true } }),
+        prisma.organization.findMany({ where: { id: organizationId, updatedAt: { gte: since, lte: until } }, select: { id: true } }),
         prisma.marketplaceListing.findMany({ where: { organizationId, updatedAt: { gte: since, lte: until } }, select: { id: true } }),
         prisma.contract.findMany({ where: { OR: [{ organizationId }, { providerOrganizationId: organizationId }], updatedAt: { gte: since, lte: until } }, select: { id: true } }),
         prisma.fileNode.findMany({ where: { organizationId, updatedAt: { gte: since, lte: until } }, select: { id: true } }),
       ]);
       await this.indexBatch(organizationId, "PROJECT", projects.map((row) => row.id));
+      await this.indexBatch(organizationId, "TASK", tasks.map((row) => row.id));
+      await this.indexBatch(organizationId, "USER", users.map((row) => row.id));
+      await this.indexBatch(organizationId, "ORGANIZATION", organizations.map((row) => row.id));
       await this.indexBatch(organizationId, "LISTING", listings.map((row) => row.id));
       await this.indexBatch(organizationId, "CONTRACT", contracts.map((row) => row.id));
       await this.indexBatch(organizationId, "FILE", files.map((row) => row.id));
@@ -177,7 +223,7 @@ export class SearchIndexService {
         prisma.realtimeEvent.create({ data: { organizationId, topic: `organization:${organizationId}`, eventType: "search.index.updated", aggregateType: "SearchIndexCheckpoint", aggregateId: organizationId, payload: json({ mode: "INCREMENTAL", documentCount }) } }),
       ]);
       await distributedCache.invalidateTenant(organizationId);
-      return { indexed: projects.length + listings.length + contracts.length + files.length, documentCount };
+      return { indexed: projects.length + tasks.length + users.length + organizations.length + listings.length + contracts.length + files.length, documentCount };
     } catch (error) {
       await prisma.searchIndexCheckpoint.update({ where: { organizationId }, data: { status: "FAILED", lastError: error instanceof Error ? error.message.slice(0, 2000) : "Unknown indexing error" } });
       throw error;

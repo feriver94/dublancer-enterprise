@@ -2,6 +2,10 @@ import { apiError, apiSuccess } from "@/lib/http/api-response";
 import { getAuthenticatedContext } from "@/lib/auth/session";
 import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
+import type { NextRequest } from "next/server";
+import { requireCsrfToken } from "@/lib/auth/csrf";
+import { OrganizationDomainService } from "@/lib/services/organization-domain.service";
+import { createOrganizationSchema } from "@/lib/validation/organization";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +50,17 @@ export async function GET() {
     }
 
     return apiSuccess(organization);
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    await requireCsrfToken(request);
+    const context = await getAuthenticatedContext();
+    const input = createOrganizationSchema.parse(await request.json());
+    return apiSuccess(await new OrganizationDomainService().create(context, input), 201);
   } catch (error) {
     return apiError(error);
   }

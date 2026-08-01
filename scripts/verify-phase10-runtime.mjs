@@ -393,6 +393,207 @@ try {
     expected: [201],
     body: { userId: outsider.userId, role: "CONTRIBUTOR" },
   });
+
+  const predecessorTask = (
+    await browserRequest(owner.jar, `/api/projects/${project.id}/tasks`, {
+      method: "POST",
+      expected: [201],
+      body: {
+        title: "Sprint blocker predecessor",
+        status: "TODO",
+        priority: "HIGH",
+        position: 0,
+      },
+    })
+  ).data;
+  const successorTask = (
+    await browserRequest(owner.jar, `/api/projects/${project.id}/tasks`, {
+      method: "POST",
+      expected: [201],
+      body: {
+        title: "Sprint blocker assigned task",
+        assigneeId: outsider.userId,
+        status: "BLOCKED",
+        priority: "URGENT",
+        position: 1,
+      },
+    })
+  ).data;
+  const unread = await browserRequest(organizationViewerJar, "/api/notifications/unread-count");
+  assert.ok(unread.data.count >= 1);
+  const projectNotifications = await browserRequest(
+    organizationViewerJar,
+    "/api/notifications?category=PROJECT&status=UNREAD&take=10",
+  );
+  const assignmentNotification = projectNotifications.data.find(
+    (item) => item.metadata?.taskId === successorTask.id,
+  );
+  assert.ok(assignmentNotification, "Project assignment must create an unread notification.");
+  assert.ok(
+    await prisma.realtimeEvent.findFirst({
+      where: {
+        aggregateId: assignmentNotification.id,
+        eventType: "notification.created",
+        topic: `user:${outsider.userId}`,
+      },
+    }),
+    "Project notification must publish a realtime event.",
+  );
+  await browserRequest(
+    organizationViewerJar,
+    `/api/notifications/${assignmentNotification.id}/read`,
+    { method: "POST" },
+  );
+  assert.equal(
+    (await prisma.userNotification.findUniqueOrThrow({ where: { id: assignmentNotification.id } })).status,
+    "READ",
+  );
+  await browserRequest(
+    organizationViewerJar,
+    `/api/notifications/${assignmentNotification.id}/archive`,
+    { method: "POST" },
+  );
+  assert.equal(
+    (await prisma.userNotification.findUniqueOrThrow({ where: { id: assignmentNotification.id } })).status,
+    "ARCHIVED",
+  );
+
+  await browserRequest(owner.jar, `/api/projects/${project.id}/delivery`, {
+    method: "POST",
+    expected: [201],
+    body: {
+      type: "dependency",
+      predecessorTaskId: predecessorTask.id,
+      successorTaskId: successorTask.id,
+      dependencyType: "FINISH_TO_START",
+      lagMinutes: 0,
+    },
+  });
+  await browserRequest(owner.jar, `/api/projects/${project.id}/delivery`, {
+    method: "POST",
+    expected: [422],
+    body: {
+      type: "dependency",
+      predecessorTaskId: predecessorTask.id,
+      successorTaskId: predecessorTask.id,
+      dependencyType: "FINISH_TO_START",
+      lagMinutes: 0,
+    },
+  });
+  await browserRequest(owner.jar, `/api/projects/${project.id}/delivery`, {
+    method: "POST",
+    expected: [409],
+    body: {
+      type: "dependency",
+      predecessorTaskId: successorTask.id,
+      successorTaskId: predecessorTask.id,
+      dependencyType: "FINISH_TO_START",
+      lagMinutes: 0,
+    },
+  });
+  const deliveryHealth = await browserRequest(owner.jar, `/api/projects/${project.id}/delivery`);
+  assert.equal(deliveryHealth.data.health.current.signals.blockedDependencies, 1);
+  assert.ok(deliveryHealth.data.health.current.score < 100);
+
+  const draftContract = (
+    await browserRequest(owner.jar, "/api/contracts", {
+      method: "POST",
+      expected: [201],
+      body: {
+        projectId: project.id,
+        title: "Sprint lifecycle contract",
+        valueMinor: 125000,
+        currency: "AED",
+        taxRateBasisPoints: 500,
+        platformFeeBasisPoints: 250,
+        terms: { scope: "Release blocker verification" },
+      },
+    })
+  ).data;
+  const editedContract = (
+    await browserRequest(owner.jar, `/api/contracts/${draftContract.id}`, {
+      method: "PATCH",
+      body: {
+        expectedVersion: draftContract.version,
+        title: "Sprint lifecycle contract updated",
+        projectId: project.id,
+        terms: { scope: "Verified contract edit" },
+      },
+    })
+  ).data;
+  assert.equal(editedContract.title, "Sprint lifecycle contract updated");
+  assert.equal(editedContract.project.id, project.id);
+  assert.ok((await browserRequest(owner.jar, "/api/contracts")).data.some((item) => item.id === draftContract.id));
+  await browserRequest(owner.jar, `/api/contracts/${draftContract.id}`, {
+    method: "DELETE",
+    body: { confirmation: "DELETE", expectedVersion: editedContract.version },
+  });
+  assert.equal(await prisma.contract.count({ where: { id: draftContract.id } }), 0);
+  const searchableContract = (
+    await browserRequest(owner.jar, "/api/contracts", {
+      method: "POST",
+      expected: [201],
+      body: {
+        projectId: project.id,
+        title: "Sprint searchable contract",
+        valueMinor: 250000,
+        currency: "AED",
+        terms: { scope: "Global search verification" },
+      },
+    })
+  ).data;
+
+  const controlCenter = await browserRequest(owner.jar, "/api/enterprise/control-center");
+  assert.equal(controlCenter.data.organization.id, owner.organizationId);
+  assert.equal(typeof controlCenter.data.security.score, "number");
+  const department = (
+    await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/administration`, {
+      method: "POST",
+      expected: [201],
+      body: { action: "department.create", name: "Sprint Operations" },
+    })
+  ).data;
+  const team = (
+    await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/administration`, {
+      method: "POST",
+      expected: [201],
+      body: { action: "team.create", name: "Release Blockers", departmentId: department.id },
+    })
+  ).data;
+  await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/administration`, {
+    method: "POST",
+    body: { action: "team.update", id: team.id, name: "Release Readiness" },
+  });
+  await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/invitations/bulk`, {
+    method: "POST",
+    expected: [201],
+    body: { invitations: [{ email: `sprint-invite-${randomUUID()}@example.test`, roleId: viewerRole.id, expiresInHours: 168 }] },
+  });
+  const createdOrganization = (
+    await browserRequest(owner.jar, "/api/organizations", {
+      method: "POST",
+      expected: [201],
+      body: { name: "Sprint Isolated Tenant", slug: `sprint-isolated-${randomUUID().slice(0, 8)}` },
+    })
+  ).data;
+  assert.ok(await prisma.membership.findFirst({ where: { organizationId: createdOrganization.id, userId: owner.userId, status: "ACTIVE" } }));
+  const refreshedControlCenter = await browserRequest(owner.jar, "/api/enterprise/control-center");
+  assert.ok(refreshedControlCenter.data.counters.organizations >= 2);
+  assert.equal(refreshedControlCenter.data.counters.departments, 1);
+  assert.equal(refreshedControlCenter.data.counters.teams, 1);
+  assert.ok(refreshedControlCenter.data.counters.pendingInvitations >= 1);
+  await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/administration`, {
+    method: "POST",
+    body: { action: "team.delete", id: team.id },
+  });
+  await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/administration`, {
+    method: "POST",
+    body: { action: "department.update", id: department.id, name: "Sprint Operations Updated" },
+  });
+  await browserRequest(owner.jar, `/api/organizations/${owner.organizationId}/administration`, {
+    method: "POST",
+    body: { action: "department.delete", id: department.id },
+  });
   await browserRequest(
     owner.jar,
     `/api/projects/${project.id}/members/${outsider.userId}`,
@@ -457,6 +658,30 @@ try {
   assert.equal(inboundInvalidation.status, 200);
   assert.equal(invalidations.length, 0, "Inbound invalidation must not loop.");
 
+  const searchableFile = await prisma.fileNode.create({
+    data: {
+      organizationId: owner.organizationId,
+      projectId: project.id,
+      createdById: owner.userId,
+      type: "FILE",
+      name: "Sprint release evidence.txt",
+      currentVersionNumber: 1,
+      versions: {
+        create: {
+          uploadedById: owner.userId,
+          version: 1,
+          storageProvider: "runtime",
+          storageKey: `sprint-runtime/${randomUUID()}`,
+          mimeType: "text/plain",
+          sizeBytes: 128n,
+          checksumSha256: "a".repeat(64),
+          scanStatus: "CLEAN",
+          scannedAt: new Date(),
+        },
+      },
+    },
+  });
+
   await browserRequest(owner.jar, "/api/search/reindex", {
     method: "POST",
     expected: [202],
@@ -475,6 +700,24 @@ try {
   assert.equal(invalidations[0].secret, invalidationSecret);
   assert.equal(invalidations[0].body.organizationId, owner.organizationId);
   assert.equal(invalidations[0].body.sourceRegion, "uae-north");
+
+  for (const [entityType, query, entityId] of [
+    ["project", "production", project.id],
+    ["task", "assigned", successorTask.id],
+    ["user", "owner", owner.userId],
+    ["file", "release", searchableFile.id],
+    ["contract", "searchable", searchableContract.id],
+    ["organization", "Workspace", owner.organizationId],
+  ]) {
+    const result = await browserRequest(
+      owner.jar,
+      `/api/search?q=${encodeURIComponent(query)}&entityType=${entityType}&take=10`,
+    );
+    assert.ok(
+      result.data.some((item) => item.entityId === entityId),
+      `Global search must find ${entityType} ${entityId}.`,
+    );
+  }
 
   const oversizedBatch = await fetch(`${baseUrl}/api/internal/workers/runtime`, {
     method: "POST",
@@ -511,6 +754,12 @@ try {
   assert.deepEqual(capacity.data.deployment.regions, ["uae-north", "europe-west"]);
   assert.equal(capacity.data.cache.invalidationPeers, 1);
   assert.equal(capacity.data.cache.strategy, "redis-primary-local-lru-fallback");
+  const observability = await browserRequest(owner.jar, "/api/observability/dashboard");
+  assert.equal(typeof observability.data.live.errorRatePercent, "number");
+  assert.equal(typeof observability.data.live.availabilityPercent, "number");
+  assert.equal(typeof observability.data.live.p95LatencyMs, "number");
+  assert.equal(typeof observability.data.live.workers.active, "number");
+  assert.equal(typeof observability.data.live.queue.pending, "number");
 
   for (const [route, destination] of [
     ["/platform", "/admin"],
@@ -526,6 +775,25 @@ try {
     assert.equal(new URL(redirect.headers.get("location"), baseUrl).pathname, destination);
   }
 
+  const logoutActor = await actor("logout");
+  await browserRequest(logoutActor.jar, "/api/auth/login", {
+    method: "POST",
+    body: {
+      email: logoutActor.email,
+      password: logoutActor.password,
+      organizationId: logoutActor.organizationId,
+      deviceLabel: "logout duplicate session verification",
+    },
+  });
+  assert.equal(
+    await prisma.authSession.count({ where: { userId: logoutActor.userId, status: "ACTIVE" } }),
+    1,
+    "A new browser session must revoke its duplicate fingerprint.",
+  );
+  await browserRequest(logoutActor.jar, "/api/auth/logout", { method: "POST" });
+  assert.equal(await prisma.authSession.count({ where: { userId: logoutActor.userId, status: "ACTIVE" } }), 0);
+  await browserRequest(logoutActor.jar, "/api/notifications/unread-count", { expected: [401] });
+
   console.log(
     JSON.stringify(
       {
@@ -539,6 +807,13 @@ try {
         workerBatchOptimization: "verified",
         capacityReport: "verified",
         legacyFrontendRedirects: "verified",
+        logoutAndDuplicateSessions: "verified",
+        contractLifecycleAndProjectLink: "verified",
+        enterpriseControlCenter: "verified",
+        globalSearchSixEntities: "verified",
+        dependencyDagAndHealth: "verified",
+        notificationLifecycleRealtime: "verified",
+        liveObservability: "verified",
       },
       null,
       2,

@@ -1,14 +1,18 @@
 import { Card, Badge } from "@/components/ui";
 import { brand } from "@/constants/design";
 
-const health = [
-  ["Delivery Health", "92%", "success"],
-  ["Budget Status", "On Track", "info"],
-  ["Timeline Risk", "Low", "success"],
-  ["Client Sentiment", "Positive", "success"],
-];
-
-export default function ProjectHealthPanel() {
+export default function ProjectHealthPanel({
+  score,
+  grade,
+  calculatedAt,
+}: {
+  score?: number;
+  grade?: string;
+  calculatedAt?: string;
+}) {
+  if (score === undefined) {
+    return <Card variant="soft">Live project health is calculated from the project delivery workspace.</Card>;
+  }
   return (
     <section
       style={{
@@ -18,9 +22,8 @@ export default function ProjectHealthPanel() {
         marginBottom: 28,
       }}
     >
-      {health.map(([label, value, variant]) => (
-        <Card key={label} variant="elevated">
-          <Badge variant={variant as "success" | "info"}>{label}</Badge>
+      <Card variant="elevated">
+          <Badge variant={score >= 85 ? "success" : score >= 65 ? "info" : "danger"}>{grade ?? "PROJECT HEALTH"}</Badge>
           <div
             style={{
               marginTop: 18,
@@ -30,10 +33,10 @@ export default function ProjectHealthPanel() {
               letterSpacing: "-0.04em",
             }}
           >
-            {value}
+            {score}%
           </div>
+          {calculatedAt ? <p style={{ color: brand.colors.muted, marginTop: 8 }}>{new Date(calculatedAt).toLocaleString()}</p> : null}
         </Card>
-      ))}
     </section>
   );
 }

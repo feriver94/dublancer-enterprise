@@ -95,6 +95,28 @@ export const createContractSchema = z.object({
   endsAt: optionalDate,
 });
 
+export const updateContractSchema = z.object({
+  projectId: id.nullable().optional(),
+  providerOrganizationId: id.nullable().optional(),
+  providerUserId: id.nullable().optional(),
+  title: z.string().trim().min(3).max(200).optional(),
+  valueMinor: minorAmount.optional(),
+  currency: currency.optional(),
+  taxRateBasisPoints: z.number().int().min(0).max(10_000).optional(),
+  platformFeeBasisPoints: z.number().int().min(0).max(10_000).optional(),
+  terms: jsonObject.optional(),
+  startsAt: z.coerce.date().nullable().optional(),
+  endsAt: z.coerce.date().nullable().optional(),
+  expectedVersion: z.number().int().positive(),
+}).refine((value) => Object.keys(value).some((key) => key !== "expectedVersion"), {
+  message: "At least one editable contract field must be provided.",
+});
+
+export const deleteContractSchema = z.object({
+  confirmation: z.literal("DELETE"),
+  expectedVersion: z.number().int().positive(),
+});
+
 export const deliveryItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("timeEntry"), taskId: id.optional(), startedAt: z.coerce.date(), endedAt: optionalDate, durationMinutes: z.number().int().min(1).max(1440).optional(), description: z.string().trim().max(2000).optional(), billable: z.boolean().default(true) }),
   z.object({ type: z.literal("risk"), title: z.string().trim().min(3).max(200), description: z.string().trim().max(5000).optional(), severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"), probability: z.number().int().min(0).max(100).default(50), impact: z.number().int().min(0).max(100).default(50), mitigation: z.string().trim().max(5000).optional(), dueAt: optionalDate }),

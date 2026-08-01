@@ -6,6 +6,7 @@ import { requireProjectAccess } from "@/lib/authorization/project-access";
 import { AppError } from "@/lib/errors/app-error";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { phase6WorkspaceCreateSchema, phase6WorkspaceTransitionSchema } from "@/lib/validation/phase6";
+import { validateTaskDependencyDag } from "@/lib/workspace/dependency-dag";
 
 type CreateInput = z.infer<typeof phase6WorkspaceCreateSchema>;
 type TransitionInput = z.infer<typeof phase6WorkspaceTransitionSchema>;
@@ -142,15 +143,18 @@ export class Phase6WorkspaceService {
   }
 
   private async createDependency(context: TenantContext, projectId: string, input: Extract<CreateInput, { type: "dependency" }>) {
-    if (input.predecessorTaskId === input.successorTaskId) throw new AppError("VALIDATION_ERROR", "A task cannot depend on itself.", 422);
+    validateTaskDependencyDag([{ predecessorTaskId: input.predecessorTaskId, successorTaskId: input.successorTaskId }]);
     const tasks = await prisma.projectTask.findMany({ where: { projectId, id: { in: [input.predecessorTaskId, input.successorTaskId] } }, select: { id: true } });
     if (tasks.length !== 2) throw new AppError("NOT_FOUND", "Both dependency tasks must belong to this project.", 404);
     const links = await prisma.taskDependency.findMany({ where: { projectId }, select: { predecessorTaskId: true, successorTaskId: true } });
-    const adjacency = new Map<string, string[]>();
-    for (const link of links) adjacency.set(link.predecessorTaskId, [...(adjacency.get(link.predecessorTaskId) ?? []), link.successorTaskId]);
-    adjacency.set(input.predecessorTaskId, [...(adjacency.get(input.predecessorTaskId) ?? []), input.successorTaskId]);
-    const visit = (taskId: string, seen = new Set<string>()): boolean => taskId === input.predecessorTaskId && seen.size > 0 ? true : seen.has(taskId) ? false : (seen.add(taskId), (adjacency.get(taskId) ?? []).some((next) => visit(next, new Set(seen))));
-    if (visit(input.successorTaskId)) throw new AppError("CONFLICT", "The dependency would create a task cycle.", 409);
+    try {
+      validateTaskDependencyDag([...links, { predecessorTaskId: input.predecessorTaskId, successorTaskId: input.successorTaskId }]);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 409) {
+        throw new AppError("CONFLICT", "The dependency would create a task cycle; the graph must remain acyclic.", 409);
+      }
+      throw error;
+    }
     return prisma.taskDependency.create({ data: { projectId, predecessorTaskId: input.predecessorTaskId, successorTaskId: input.successorTaskId, dependencyType: input.dependencyType, lagMinutes: input.lagMinutes } });
   }
 
@@ -253,13 +257,20 @@ export class Phase6WorkspaceService {
 
   private async calculateHealth(projectId: string) {
     const now = new Date();
-    const [tasks, risks, issues, deliverables, changes, sheets] = await Promise.all([
+    const [tasks, risks, issues, deliverables, changes, sheets, dependencies] = await Promise.all([
       prisma.projectTask.findMany({ where: { projectId }, select: { status: true, dueAt: true } }),
       prisma.projectRisk.findMany({ where: { projectId }, select: { status: true, severity: true } }),
       prisma.projectIssue.findMany({ where: { projectId }, select: { status: true, severity: true, dueAt: true } }),
       prisma.deliverable.findMany({ where: { projectId }, select: { status: true, dueAt: true } }),
       prisma.changeRequest.findMany({ where: { projectId }, select: { status: true } }),
       prisma.timesheet.findMany({ where: { projectId }, select: { status: true } }),
+      prisma.taskDependency.findMany({
+        where: { projectId },
+        select: {
+          predecessorTask: { select: { status: true } },
+          successorTask: { select: { status: true } },
+        },
+      }),
     ]);
     const overdueTasks = tasks.filter((item) => item.dueAt && item.dueAt < now && !["DONE", "CANCELLED"].includes(item.status)).length;
     const criticalRisks = risks.filter((item) => item.severity === "CRITICAL" && !["ACCEPTED", "CLOSED"].includes(item.status)).length;
@@ -267,8 +278,12 @@ export class Phase6WorkspaceService {
     const overdueDeliverables = deliverables.filter((item) => item.dueAt && item.dueAt < now && !["ACCEPTED", "REJECTED"].includes(item.status)).length;
     const pendingChanges = changes.filter((item) => ["SUBMITTED", "UNDER_REVIEW", "APPROVED"].includes(item.status)).length;
     const pendingTimesheets = sheets.filter((item) => item.status === "SUBMITTED").length;
-    const score = Math.max(0, 100 - Math.min(30, overdueTasks * 3) - Math.min(30, criticalRisks * 15) - Math.min(20, openIssues * 4) - Math.min(10, overdueDeliverables * 5) - Math.min(5, pendingChanges) - Math.min(5, pendingTimesheets));
-    return { score, grade: score >= 85 ? "HEALTHY" : score >= 65 ? "WATCH" : "AT_RISK", signals: { overdueTasks, criticalRisks, openIssues, overdueDeliverables, pendingChanges, pendingTimesheets }, calculatedAt: now.toISOString() };
+    const blockedDependencies = dependencies.filter((item) =>
+      !["DONE", "CANCELLED"].includes(item.predecessorTask.status) &&
+      ["IN_PROGRESS", "IN_REVIEW", "BLOCKED"].includes(item.successorTask.status),
+    ).length;
+    const score = Math.max(0, 100 - Math.min(25, overdueTasks * 3) - Math.min(25, criticalRisks * 12) - Math.min(20, openIssues * 4) - Math.min(10, overdueDeliverables * 5) - Math.min(5, pendingChanges) - Math.min(5, pendingTimesheets) - Math.min(10, blockedDependencies * 5));
+    return { score, grade: score >= 85 ? "HEALTHY" : score >= 65 ? "WATCH" : "AT_RISK", signals: { overdueTasks, criticalRisks, openIssues, overdueDeliverables, pendingChanges, pendingTimesheets, blockedDependencies }, calculatedAt: now.toISOString() };
   }
 
   private async snapshotHealth(context: TenantContext, projectId: string) {

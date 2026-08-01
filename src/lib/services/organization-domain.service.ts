@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors/app-error";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { assertOrganizationAccess } from "@/lib/tenancy/assert-organization-access";
 import type {
+  createOrganizationSchema,
   invitationStatusSchema,
   inviteSchema,
   membershipSchema,
@@ -13,7 +14,12 @@ import type {
 } from "@/lib/validation/organization";
 import { MemberAdministrationService } from "@/lib/services/member-administration.service";
 import { IdentityService } from "@/lib/services/identity.service";
+import { requirePermission } from "@/lib/authorization/permission-resolver";
+import { DEFAULT_ROLES } from "@/lib/authorization/default-roles";
+import { PLATFORM_PERMISSIONS } from "@/lib/authorization/permissions";
+import { ensureSeatForMembership } from "@/lib/services/subscription-administration.service";
 
+type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 type UpdateMembershipInput = z.infer<typeof membershipSchema>;
 type InviteInput = z.infer<typeof inviteSchema>;
@@ -21,6 +27,93 @@ type InvitationStatus = z.infer<typeof invitationStatusSchema>["status"];
 type SettingsInput = z.infer<typeof settingsSchema>;
 
 export class OrganizationDomainService {
+  async create(context: TenantContext, input: CreateOrganizationInput) {
+    await requirePermission(context, "organization.update");
+    if (await prisma.organization.findUnique({ where: { slug: input.slug }, select: { id: true } })) {
+      throw new AppError("CONFLICT", "An organization with this slug already exists.", 409);
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({
+        data: {
+          ...input,
+          settings: {
+            create: {
+              timezone: "Asia/Dubai",
+              defaultCurrency: "AED",
+              defaultLocale: "en-AE",
+              supportedLocales: ["en-AE", "ar-AE"],
+              dataRegion: "UAE",
+            },
+          },
+        },
+      });
+      await tx.organizationIdentityPolicy.create({ data: { organizationId: organization.id } });
+
+      const permissionIds = new Map<string, string>();
+      for (const key of PLATFORM_PERMISSIONS) {
+        const permission = await tx.permission.upsert({
+          where: { key },
+          create: { key, description: `Dublancer permission: ${key}` },
+          update: {},
+          select: { id: true },
+        });
+        permissionIds.set(key, permission.id);
+      }
+      let ownerRoleId = "";
+      for (const definition of DEFAULT_ROLES) {
+        const role = await tx.role.create({
+          data: { organizationId: organization.id, name: definition.name, description: definition.description },
+        });
+        if (definition.name === "Owner") ownerRoleId = role.id;
+        await tx.rolePermission.createMany({
+          data: definition.permissions.map((key) => ({ roleId: role.id, permissionId: permissionIds.get(key)! })),
+        });
+      }
+      const membership = await tx.membership.create({
+        data: { organizationId: organization.id, userId: context.userId, roleId: ownerRoleId, status: "ACTIVE" },
+      });
+      const starterPlan = await tx.subscriptionPlan.findFirst({ where: { code: "STARTER", isActive: true } });
+      if (starterPlan) {
+        const now = new Date();
+        const trialEndsAt = new Date(now.getTime() + 14 * 86_400_000);
+        const subscription = await tx.organizationSubscription.create({
+          data: {
+            organizationId: organization.id,
+            planId: starterPlan.id,
+            status: "TRIALING",
+            currentPeriodStart: now,
+            currentPeriodEnd: trialEndsAt,
+            trialStartedAt: now,
+            trialEndsAt,
+            renewAt: trialEndsAt,
+          },
+        });
+        await tx.subscriptionEvent.create({
+          data: {
+            organizationId: organization.id,
+            subscriptionId: subscription.id,
+            actorUserId: context.userId,
+            type: "TRIAL_STARTED",
+            reason: "Organization trial created from enterprise control center.",
+          },
+        });
+        await ensureSeatForMembership(tx, organization.id, membership.id, context.userId);
+      }
+      await tx.auditEvent.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: context.userId,
+          action: "organization.created",
+          resourceType: "Organization",
+          resourceId: organization.id,
+          outcome: "SUCCESS",
+        },
+      });
+      return organization;
+    });
+  }
+
   async get(context: TenantContext, organizationId: string) {
     await assertOrganizationAccess(context, organizationId);
 
@@ -51,6 +144,7 @@ export class OrganizationDomainService {
     input: UpdateOrganizationInput,
   ) {
     await assertOrganizationAccess(context, organizationId);
+    await requirePermission(context, "organization.update");
 
     const organization = await prisma.organization.update({
       where: { id: organizationId },

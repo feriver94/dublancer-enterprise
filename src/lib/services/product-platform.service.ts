@@ -498,6 +498,62 @@ export class ContractService {
       return contract;
     });
   }
+
+  async update(context: TenantContext, contractId: string, input: {
+    projectId?: string | null; providerOrganizationId?: string | null; providerUserId?: string | null;
+    title?: string; valueMinor?: bigint; currency?: string; taxRateBasisPoints?: number; platformFeeBasisPoints?: number;
+    terms?: Record<string, unknown>; startsAt?: Date | null; endsAt?: Date | null; expectedVersion: number;
+  }) {
+    await requirePermission(context, "marketplace.contract.manage");
+    const contract = await prisma.contract.findFirst({
+      where: { id: contractId, organizationId: context.organizationId },
+      select: { id: true, status: true, version: true, projectId: true },
+    });
+    if (!contract) throw new AppError("NOT_FOUND", "Contract not found.", 404);
+    if (contract.status !== "DRAFT") throw new AppError("CONFLICT", "Only draft contracts can be edited directly. Use amendments after signature preparation begins.", 409);
+    if (input.projectId) await projectInTenant(context.organizationId, input.projectId);
+    if (input.providerOrganizationId) {
+      const provider = await prisma.organization.findFirst({ where: { id: input.providerOrganizationId, status: "ACTIVE" }, select: { id: true } });
+      if (!provider) throw new AppError("NOT_FOUND", "Provider organization not found.", 404);
+      if (provider.id === context.organizationId) throw new AppError("CONFLICT", "The client and provider organizations must be different.", 409);
+    }
+    if (input.providerUserId) {
+      const provider = await prisma.user.findUnique({ where: { id: input.providerUserId }, select: { id: true } });
+      if (!provider) throw new AppError("NOT_FOUND", "Provider user not found.", 404);
+      if (provider.id === context.userId) throw new AppError("CONFLICT", "The contract creator cannot also be the individual provider.", 409);
+    }
+    const { expectedVersion, terms, ...fields } = input;
+    return withTransaction(async (tx) => {
+      const changed = await tx.contract.updateMany({
+        where: { id: contractId, organizationId: context.organizationId, status: "DRAFT", version: expectedVersion },
+        data: { ...fields, ...(terms ? { terms: json(terms) } : {}), version: { increment: 1 } },
+      });
+      if (changed.count !== 1) throw new AppError("CONFLICT", "Contract changed before the edit was saved.", 409);
+      await audit(tx, context, "contract.updated", "Contract", contractId, { changedFields: Object.keys(fields).concat(terms ? ["terms"] : []) });
+      await event(tx, context, "contract.updated", "Contract", contractId, { previousVersion: expectedVersion }, input.projectId === undefined ? contract.projectId ?? undefined : input.projectId ?? undefined);
+      return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: { project: { select: { id: true, title: true } }, milestones: true } });
+    });
+  }
+
+  async delete(context: TenantContext, contractId: string, expectedVersion: number) {
+    await requirePermission(context, "marketplace.contract.manage");
+    const contract = await prisma.contract.findFirst({
+      where: { id: contractId, organizationId: context.organizationId },
+      include: { _count: { select: { acceptances: true, amendments: true, milestones: true, disputes: true, reviews: true, invoices: true, transactions: true } } },
+    });
+    if (!contract) throw new AppError("NOT_FOUND", "Contract not found.", 404);
+    if (contract.status !== "DRAFT") throw new AppError("CONFLICT", "Only draft contracts can be deleted. Use the governed lifecycle for active agreements.", 409);
+    if (Object.values(contract._count).some((count) => count > 0)) {
+      throw new AppError("CONFLICT", "Remove contract execution records before deleting this draft.", 409);
+    }
+    return withTransaction(async (tx) => {
+      const removed = await tx.contract.deleteMany({ where: { id: contractId, organizationId: context.organizationId, status: "DRAFT", version: expectedVersion } });
+      if (removed.count !== 1) throw new AppError("CONFLICT", "Contract changed before deletion.", 409);
+      await audit(tx, context, "contract.deleted", "Contract", contractId, { title: contract.title, projectId: contract.projectId });
+      await event(tx, context, "contract.deleted", "Contract", contractId, { title: contract.title }, contract.projectId ?? undefined);
+      return { deleted: true, contractId };
+    });
+  }
 }
 
 export class DeliveryService {
