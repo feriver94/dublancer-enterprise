@@ -13,6 +13,7 @@ import {
   incrementMetric,
   metricsSnapshot,
   observeMetric,
+  setMetric,
 } from "@/lib/observability/metrics";
 import { distributedCache } from "@/lib/cache/distributed-cache";
 import { pingRedis } from "@/lib/realtime/redis";
@@ -83,6 +84,149 @@ async function signedPost(
 }
 
 export class PlatformReliabilityService {
+  async capacityReport(context: TenantContext) {
+    await requirePermission(context, "observability.read");
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - 90_000);
+    const [groups, workers, profiles, searchLogs, loadTests, recommendations] =
+      await Promise.all([
+        prisma.backgroundJob.groupBy({
+          by: ["queue", "status"],
+          where: {
+            OR: [
+              { organizationId: context.organizationId },
+              { organizationId: null },
+            ],
+            status: { in: ["PENDING", "PROCESSING", "DEAD_LETTER"] },
+          },
+          _count: { _all: true },
+          _min: { availableAt: true },
+        }),
+        prisma.workerHeartbeat.groupBy({
+          by: ["status"],
+          where: {
+            OR: [
+              { organizationId: context.organizationId },
+              { organizationId: null },
+            ],
+            lastSeenAt: { gte: staleBefore },
+          },
+          _count: { _all: true },
+        }),
+        prisma.performanceProfile.findMany({
+          where: {
+            OR: [
+              { organizationId: context.organizationId },
+              { organizationId: null },
+            ],
+            status: "COMPLETED",
+            durationMs: { not: null },
+          },
+          select: { operation: true, durationMs: true, startedAt: true },
+          orderBy: { startedAt: "desc" },
+          take: 1_000,
+        }),
+        prisma.searchQueryLog.findMany({
+          where: { organizationId: context.organizationId },
+          select: { durationMs: true, resultCount: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 1_000,
+        }),
+        prisma.loadTestRun.findMany({
+          where: {
+            OR: [
+              { organizationId: context.organizationId },
+              { organizationId: null },
+            ],
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        }),
+        prisma.workerScalingRecommendation.findMany({
+          where: {
+            OR: [
+              { organizationId: context.organizationId },
+              { organizationId: null },
+            ],
+            status: "OPEN",
+            expiresAt: { gt: now },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        }),
+      ]);
+    const percentile = (values: number[], value: number) => {
+      if (!values.length) return null;
+      const sorted = [...values].sort((left, right) => left - right);
+      return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * value) - 1)];
+    };
+    const queues = [...new Set(groups.map((group) => group.queue))].map(
+      (queue) => {
+        const entries = groups.filter((group) => group.queue === queue);
+        const count = (status: string) =>
+          entries.find((entry) => entry.status === status)?._count._all ?? 0;
+        const oldest = entries
+          .map((entry) => entry._min.availableAt)
+          .filter((value): value is Date => Boolean(value))
+          .sort((left, right) => left.getTime() - right.getTime())[0];
+        const oldestJobAgeMs = oldest
+          ? Math.max(0, now.getTime() - oldest.getTime())
+          : 0;
+        setMetric("dublancer_queue_pending_jobs", count("PENDING"), { queue });
+        setMetric("dublancer_queue_oldest_job_age_ms", oldestJobAgeMs, { queue });
+        return {
+          queue,
+          pending: count("PENDING"),
+          processing: count("PROCESSING"),
+          deadLetters: count("DEAD_LETTER"),
+          oldestJobAgeMs,
+        };
+      },
+    );
+    const operationGroups = new Map<string, number[]>();
+    for (const profile of profiles) {
+      const values = operationGroups.get(profile.operation) ?? [];
+      if (profile.durationMs !== null) values.push(profile.durationMs);
+      operationGroups.set(profile.operation, values);
+    }
+    return {
+      generatedAt: now,
+      deployment: {
+        environment: process.env.DEPLOYMENT_ENVIRONMENT ?? "development",
+        region: process.env.DEPLOYMENT_REGION ?? "unknown",
+        regions: (process.env.DEPLOYMENT_REGIONS ?? "")
+          .split(",")
+          .filter(Boolean),
+        version: process.env.APP_VERSION ?? "1.0.0",
+      },
+      workers: Object.fromEntries(
+        workers.map((worker) => [worker.status, worker._count._all]),
+      ),
+      queues,
+      operations: [...operationGroups].map(([operation, durations]) => ({
+        operation,
+        samples: durations.length,
+        p50LatencyMs: percentile(durations, 0.5),
+        p95LatencyMs: percentile(durations, 0.95),
+        p99LatencyMs: percentile(durations, 0.99),
+      })),
+      search: {
+        samples: searchLogs.length,
+        p95LatencyMs: percentile(
+          searchLogs.map((entry) => entry.durationMs),
+          0.95,
+        ),
+        averageResults: searchLogs.length
+          ? searchLogs.reduce((sum, entry) => sum + entry.resultCount, 0) /
+            searchLogs.length
+          : null,
+      },
+      cache: distributedCache.health(),
+      recommendations,
+      loadTests,
+    };
+  }
+
   async dashboard(context: TenantContext) {
     await requirePermission(context, "observability.read");
     const now = new Date();

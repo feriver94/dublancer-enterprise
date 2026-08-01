@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
     requireInternalSecret(request, "INTERNAL_WORKER_SECRET");
     const input = workerRuntimeSchema.parse(await request.json());
     if (input.action === "SCHEDULE") return apiSuccess(await enqueueDueSchedules(), 202);
+    if (input.action === "PROCESS_BATCH") return apiSuccess(await service.processBatch(input.workerId, input.batchSize), 202);
     if (input.action === "CLAIM") return apiSuccess(await claimJob({ workerId: input.workerId, types: input.types, queues: input.queues, version: input.version, hostname: input.hostname }), 202);
     if (input.action === "HEARTBEAT") {
       if (!input.jobId || !input.leaseToken) return apiSuccess(await registerWorker({ workerId: input.workerId, queues: input.queues, version: input.version, hostname: input.hostname }), 202);

@@ -2834,6 +2834,8 @@ model SearchQueryLog {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, scope, createdAt])
+  @@index([organizationId, durationMs, createdAt])
+  @@index([organizationId, resultCount, createdAt])
   @@index([queryHash, createdAt])
 }
 
@@ -4138,6 +4140,8 @@ model PerformanceProfile {
   completedAt     DateTime?
 
   @@index([organizationId, operation, startedAt])
+  @@index([organizationId, status, startedAt])
+  @@index([organizationId, operation, durationMs])
   @@index([status, startedAt])
   @@index([durationMs])
 }
@@ -4167,6 +4171,7 @@ model LoadTestRun {
   updatedAt       DateTime          @updatedAt
 
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, completedAt])
   @@index([requestedById, createdAt])
 }
 
@@ -5237,6 +5242,7 @@ model IntegrationRun {
 
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, status, availableAt])
   @@index([status, availableAt])
   @@index([connectorId, createdAt])
 }
@@ -5442,6 +5448,7 @@ model BackgroundJob {
 
   @@index([status, availableAt])
   @@index([queue, status, priority, availableAt])
+  @@index([organizationId, queue, status, priority, availableAt])
   @@index([organizationId, type, createdAt])
   @@index([lockedAt])
   @@index([status, leaseExpiresAt])
@@ -5503,6 +5510,7 @@ model WorkerHeartbeat {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, lastSeenAt])
+  @@index([organizationId, status, lastSeenAt])
   @@index([status, lastSeenAt])
 }
 

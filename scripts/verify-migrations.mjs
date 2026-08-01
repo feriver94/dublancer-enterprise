@@ -24,6 +24,7 @@ const phase6MigrationName = "20260722180000_contract_workspace_localization";
 const phase7MigrationName = "20260723090000_subscriptions_members_email_security";
 const phase8MigrationName = "20260728120000_enterprise_identity_observability_scalability";
 const phase9MigrationName = "20260729100000_enterprise_crm_talent_knowledge_integrations";
+const phase10MigrationName = "20260730150000_enterprise_production_performance";
 const commercialSql = migrationSql[entries.indexOf(commercialMigrationName)];
 const phase4Sql = migrationSql[entries.indexOf(phase4MigrationName)];
 const phase5Sql = migrationSql[entries.indexOf(phase5MigrationName)];
@@ -31,6 +32,7 @@ const phase6Sql = migrationSql[entries.indexOf(phase6MigrationName)];
 const phase7Sql = migrationSql[entries.indexOf(phase7MigrationName)];
 const phase8Sql = migrationSql[entries.indexOf(phase8MigrationName)];
 const phase9Sql = migrationSql[entries.indexOf(phase9MigrationName)];
+const phase10Sql = migrationSql[entries.indexOf(phase10MigrationName)];
 for (const table of ["WorkGraphNode", "WorkflowDefinition", "WorkflowRun", "WorkflowApproval", "TalentMatch", "RateLimitBucket"]) {
   if (!completeSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Migration history is missing ${table}.`);
 }
@@ -55,6 +57,9 @@ for (const table of ["IdentityProvider", "ExternalIdentity", "MfaFactor", "WebAu
 for (const table of ["CrmPipeline", "CrmLead", "CrmOpportunity", "CrmQuote", "TalentProfile", "StaffingAssignment", "TalentCapacitySnapshot", "KnowledgeArticle", "KnowledgeArticleVersion", "KnowledgeRetrievalLog", "IntegrationConnector", "IntegrationApiKey", "IntegrationWebhookDelivery", "IntegrationRun"]) {
   if (!phase9Sql?.includes(`CREATE TABLE "${table}"`)) throw new Error(`Phase 9 migration is missing ${table}.`);
 }
-if (entries.at(-1) !== phase9MigrationName) throw new Error("Phase 9 migration must be the latest chronological migration.");
+for (const index of ["SearchQueryLog_organizationId_durationMs_createdAt_idx", "PerformanceProfile_organizationId_status_startedAt_idx", "BackgroundJob_organizationId_queue_status_priority_availableAt_idx", "IntegrationRun_organizationId_status_availableAt_idx"]) {
+  if (!phase10Sql?.includes(`CREATE INDEX \"${index}\"`)) throw new Error(`Phase 10 migration is missing ${index}.`);
+}
+if (entries.at(-1) !== phase10MigrationName) throw new Error("Phase 10 migration must be the latest chronological migration.");
 if (/\bDROP\s+(TABLE|COLUMN|TYPE)\b/i.test(finalSql)) throw new Error("Final migration contains a destructive DROP statement.");
-console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial and Phase 4-9 migrations).`);
+console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial and Phase 4-10 migrations).`);

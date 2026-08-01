@@ -1,5 +1,9 @@
 import { meter } from "@/lib/observability/telemetry";
-import type { Counter, Histogram as OtelHistogram } from "@opentelemetry/api";
+import type {
+  Counter,
+  Histogram as OtelHistogram,
+  UpDownCounter,
+} from "@opentelemetry/api";
 
 type Labels = Record<string, string | number | boolean | undefined>;
 type Histogram = {
@@ -12,16 +16,20 @@ const histogramBounds = [5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000];
 const globalMetrics = globalThis as unknown as {
   dublancerCounters?: Map<string, number>;
   dublancerHistograms?: Map<string, Histogram>;
+  dublancerGauges?: Map<string, number>;
 };
 const counters =
   globalMetrics.dublancerCounters ?? new Map<string, number>();
 const histograms =
   globalMetrics.dublancerHistograms ?? new Map<string, Histogram>();
+const gauges = globalMetrics.dublancerGauges ?? new Map<string, number>();
 const otelCounters = new Map<string, Counter>();
 const otelHistograms = new Map<string, OtelHistogram>();
+const otelGauges = new Map<string, UpDownCounter>();
 
 globalMetrics.dublancerCounters = counters;
 globalMetrics.dublancerHistograms = histograms;
+globalMetrics.dublancerGauges = gauges;
 
 function normalizedLabels(labels: Labels = {}) {
   return Object.entries(labels)
@@ -91,9 +99,20 @@ export function observeMetric(
   instrument.record(value, metricAttributes(labels));
 }
 
+export function setMetric(name: string, value: number, labels?: Labels) {
+  const metricKey = key(name, labels);
+  const previous = gauges.get(metricKey) ?? 0;
+  gauges.set(metricKey, value);
+  const instrument =
+    otelGauges.get(name) ?? meter.createUpDownCounter(name);
+  otelGauges.set(name, instrument);
+  instrument.add(value - previous, metricAttributes(labels));
+}
+
 export function metricsSnapshot() {
   return {
     counters: Object.fromEntries(counters),
+    gauges: Object.fromEntries(gauges),
     histograms: Object.fromEntries(
       [...histograms].map(([metricKey, value]) => [
         metricKey,
@@ -114,6 +133,10 @@ export function prometheusMetrics() {
     `dublancer_process_start_time_seconds ${Math.floor((Date.now() - process.uptime() * 1_000) / 1_000)}`,
   ];
   for (const [metricKey, value] of counters) {
+    const [name, serialized = ""] = metricKey.split("|");
+    lines.push(`${name}${prometheusLabels(serialized)} ${value}`);
+  }
+  for (const [metricKey, value] of gauges) {
     const [name, serialized = ""] = metricKey.split("|");
     lines.push(`${name}${prometheusLabels(serialized)} ${value}`);
   }

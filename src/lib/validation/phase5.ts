@@ -56,7 +56,7 @@ export const jobScheduleUpdateSchema = jobScheduleSchema.omit({ key: true }).par
 
 export const workerRuntimeSchema = z.object({
   workerId: z.string().trim().min(3).max(128),
-  action: z.enum(["PROCESS", "SCHEDULE", "CLAIM", "HEARTBEAT", "COMPLETE", "FAIL"]).default("PROCESS"),
+  action: z.enum(["PROCESS", "PROCESS_BATCH", "SCHEDULE", "CLAIM", "HEARTBEAT", "COMPLETE", "FAIL"]).default("PROCESS"),
   jobId: id.optional(),
   leaseToken: z.string().uuid().optional(),
   types: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
@@ -66,6 +66,7 @@ export const workerRuntimeSchema = z.object({
   diagnostics: z.unknown().optional(),
   errorCode: z.string().trim().min(1).max(100).optional(),
   errorMessage: z.string().trim().min(1).max(2_000).optional(),
+  batchSize: z.coerce.number().int().min(1).max(25).default(10),
 });
 
 export const exportListSchema = z.object({

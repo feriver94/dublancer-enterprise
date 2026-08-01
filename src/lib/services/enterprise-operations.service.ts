@@ -8,6 +8,7 @@ import { pingRedis } from "@/lib/realtime/redis";
 import { runClaimedJob } from "@/lib/jobs/worker-runtime.service";
 import { processNotificationDeliveries } from "@/lib/notifications/delivery-worker";
 import type { TenantContext } from "@/lib/tenancy/context";
+import { incrementMetric, observeMetric } from "@/lib/observability/metrics";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value, (_key, nested) => typeof nested === "bigint" ? nested.toString() : nested)) as Prisma.InputJsonValue;
 const configured = (...keys: string[]) => keys.every((key) => Boolean(process.env[key]));
@@ -245,6 +246,27 @@ export class EnterpriseOperationsService {
       if (!organizationId) throw new AppError("VALIDATION_ERROR", "Retention job organization is missing.", 422);
       return this.enforceRetention(organizationId);
     });
+  }
+
+  async processBatch(workerId: string, batchSize = 10) {
+    const started = performance.now();
+    const results = [];
+    const limit = Math.min(Math.max(batchSize, 1), 25);
+    for (let index = 0; index < limit; index += 1) {
+      const result = await this.processNext(workerId);
+      if (!result) break;
+      results.push(result);
+    }
+    incrementMetric("dublancer_worker_batches_total", {
+      result: "completed",
+      size: results.length,
+    });
+    observeMetric(
+      "dublancer_worker_batch_duration_ms",
+      performance.now() - started,
+      { requested_size: limit },
+    );
+    return { processed: results.length, results };
   }
 
   async moderation(context: TenantContext) {

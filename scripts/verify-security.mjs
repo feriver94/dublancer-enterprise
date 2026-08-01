@@ -21,6 +21,7 @@ const routes = (await files(apiRoot)).filter((filePath) =>
 const mutationPattern = /export\s+async\s+function\s+(POST|PUT|PATCH|DELETE)/;
 const exemptions = new Map([
   ["internal/chat/retention/route.ts", "internal"],
+  ["internal/cache/invalidate/route.ts", "internal"],
   ["internal/email/process/route.ts", "internal"],
   ["internal/integrations/process/route.ts", "internal"],
   ["internal/notifications/create/route.ts", "internal"],

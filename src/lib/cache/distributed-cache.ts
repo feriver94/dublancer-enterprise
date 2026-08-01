@@ -73,6 +73,75 @@ function primarySuccess() {
   circuit.openUntil = 0;
 }
 
+function invalidationPeers() {
+  return (process.env.CACHE_INVALIDATION_PEERS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+async function propagateInvalidation(organizationId: string, reason: string) {
+  const secret = process.env.CACHE_INVALIDATION_SECRET;
+  const peers = invalidationPeers();
+  if (!peers.length) return [];
+  if (!secret || secret.length < 32) {
+    logger.error("cache.invalidation_not_configured", { peers: peers.length });
+    incrementMetric("dublancer_cache_invalidations_total", {
+      result: "failed",
+      scope: "regional",
+    });
+    return peers.map((endpoint) => ({ endpoint, status: "not_configured" }));
+  }
+  const sourceRegion = process.env.DEPLOYMENT_REGION ?? "unknown";
+  return Promise.all(
+    peers.map(async (endpoint) => {
+      const started = performance.now();
+      let destinationRegion = "unknown";
+      try {
+        const url = new URL(endpoint);
+        destinationRegion = url.hostname;
+        if (!/^https?:$/.test(url.protocol)) throw new Error("Unsupported invalidation protocol.");
+        if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+          throw new Error("Production invalidation peers require HTTPS.");
+        }
+        const response = await fetch(url, {
+          method: "POST",
+          redirect: "error",
+          signal: AbortSignal.timeout(1_500),
+          headers: {
+            "content-type": "application/json",
+            "x-cache-invalidation-secret": secret,
+            "user-agent": "Dublancer-Cache-Invalidation/1.0",
+          },
+          body: JSON.stringify({ organizationId, sourceRegion, reason }),
+        });
+        if (!response.ok) throw new Error(`Invalidation peer returned HTTP ${response.status}.`);
+        incrementMetric("dublancer_cache_invalidations_total", {
+          result: "success",
+          scope: "regional",
+        });
+        return { endpoint, status: "delivered" };
+      } catch (error) {
+        incrementMetric("dublancer_cache_invalidations_total", {
+          result: "failed",
+          scope: "regional",
+        });
+        logger.warn("cache.invalidation_peer_failed", {
+          destinationRegion,
+          error,
+        });
+        return { endpoint, status: "failed" };
+      } finally {
+        observeMetric(
+          "dublancer_cache_invalidation_duration_ms",
+          performance.now() - started,
+          { destination_region: destinationRegion },
+        );
+      }
+    }),
+  );
+}
+
 export class DistributedCache {
   async get<T>(organizationId: string | null, key: string): Promise<T | null> {
     const started = performance.now();
@@ -172,7 +241,10 @@ export class DistributedCache {
     }
   }
 
-  async invalidateTenant(organizationId: string) {
+  async invalidateTenant(
+    organizationId: string,
+    options: { propagate?: boolean; reason?: string } = {},
+  ) {
     const prefix = namespace(organizationId, "");
     for (const key of local.keys()) {
       if (key.startsWith(prefix)) local.delete(key);
@@ -197,7 +269,14 @@ export class DistributedCache {
     }
     incrementMetric("dublancer_cache_invalidations_total", {
       scope: "tenant",
+      result: "success",
     });
+    return options.propagate === false
+      ? []
+      : propagateInvalidation(
+          organizationId,
+          options.reason ?? "tenant_mutation",
+        );
   }
 
   async getOrSet<T>(
@@ -221,6 +300,8 @@ export class DistributedCache {
       consecutiveFailures: circuit.failures,
       localEntries: local.size,
       keyspaceVersion: "v1",
+      region: process.env.DEPLOYMENT_REGION ?? "unknown",
+      invalidationPeers: invalidationPeers().length,
     };
   }
 

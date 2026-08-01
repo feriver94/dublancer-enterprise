@@ -6,6 +6,7 @@ import { requirePermission, resolveAuthorization } from "@/lib/authorization/per
 import { enqueuePhase4Job, PHASE4_JOB_TYPES, runClaimedPhase4Job } from "@/lib/jobs/phase4-job.service";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { distributedCache } from "@/lib/cache/distributed-cache";
+import { federatedSearch } from "@/lib/services/federated-search.service";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const ENTITY_TYPES = ["PROJECT", "LISTING", "CONTRACT", "FILE"] as const;
@@ -284,8 +285,22 @@ export class SearchIndexService {
         const hasMore = rows.length > input.take;
         if (hasMore) rows.pop();
         const next = hasMore ? rows.at(-1) ?? null : null;
+        const remaining = input.cursor ? 0 : Math.max(0, input.take - rows.length);
+        const federated = remaining
+          ? await federatedSearch({
+              organizationId: context.organizationId,
+              query: input.q,
+              entityType: input.entityType,
+              locale: input.locale,
+              take: remaining,
+              permissions,
+              projectIds,
+              fileIds,
+              isPlatformAdmin: authorization.isPlatformAdmin,
+            })
+          : [];
         return {
-          items: rows,
+          items: [...rows, ...federated],
           nextCursor: next ? cursorEncode(next) : null,
         };
       },
