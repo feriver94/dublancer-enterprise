@@ -108,3 +108,19 @@ test("Phase 10 automates accessibility responsive and cross-browser verification
     assert.match(workflow, new RegExp(engine));
   }
 });
+
+test("Phase 10 locks compatible dependency upgrades and enforces supply-chain provenance", () => {
+  const manifest = JSON.parse(read("package.json"));
+  const lock = JSON.parse(read("package-lock.json"));
+  const verifier = read("scripts/verify-supply-chain.mjs");
+  assert.equal(lock.lockfileVersion, 3);
+  assert.equal(manifest.dependencies["@prisma/client"], "^7.9.1");
+  assert.equal(manifest.dependencies.react, "19.2.8");
+  assert.equal(manifest.devDependencies["@tailwindcss/postcss"], "^4.3.3");
+  assert.equal(manifest.overrides.postcss, "8.5.25");
+  assert.equal(manifest.overrides.sharp, "0.35.3");
+  assert.match(verifier, /registry\.npmjs\.org/);
+  assert.match(verifier, /sha512-/);
+  assert.match(verifier, /installScriptAllowlist/);
+  assert.match(read(".github/workflows/supply-chain.yml"), /npm ci --ignore-scripts/);
+});

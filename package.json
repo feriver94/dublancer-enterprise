@@ -2,6 +2,11 @@
   "name": "dublancer-enterprise",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@11.9.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -29,6 +34,7 @@
     "verify:backup": "node scripts/verify-backup.mjs",
     "verify:ui": "node scripts/verify-ui-consistency.mjs",
     "verify:supply-chain": "node scripts/verify-supply-chain.mjs",
+    "audit:production": "npm audit --omit=dev --audit-level=moderate",
     "verify:release": "prisma validate && prisma generate && npm run verify:migrations && npm run verify:locales && npm run verify:security && npm run verify:secrets && npm test && tsc --noEmit && eslint --quiet && next build",
     "seed": "node prisma/seed.mjs"
   },
@@ -40,18 +46,18 @@
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/sdk-node": "^0.221.0",
-    "@opentelemetry/semantic-conventions": "^1.38.0",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
     "@simplewebauthn/server": "^13.3.2",
     "argon2": "^0.44.0",
     "ioredis": "^5.11.1",
-    "jose": "^6.2.3",
+    "jose": "^6.2.6",
     "next": "^16.2.12",
-    "next-intl": "^4.13.2",
+    "next-intl": "^4.13.4",
     "pg": "^8.22.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -59,14 +65,27 @@
     "@electric-sql/pglite": "0.4.1",
     "@electric-sql/pglite-socket": "0.1.1",
     "@playwright/test": "^1.62.1",
-    "@tailwindcss/postcss": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "latest",
-    "prisma": "^7.8.0",
-    "tailwindcss": "latest",
-    "typescript": "latest"
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.12",
+    "prisma": "^7.9.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "postcss": "8.5.25",
+    "sharp": "0.35.3",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@10.2.5": {
+      "brace-expansion": "5.0.9"
+    },
+    "ajv@8.20.0": {
+      "fast-uri": "3.1.5"
+    }
   }
 }
