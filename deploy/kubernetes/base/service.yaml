@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dublancer-enterprise
+spec:
+  selector:
+    app.kubernetes.io/name: dublancer-enterprise
+    app.kubernetes.io/component: web
+    release-color: blue
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

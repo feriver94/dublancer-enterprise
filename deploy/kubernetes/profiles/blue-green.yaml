@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dublancer-enterprise-preview
+spec:
+  selector:
+    app.kubernetes.io/name: dublancer-enterprise
+    app.kubernetes.io/component: web
+    release-color: green
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dublancer-enterprise-green
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dublancer-enterprise
+      app.kubernetes.io/component: web
+      release-color: green
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dublancer-enterprise
+        app.kubernetes.io/component: web
+        release-color: green
+    spec:
+      serviceAccountName: dublancer-enterprise
+      containers:
+        - name: web
+          image: ghcr.io/feriver94/dublancer-enterprise:1.0.0
+          envFrom:
+            - configMapRef: { name: dublancer-runtime }
+            - secretRef: { name: dublancer-secrets }
+          env:
+            - { name: RELEASE_COLOR, value: green }
+          ports:
+            - { name: http, containerPort: 3000 }
+          readinessProbe:
+            httpGet: { path: /api/health/ready, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            runAsUser: 1001
+            runAsGroup: 1001

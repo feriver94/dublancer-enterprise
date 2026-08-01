@@ -1,0 +1,20 @@
+{
+  "title": "Dublancer Enterprise Production Overview",
+  "uid": "dublancer-production-overview",
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "tags": ["dublancer", "production", "slo"],
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {"name": "region", "type": "query", "query": "label_values(dublancer_http_requests_total, deployment_region)", "includeAll": true}
+    ]
+  },
+  "panels": [
+    {"id": 1, "title": "Availability", "type": "stat", "targets": [{"expr": "1 - (sum(rate(dublancer_http_requests_total{status=~\"5..\",deployment_region=~\"$region\"}[30d])) / clamp_min(sum(rate(dublancer_http_requests_total{deployment_region=~\"$region\"}[30d])), 1))"}], "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}},
+    {"id": 2, "title": "Request rate", "type": "timeseries", "targets": [{"expr": "sum by (deployment_region) (rate(dublancer_http_requests_total{deployment_region=~\"$region\"}[5m]))"}], "gridPos": {"h": 8, "w": 9, "x": 6, "y": 0}},
+    {"id": 3, "title": "p95 latency", "type": "timeseries", "targets": [{"expr": "histogram_quantile(0.95, sum by (le, deployment_region) (rate(dublancer_http_request_duration_ms_bucket{deployment_region=~\"$region\"}[5m])))"}], "gridPos": {"h": 8, "w": 9, "x": 15, "y": 0}},
+    {"id": 4, "title": "Queue backlog", "type": "timeseries", "targets": [{"expr": "sum by (queue) (dublancer_queue_pending_jobs)"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}},
+    {"id": 5, "title": "Cache failover", "type": "timeseries", "targets": [{"expr": "sum by (deployment_region) (rate(dublancer_cache_failover_total[5m]))"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}}
+  ]
+}

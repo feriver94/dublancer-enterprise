@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dublancer-enterprise
+spec:
+  replicas: 4
+  template:
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/region: uae-north
+      containers:
+        - name: web
+          env:
+            - name: DEPLOYMENT_REGION
+              value: uae-north
+            - name: DEPLOYMENT_REGIONS
+              value: uae-north,europe-west
+            - name: DISASTER_RECOVERY_REGION
+              value: europe-west

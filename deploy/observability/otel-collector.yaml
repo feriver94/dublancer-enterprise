@@ -1,0 +1,76 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: dublancer-enterprise
+          metrics_path: /api/observability/metrics
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: "true"
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 768
+    spike_limit_mib: 192
+  resource:
+    attributes:
+      - key: service.namespace
+        value: dublancer
+        action: upsert
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+  tail_sampling:
+    decision_wait: 10s
+    policies:
+      - name: errors
+        type: status_code
+        status_code: { status_codes: [ERROR] }
+      - name: slow-requests
+        type: latency
+        latency: { threshold_ms: 1000 }
+      - name: baseline
+        type: probabilistic
+        probabilistic: { sampling_percentage: 10 }
+exporters:
+  otlp/traces:
+    endpoint: ${env:TRACE_BACKEND_OTLP_ENDPOINT}
+    headers: { authorization: ${env:TRACE_BACKEND_AUTHORIZATION} }
+  prometheusremotewrite:
+    endpoint: ${env:METRICS_REMOTE_WRITE_ENDPOINT}
+    headers: { authorization: ${env:METRICS_REMOTE_WRITE_AUTHORIZATION} }
+  otlphttp/logs:
+    endpoint: ${env:LOG_BACKEND_OTLP_ENDPOINT}
+    headers: { authorization: ${env:LOG_BACKEND_AUTHORIZATION} }
+  debug:
+    verbosity: basic
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, tail_sampling, batch]
+      exporters: [otlp/traces]
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheusremotewrite]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/logs]
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888

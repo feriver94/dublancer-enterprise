@@ -1,0 +1,44 @@
+groups:
+  - name: dublancer-availability
+    interval: 30s
+    rules:
+      - alert: DublancerHighErrorRate
+        expr: sum(rate(dublancer_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(dublancer_http_requests_total[5m])), 1) > 0.01
+        for: 10m
+        labels: { severity: critical, service: dublancer-enterprise }
+        annotations:
+          summary: Dublancer error budget is burning
+          runbook_url: https://github.com/feriver94/dublancer-enterprise/blob/master/OPERATIONS_RUNBOOK.md#high-error-rate
+      - alert: DublancerHighLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(dublancer_http_request_duration_ms_bucket[10m]))) > 750
+        for: 15m
+        labels: { severity: warning, service: dublancer-enterprise }
+        annotations:
+          summary: Dublancer p95 latency exceeds the production objective
+      - alert: DublancerReadinessUnavailable
+        expr: min_over_time(up{job="dublancer-enterprise"}[5m]) < 1
+        for: 5m
+        labels: { severity: critical, service: dublancer-enterprise }
+        annotations:
+          summary: Dublancer is not ready in at least one region
+  - name: dublancer-workers
+    interval: 30s
+    rules:
+      - alert: DublancerQueueBacklog
+        expr: max(dublancer_queue_pending_jobs) > 100
+        for: 10m
+        labels: { severity: warning, service: dublancer-enterprise }
+        annotations:
+          summary: Background queue backlog is above capacity target
+      - alert: DublancerDeadLetters
+        expr: increase(dublancer_queue_jobs_total{result="dead_letter"}[15m]) > 0
+        for: 1m
+        labels: { severity: critical, service: dublancer-enterprise }
+        annotations:
+          summary: A background job entered the dead-letter queue
+      - alert: DublancerCacheInvalidationFailure
+        expr: increase(dublancer_cache_invalidations_total{result="failed"}[10m]) > 0
+        for: 2m
+        labels: { severity: warning, service: dublancer-enterprise }
+        annotations:
+          summary: Multi-region cache invalidation failed

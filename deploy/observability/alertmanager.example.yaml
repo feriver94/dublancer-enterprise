@@ -1,0 +1,25 @@
+route:
+  receiver: operations-webhook
+  group_by: [alertname, service, deployment_region]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: incident-webhook
+      repeat_interval: 30m
+receivers:
+  - name: operations-webhook
+    webhook_configs:
+      - url: ${ALERTMANAGER_WEBHOOK_URL}
+        send_resolved: true
+        max_alerts: 25
+  - name: incident-webhook
+    webhook_configs:
+      - url: ${INCIDENT_WEBHOOK_URL}
+        send_resolved: true
+        max_alerts: 10
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname, service, deployment_region]

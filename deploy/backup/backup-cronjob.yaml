@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dublancer-postgres-backup
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: postgres:18.1-bookworm
+              command: ["/opt/dublancer/backup.sh"]
+              envFrom:
+                - secretRef: { name: dublancer-backup-secrets }
+              volumeMounts:
+                - { name: scripts, mountPath: /opt/dublancer, readOnly: true }
+                - { name: scratch, mountPath: /backup }
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+          volumes:
+            - name: scripts
+              configMap:
+                name: dublancer-backup-scripts
+                defaultMode: 0555
+            - name: scratch
+              emptyDir: {}

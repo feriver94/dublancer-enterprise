@@ -22,6 +22,10 @@
     "verify:security": "node scripts/verify-security.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
     "verify:secrets": "node scripts/verify-secrets.mjs",
+    "verify:environment": "node scripts/validate-environment.mjs",
+    "verify:production-config": "node scripts/verify-production-config.mjs",
+    "verify:backup": "node scripts/verify-backup.mjs",
+    "verify:supply-chain": "node scripts/verify-supply-chain.mjs",
     "verify:release": "prisma validate && prisma generate && npm run verify:migrations && npm run verify:locales && npm run verify:security && npm run verify:secrets && npm test && tsc --noEmit && eslint --quiet && next build",
     "seed": "node prisma/seed.mjs"
   },

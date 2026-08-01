@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dublancer-restore-verification
+spec:
+  schedule: "30 2 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: restore-verification
+              image: ghcr.io/feriver94/dublancer-enterprise:1.0.0
+              command: ["node", "scripts/verify-backup.mjs", "--manifest", "/restore/manifest.json", "--max-age-hours", "26"]
+              envFrom:
+                - secretRef: { name: dublancer-backup-secrets }
+              volumeMounts:
+                - { name: restore, mountPath: /restore, readOnly: true }
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+          volumes:
+            - name: restore
+              persistentVolumeClaim: { claimName: dublancer-restore-verification }
