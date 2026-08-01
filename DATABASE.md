@@ -1,5 +1,11 @@
 # Database — Sprint 29 Chat Domain
 
+## Phase A dual-profile foundation
+
+The complete `prisma/schema.prisma` now includes `PersonalIdentity`, `OnboardingProgress`, `AccountPersona`, `ClientProfile` and `PersonaEvent`, an optional `FreelancerProfile.personaId`, and `AuthSession.activePersonaId`. Apply `prisma/migrations/20260801090000_dual_profile_marketplace_phase_a/migration.sql` after the 18 Phase 0-10 migrations. The migration is additive and backfills existing accounts, memberships and provider profiles without rebinding live sessions or deleting released data.
+
+Do not use `prisma db push` in shared environments. Use `prisma migrate deploy`, then run `npm run test:phase-a:runtime` against a disposable integration environment for the full onboarding/session/persona contract.
+
 `prisma/schema.prisma` is the complete application schema through Sprint 29. It includes all pre-existing organization, authentication, authorization, project workspace, realtime, presence, and notification models plus the chat domain.
 
 ## Chat entities

@@ -13,6 +13,8 @@ export async function resolveAuthorization(context: TenantContext) {
       roleName: "Platform Admin",
       permissions: ["*"],
       isPlatformAdmin: true,
+      activePersonaId: context.activePersonaId ?? null,
+      activePersonaType: context.activePersonaType ?? null,
     };
   }
 
@@ -52,6 +54,8 @@ export async function resolveAuthorization(context: TenantContext) {
     roleName: membership.role?.name ?? null,
     permissions: membership.role?.permissions.map((x) => x.permission.key) ?? [],
     isPlatformAdmin: false,
+    activePersonaId: context.activePersonaId ?? null,
+    activePersonaType: context.activePersonaType ?? null,
   };
 }
 

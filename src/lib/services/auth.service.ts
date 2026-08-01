@@ -20,9 +20,37 @@ export class AuthService {
     }
     const passwordHash = await hashPassword(input.password);
     return prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data:{ email:input.email, displayName:input.displayName, passwordHash }, select:{id:true,email:true,displayName:true,isPlatformAdmin:true} });
+      const user = await tx.user.create({
+        data:{
+          email:input.email,
+          displayName:input.displayName,
+          passwordHash,
+          personalIdentity: {
+            create: {
+              preferredName: input.displayName,
+              countryCode: "AE",
+              timezone: "Asia/Dubai",
+              locale: "en-AE",
+              identityCompletedAt: new Date(),
+            },
+          },
+          onboardingProgress: {
+            create: {
+              status: "IN_PROGRESS",
+              stage: "PERSONAS",
+              selectedPersonaTypes: ["CLIENT", "ORGANIZATION"],
+            },
+          },
+        },
+        select:{id:true,email:true,displayName:true,isPlatformAdmin:true},
+      });
       const baseSlug = input.displayName.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "workspace";
-      const organization = await tx.organization.create({ data: { name: `${input.displayName}'s Workspace`, slug: `${baseSlug}-${randomBytes(4).toString("hex")}`, settings: { create: { timezone: "Asia/Dubai", defaultCurrency: "AED", defaultLocale: "en-AE", supportedLocales: ["en-AE", "ar-AE"], dataRegion: "UAE" } } } });
+      const organization = await tx.organization.create({ data: {
+        name: `${input.displayName}'s Workspace`,
+        slug: `${baseSlug}-${randomBytes(4).toString("hex")}`,
+        settings: { create: { timezone: "Asia/Dubai", defaultCurrency: "AED", defaultLocale: "en-AE", supportedLocales: ["en-AE", "ar-AE"], dataRegion: "UAE" } },
+        companyProfile: { create: { legalName: `${input.displayName}'s Workspace`, countryCode: "AE" } },
+      } });
       await tx.organizationIdentityPolicy.create({
         data: { organizationId: organization.id },
       });
@@ -31,6 +59,45 @@ export class AuthService {
       let ownerRoleId = "";
       for (const definition of DEFAULT_ROLES) { const role = await tx.role.create({ data: { organizationId: organization.id, name: definition.name, description: definition.description } }); if (definition.name === "Owner") ownerRoleId = role.id; await tx.rolePermission.createMany({ data: definition.permissions.map((key) => ({ roleId: role.id, permissionId: permissionIds.get(key)! })) }); }
       const membership = await tx.membership.create({ data: { userId: user.id, organizationId: organization.id, roleId: ownerRoleId, status: "ACTIVE" } });
+      const clientPersona = await tx.accountPersona.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          type: "CLIENT",
+          status: "DRAFT",
+          label: "Client",
+        },
+      });
+      await tx.clientProfile.create({
+        data: {
+          userId: user.id,
+          personaId: clientPersona.id,
+          displayName: input.displayName,
+          countryCode: "AE",
+          timezone: "Asia/Dubai",
+          locale: "en-AE",
+        },
+      });
+      const organizationPersona = await tx.accountPersona.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          type: "ORGANIZATION",
+          status: "ACTIVE",
+          label: organization.name,
+          activatedAt: new Date(),
+          lastUsedAt: new Date(),
+          events: {
+            create: {
+              actorUserId: user.id,
+              organizationId: organization.id,
+              type: "ACTIVATED",
+              fromStatus: "DRAFT",
+              toStatus: "ACTIVE",
+            },
+          },
+        },
+      });
       const starterPlan = await tx.subscriptionPlan.findFirst({ where: { code: "STARTER", isActive: true } });
       if (starterPlan) {
         const now = new Date();
@@ -58,7 +125,12 @@ export class AuthService {
         });
         await ensureSeatForMembership(tx, organization.id, membership.id, user.id);
       }
-      return { ...user, organizationId: organization.id };
+      return {
+        ...user,
+        organizationId: organization.id,
+        activePersonaId: organizationPersona.id,
+        onboardingRequired: true,
+      };
     });
   }
 
@@ -186,6 +258,7 @@ export class AuthService {
     metadata: { ipAddress: string | null; userAgent: string | null };
     deviceLabel?: string;
     trustedDeviceId?: string;
+    activePersonaId?: string;
   }) {
     const [user, policy] = await Promise.all([
       prisma.user.findUniqueOrThrow({
@@ -195,6 +268,7 @@ export class AuthService {
           email: true,
           displayName: true,
           isPlatformAdmin: true,
+          onboardingProgress: { select: { status: true, stage: true } },
         },
       }),
       input.organizationId
@@ -225,6 +299,19 @@ export class AuthService {
     const idleMs = (policy?.sessionIdleMinutes ?? 720) * 60_000;
     const refreshToken = createRefreshToken();
     const now = new Date();
+    let activePersonaId = input.activePersonaId;
+    if (input.organizationId && !activePersonaId) {
+      const recentPersona = await prisma.accountPersona.findFirst({
+        where: {
+          userId: input.userId,
+          organizationId: input.organizationId,
+          status: "ACTIVE",
+        },
+        orderBy: [{ lastUsedAt: "desc" }, { activatedAt: "desc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      activePersonaId = recentPersona?.id;
+    }
     const session = await prisma.$transaction(async (tx) => {
       await tx.authSession.updateMany({
         where: {
@@ -240,6 +327,7 @@ export class AuthService {
       return tx.authSession.create({ data: {
         userId: input.userId,
         organizationId: input.organizationId,
+        activePersonaId,
         refreshTokenHash: hashRefreshToken(refreshToken),
         userAgent: input.metadata.userAgent,
         ipAddress: input.metadata.ipAddress,
@@ -262,14 +350,18 @@ export class AuthService {
       sub: user.id,
       sessionId: session.id,
       organizationId: input.organizationId,
+      activePersonaId,
       isPlatformAdmin: user.isPlatformAdmin,
     });
     return {
       user,
       sessionId: session.id,
       organizationId: input.organizationId,
+      activePersonaId: activePersonaId ?? null,
       accessToken,
       refreshToken,
+      onboardingRequired: user.onboardingProgress?.status !== "COMPLETED",
+      onboardingStage: user.onboardingProgress?.stage ?? "IDENTITY",
     };
   }
 
@@ -333,13 +425,27 @@ export class AuthService {
       }
     }
 
+    let activePersonaId = current.activePersonaId;
+    if (nextOrganizationId !== current.organizationId || !activePersonaId) {
+      activePersonaId = nextOrganizationId
+        ? (await prisma.accountPersona.findFirst({
+            where: {
+              userId: current.userId,
+              organizationId: nextOrganizationId,
+              status: "ACTIVE",
+            },
+            orderBy: [{ lastUsedAt: "desc" }, { activatedAt: "desc" }, { createdAt: "asc" }],
+            select: { id: true },
+          }))?.id ?? null
+        : null;
+    }
     const nextRaw = createRefreshToken();
     const policy = nextOrganizationId
       ? await prisma.organizationIdentityPolicy.findUnique({
           where: { organizationId: nextOrganizationId },
         })
       : null;
-    let next: { id: string; organizationId: string | null };
+    let next: { id: string; organizationId: string | null; activePersonaId: string | null };
 
     try {
       next = await prisma.$transaction(async tx => {
@@ -363,6 +469,7 @@ export class AuthService {
 
         return tx.authSession.create({data:{
           userId:current.userId, organizationId:nextOrganizationId,
+          activePersonaId,
           refreshTokenHash:hashRefreshToken(nextRaw), userAgent:current.userAgent, ipAddress:current.ipAddress,
           deviceLabel:current.deviceLabel, rotatedFromSessionId:current.id,
           authMethod:current.authMethod, assuranceLevel:current.assuranceLevel,
@@ -385,7 +492,7 @@ export class AuthService {
       throw error;
     }
 
-    const accessToken = await signAccessToken({sub:current.userId,sessionId:next.id,organizationId:next.organizationId,isPlatformAdmin:current.user.isPlatformAdmin});
-    return {accessToken,refreshToken:nextRaw,sessionId:next.id,organizationId:next.organizationId};
+    const accessToken = await signAccessToken({sub:current.userId,sessionId:next.id,organizationId:next.organizationId,activePersonaId:next.activePersonaId,isPlatformAdmin:current.user.isPlatformAdmin});
+    return {accessToken,refreshToken:nextRaw,sessionId:next.id,organizationId:next.organizationId,activePersonaId:next.activePersonaId};
   }
 }

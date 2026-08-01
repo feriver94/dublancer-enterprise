@@ -8,6 +8,7 @@ import { apiGet, apiMutation, resetApiClientCsrf } from "@/lib/client/api-client
 
 type NavigationItem = { href: string; label: string };
 type Profile = { displayName: string | null; email: string };
+type Persona = { id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; label: string; organizationName: string };
 type SearchResult = {
   id: string;
   entityType: string;
@@ -33,6 +34,10 @@ type Labels = {
   logout: string;
   loggingOut: string;
   logoutFailed: string;
+  activePersona: string;
+  switchPersona: string;
+  managePersonas: string;
+  switchingPersona: string;
   organization: string;
   openWorkspace: string;
   dashboard: string;
@@ -57,6 +62,8 @@ export default function NavbarClient({
   items,
   authenticated,
   profile,
+  personas = [],
+  activePersonaId,
   canViewOrganization,
   workspaceHref,
   labels,
@@ -64,6 +71,8 @@ export default function NavbarClient({
   items: NavigationItem[];
   authenticated: boolean;
   profile?: Profile | null;
+  personas?: Persona[];
+  activePersonaId?: string | null;
   canViewOrganization: boolean;
   workspaceHref: string;
   labels: Labels;
@@ -78,6 +87,7 @@ export default function NavbarClient({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [switchingPersonaId, setSwitchingPersonaId] = useState("");
   const primaryItems = items.slice(0, 5);
   const overflowItems = items.slice(5);
 
@@ -139,6 +149,21 @@ export default function NavbarClient({
     } catch (reason) {
       setLoggingOut(false);
       window.alert(reason instanceof Error ? reason.message : labels.logoutFailed);
+    }
+  }
+
+  async function switchPersona(personaId: string) {
+    if (personaId === activePersonaId || switchingPersonaId) return;
+    setSwitchingPersonaId(personaId);
+    try {
+      const result = await apiMutation<{ redirectTo?: string }>("/api/personas/switch", "POST", { personaId });
+      resetApiClientCsrf();
+      setProfileOpen(false);
+      router.replace(result.redirectTo || "/dashboard");
+      router.refresh();
+    } catch (reason) {
+      window.alert(reason instanceof Error ? reason.message : labels.switchPersona);
+      setSwitchingPersonaId("");
     }
   }
 
@@ -213,6 +238,24 @@ export default function NavbarClient({
                     <p className="truncate font-bold text-[#0F4C5C]">{profile.displayName || labels.account}</p>
                     <p className="truncate text-xs text-slate-500">{profile.email}</p>
                     <div className="my-3 border-t border-slate-100" />
+                    {personas.length ? (
+                      <div className="grid gap-1" aria-label={labels.switchPersona}>
+                        <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{labels.activePersona}</p>
+                        {personas.map((persona) => (
+                          <button
+                            key={persona.id}
+                            type="button"
+                            disabled={Boolean(switchingPersonaId) || persona.id === activePersonaId}
+                            onClick={() => void switchPersona(persona.id)}
+                            className={`rounded-xl px-3 py-2 text-start text-sm hover:bg-slate-50 disabled:opacity-70 ${persona.id === activePersonaId ? "bg-emerald-50 font-bold text-[#007A36]" : ""}`}
+                          >
+                            <span className="block font-bold">{switchingPersonaId === persona.id ? labels.switchingPersona : persona.label}</span>
+                            <span className="block text-xs text-slate-500">{persona.type} · {persona.organizationName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <Link href="/account/personas" className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-50">{labels.managePersonas}</Link>
                     {canViewOrganization ? <Link href="/organization" className="block rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-50">{labels.organization}</Link> : null}
                     <Link href="/identity" className="block rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-50">{labels.account}</Link>
                     <button type="button" disabled={loggingOut} onClick={() => void logout()} className="mt-1 w-full rounded-xl px-3 py-2 text-start text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60">

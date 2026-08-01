@@ -7,6 +7,7 @@ import { paymentProvider, storageProvider } from "@/lib/providers/integrations";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { requirePermission } from "@/lib/authorization/permission-resolver";
 import { paymentWebhookSchema } from "@/lib/validation/product";
+import { requireActivePersona } from "@/lib/authorization/persona-policy";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -98,10 +99,29 @@ export class MarketplaceService {
 
   async upsertProfile(context: TenantContext, input: Record<string, unknown>) {
     const data = input as Prisma.FreelancerProfileUncheckedCreateInput;
-    const profile = await prisma.freelancerProfile.upsert({
-      where: { userId: context.userId },
-      create: { ...data, userId: context.userId },
-      update: data,
+    const profile = await prisma.$transaction(async (tx) => {
+      let persona = await tx.accountPersona.findFirst({
+        where: { userId: context.userId, type: "FREELANCER" },
+      });
+      persona ??= await tx.accountPersona.create({
+        data: {
+          userId: context.userId,
+          organizationId: context.organizationId,
+          type: "FREELANCER",
+          status: "DRAFT",
+          label: String(data.headline ?? "Freelancer"),
+        },
+      });
+      const saved = await tx.freelancerProfile.upsert({
+        where: { userId: context.userId },
+        create: { ...data, userId: context.userId, personaId: persona.id },
+        update: { ...data, personaId: persona.id },
+      });
+      await tx.accountPersona.update({
+        where: { id: persona.id },
+        data: { label: saved.headline },
+      });
+      return saved;
     });
     return profile;
   }
@@ -358,6 +378,7 @@ export class MarketplaceService {
           },
         });
         if (!proposal) throw new AppError("NOT_FOUND", "Proposal not found.", 404);
+        requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
         if (!proposal.providerOrganizationId || !proposal.submittedBy.memberships.some((membership) => membership.organizationId === proposal.providerOrganizationId)) {
           throw new AppError("CONFLICT", "The provider no longer has an active membership in the proposing organization.", 409);
         }

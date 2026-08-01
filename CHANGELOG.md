@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase A — Dual-Profile Marketplace Architecture — 2026-08-01
+
+- Added one-account client, freelancer/provider and organization persona architecture with personal identity and guided-onboarding state.
+- Added session/JWT persona binding, audited persona activation and switching, active-membership enforcement, and persona capability checks composed with existing RBAC.
+- Added bilingual `/onboarding` and `/account/personas` experiences plus a global authenticated-navbar persona switcher.
+- Added additive migration `20260801090000_dual_profile_marketplace_phase_a`, compatibility backfill, static contracts, a fresh-database runtime verifier and Phase A architecture documentation.
+- Preserved Phase 0-10 and Sprint 1 behavior; deferred dashboards, public profiles, reviews, contract persona workflows, AI profile features, marketplace redesign and search expansion.
+
 ## Final Enterprise Release — 2026-07-17
 
 - Integrated the complete commercial platform and all inherited capabilities into one final source release.

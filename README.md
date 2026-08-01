@@ -4,6 +4,7 @@ Dublancer is a bilingual, UAE-ready enterprise work platform. This repository is
 
 ## Product capabilities
 
+- One secure account with separate client, freelancer/provider and organization personas, guided bilingual onboarding, session-bound persona switching and persona-plus-RBAC authorization.
 - Signed secure sessions, refresh rotation, account recovery, CSRF, lockout controls, organizations, invitations, RBAC, audit and tenant isolation.
 - Marketplace opportunities, profiles, skills, proposals and revisions, saved listings, talent pools, vendor onboarding and explainable matching.
 - Project rooms with members, tasks, dependencies, milestones, comments, attachments, time, deliverables, change requests, risk and activity.
@@ -15,7 +16,9 @@ Dublancer is a bilingual, UAE-ready enterprise work platform. This repository is
 - Universal tenant search, analytics, security events, feature flags, branding, support, exports, moderation, retention and operations health.
 - Complete `en-AE` / `ar-AE` parity, runtime language direction, responsive RTL, `Asia/Dubai` timezone and AED formatting.
 
-Primary authenticated interfaces are available at `/platform`, `/marketplace`, `/workspace`, `/communications/chat`, `/notifications`, `/files`, `/ai-copilot`, `/contracts`, `/payments`, `/billing`, `/orchestration`, `/analytics`, `/search` and `/admin-control`.
+Primary authenticated interfaces are available at `/onboarding`, `/account/personas`, `/platform`, `/marketplace`, `/workspace`, `/communications/chat`, `/notifications`, `/files`, `/ai-copilot`, `/contracts`, `/payments`, `/billing`, `/orchestration`, `/analytics`, `/search` and `/admin-control`.
+
+See `PHASE_A_DUAL_PROFILE_ARCHITECTURE.md` for the dual-profile account, session, activation, migration and authorization contracts.
 
 ## Windows installation
 

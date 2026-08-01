@@ -25,6 +25,7 @@ const phase7MigrationName = "20260723090000_subscriptions_members_email_security
 const phase8MigrationName = "20260728120000_enterprise_identity_observability_scalability";
 const phase9MigrationName = "20260729100000_enterprise_crm_talent_knowledge_integrations";
 const phase10MigrationName = "20260730150000_enterprise_production_performance";
+const phaseAMigrationName = "20260801090000_dual_profile_marketplace_phase_a";
 const commercialSql = migrationSql[entries.indexOf(commercialMigrationName)];
 const phase4Sql = migrationSql[entries.indexOf(phase4MigrationName)];
 const phase5Sql = migrationSql[entries.indexOf(phase5MigrationName)];
@@ -33,6 +34,7 @@ const phase7Sql = migrationSql[entries.indexOf(phase7MigrationName)];
 const phase8Sql = migrationSql[entries.indexOf(phase8MigrationName)];
 const phase9Sql = migrationSql[entries.indexOf(phase9MigrationName)];
 const phase10Sql = migrationSql[entries.indexOf(phase10MigrationName)];
+const phaseASql = migrationSql[entries.indexOf(phaseAMigrationName)];
 for (const table of ["WorkGraphNode", "WorkflowDefinition", "WorkflowRun", "WorkflowApproval", "TalentMatch", "RateLimitBucket"]) {
   if (!completeSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Migration history is missing ${table}.`);
 }
@@ -60,6 +62,12 @@ for (const table of ["CrmPipeline", "CrmLead", "CrmOpportunity", "CrmQuote", "Ta
 for (const index of ["SearchQueryLog_organizationId_durationMs_createdAt_idx", "PerformanceProfile_organizationId_status_startedAt_idx", "BackgroundJob_organizationId_queue_status_priority_availableAt_idx", "IntegrationRun_organizationId_status_availableAt_idx"]) {
   if (!phase10Sql?.includes(`CREATE INDEX \"${index}\"`)) throw new Error(`Phase 10 migration is missing ${index}.`);
 }
-if (entries.at(-1) !== phase10MigrationName) throw new Error("Phase 10 migration must be the latest chronological migration.");
+for (const table of ["PersonalIdentity", "OnboardingProgress", "AccountPersona", "ClientProfile", "PersonaEvent"]) {
+  if (!phaseASql?.includes(`CREATE TABLE \"${table}\"`)) throw new Error(`Phase A migration is missing ${table}.`);
+}
+for (const index of ["AccountPersona_one_client_per_account_key", "AccountPersona_one_freelancer_per_account_key", "AuthSession_activePersonaId_status_idx"]) {
+  if (!phaseASql?.includes(`CREATE UNIQUE INDEX \"${index}\"`) && !phaseASql?.includes(`CREATE INDEX \"${index}\"`)) throw new Error(`Phase A migration is missing ${index}.`);
+}
+if (entries.at(-1) !== phaseAMigrationName) throw new Error("Phase A migration must be the latest chronological migration.");
 if (/\bDROP\s+(TABLE|COLUMN|TYPE)\b/i.test(finalSql)) throw new Error("Final migration contains a destructive DROP statement.");
-console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial and Phase 4-10 migrations).`);
+console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial, Phase 4-10 and Dual-Profile Phase A migrations).`);

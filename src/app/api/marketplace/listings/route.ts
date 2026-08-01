@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/authorization/permission-resolver";
 import { apiError, apiSuccess } from "@/lib/http/api-response";
 import { MarketplaceService } from "@/lib/services/product-platform.service";
 import { createListingSchema, listingQuerySchema } from "@/lib/validation/product";
+import { requirePersonaPermission } from "@/lib/authorization/persona-policy";
 
 export const dynamic = "force-dynamic";
 const service = new MarketplaceService();
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireCsrfToken(request);
     const context = await getAuthenticatedContext();
-    await requirePermission(context, "marketplace.listing.manage");
+    await requirePersonaPermission(context, "marketplace.listing.manage", ["CLIENT", "ORGANIZATION"]);
     return apiSuccess(await service.createListing(context, createListingSchema.parse(await request.json())), 201);
   } catch (error) { return apiError(error); }
 }

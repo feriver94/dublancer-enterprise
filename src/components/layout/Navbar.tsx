@@ -24,10 +24,14 @@ export default async function Navbar({
   authenticated,
   permissions: suppliedPermissions,
   profile: suppliedProfile,
+  personas: suppliedPersonas,
+  activePersonaId: suppliedActivePersonaId,
 }: {
   authenticated?: boolean;
   permissions?: string[];
   profile?: { displayName: string | null; email: string } | null;
+  personas?: Array<{ id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; label: string; organizationName: string }>;
+  activePersonaId?: string | null;
 }) {
   const t = await getTranslations("Navigation");
   const common = await getTranslations("Common");
@@ -35,6 +39,8 @@ export default async function Navbar({
   let permissions = suppliedPermissions ?? [];
   let profile = suppliedProfile;
   let userId: string | null = null;
+  let personas = suppliedPersonas ?? [];
+  let activePersonaId = suppliedActivePersonaId ?? null;
 
   if (isAuthenticated === undefined) {
     try {
@@ -43,6 +49,7 @@ export default async function Navbar({
       isAuthenticated = true;
       permissions = authorization.permissions;
       userId = context.userId;
+      activePersonaId = context.activePersonaId ?? null;
     } catch (error) {
       if (isAppError(error) && [401, 403].includes(error.statusCode)) {
         isAuthenticated = false;
@@ -64,10 +71,14 @@ export default async function Navbar({
   }
 
   if (isAuthenticated && profile === undefined && userId) {
-    profile = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { displayName: true, email: true },
-    });
+    [profile, personas] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { displayName: true, email: true } }),
+      prisma.accountPersona.findMany({
+        where: { userId, status: "ACTIVE", organization: { status: "ACTIVE" } },
+        select: { id: true, type: true, label: true, organization: { select: { name: true } } },
+        orderBy: [{ lastUsedAt: "desc" }, { type: "asc" }],
+      }).then((items) => items.map((item) => ({ id: item.id, type: item.type, label: item.label, organizationName: item.organization.name }))),
+    ]);
   }
 
   const can = (permission?: string) =>
@@ -84,6 +95,8 @@ export default async function Navbar({
       <NavbarClient
         authenticated={Boolean(isAuthenticated)}
         profile={profile}
+        personas={personas}
+        activePersonaId={activePersonaId}
         items={visibleItems.map((item) => ({ href: item.href, label: t(item.key) }))}
         canViewOrganization={Boolean(isAuthenticated && can("organization.read"))}
         workspaceHref={can("project.read") ? "/workspace" : "/dashboard"}
@@ -92,6 +105,7 @@ export default async function Navbar({
           menu: t("menu"), closeMenu: t("closeMenu"), more: t("more"), search: common("search"),
           searchPlaceholder: t("searchPlaceholder"), searchHint: t("searchHint"), noSearchResults: t("noSearchResults"),
           profile: t("profile"), account: t("account"), logout: t("logout"), loggingOut: t("loggingOut"), logoutFailed: t("logoutFailed"),
+          activePersona: t("activePersona"), switchPersona: t("switchPersona"), managePersonas: t("managePersonas"), switchingPersona: t("switchingPersona"),
           organization: t("organization"), openWorkspace: t("openWorkspace"), dashboard: t("dashboard"), login: t("login"), startFree: t("startFree"),
         }}
       />

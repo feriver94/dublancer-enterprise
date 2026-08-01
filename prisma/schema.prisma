@@ -58,6 +58,42 @@ enum SessionStatus {
   EXPIRED
 }
 
+enum AccountPersonaType {
+  CLIENT
+  FREELANCER
+  ORGANIZATION
+}
+
+enum AccountPersonaStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum OnboardingStage {
+  IDENTITY
+  PERSONAS
+  PROFILES
+  REVIEW
+  COMPLETE
+}
+
+enum PersonaEventType {
+  CREATED
+  ACTIVATED
+  SUSPENDED
+  REACTIVATED
+  SWITCHED
+  ONBOARDING_COMPLETED
+}
+
 model User {
   id                         String                    @id @default(cuid())
   email                      String                    @unique
@@ -133,6 +169,11 @@ model User {
   chatMentions               ChatMention[]
   chatReactions              ChatReaction[]
   freelancerProfile          FreelancerProfile?
+  personalIdentity           PersonalIdentity?
+  clientProfile              ClientProfile?
+  onboardingProgress         OnboardingProgress?
+  accountPersonas            AccountPersona[]
+  personaEvents              PersonaEvent[]             @relation("PersonaEventActor")
   createdListings            MarketplaceListing[]      @relation("ListingCreator")
   savedListings              SavedListing[]
   submittedProposals         Proposal[]                @relation("ProposalSubmitter")
@@ -218,6 +259,8 @@ model Organization {
   activities               OrganizationActivity[]
   chatChannels             ChatChannel[]
   companyProfile           CompanyProfile?
+  accountPersonas          AccountPersona[]
+  personaEvents            PersonaEvent[]
   marketplaceListings      MarketplaceListing[]
   talentPools              TalentPool[]
   vendorOnboardings        VendorOnboarding[]            @relation("VendorClientOrganization")
@@ -500,6 +543,7 @@ model AuthSession {
   id                   String                 @id @default(cuid())
   userId               String
   organizationId       String?
+  activePersonaId      String?
   status               SessionStatus          @default(ACTIVE)
   refreshTokenHash     String                 @unique
   userAgent            String?
@@ -516,15 +560,112 @@ model AuthSession {
   revokedAt            DateTime?
   rotatedFromSessionId String?
   user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activePersona        AccountPersona?        @relation(fields: [activePersonaId], references: [id], onDelete: SetNull)
   trustedDevice        VerifiedDevice?        @relation(fields: [trustedDeviceId], references: [id], onDelete: SetNull)
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
   @@index([userId, status])
   @@index([organizationId, status])
+  @@index([activePersonaId, status])
   @@index([trustedDeviceId, status])
   @@index([userId, assuranceLevel, status])
   @@index([expiresAt])
+}
+
+model PersonalIdentity {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  preferredName       String
+  legalFirstName      String?
+  legalLastName       String?
+  phoneCountryCode    String?
+  phoneNumber         String?
+  countryCode         String   @default("AE")
+  timezone            String   @default("Asia/Dubai")
+  locale              String   @default("en-AE")
+  identityCompletedAt DateTime?
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([countryCode, locale])
+}
+
+model OnboardingProgress {
+  id                   String               @id @default(cuid())
+  userId               String               @unique
+  status               OnboardingStatus     @default(NOT_STARTED)
+  stage                OnboardingStage      @default(IDENTITY)
+  selectedPersonaTypes AccountPersonaType[] @default([])
+  completedAt          DateTime?
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+model AccountPersona {
+  id                String               @id @default(cuid())
+  userId            String
+  organizationId    String
+  type              AccountPersonaType
+  status            AccountPersonaStatus @default(DRAFT)
+  label             String
+  activatedAt       DateTime?
+  suspendedAt       DateTime?
+  lastUsedAt        DateTime?
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientProfile     ClientProfile?
+  freelancerProfile FreelancerProfile?
+  sessions          AuthSession[]
+  events            PersonaEvent[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([userId, type, organizationId])
+  @@index([userId, status, lastUsedAt])
+  @@index([organizationId, type, status])
+}
+
+model ClientProfile {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  personaId      String         @unique
+  displayName    String
+  headline       String?
+  about          String?
+  countryCode    String         @default("AE")
+  timezone       String         @default("Asia/Dubai")
+  locale         String         @default("en-AE")
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  persona        AccountPersona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([countryCode, updatedAt])
+}
+
+model PersonaEvent {
+  id             String           @id @default(cuid())
+  personaId      String
+  actorUserId    String
+  organizationId String
+  type           PersonaEventType
+  fromStatus     AccountPersonaStatus?
+  toStatus       AccountPersonaStatus?
+  sessionId      String?
+  metadata       Json?
+  persona        AccountPersona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  actor          User             @relation("PersonaEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+
+  @@index([personaId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([organizationId, type, createdAt])
 }
 
 model LoginEvent {
@@ -1625,6 +1766,7 @@ model NotificationDelivery {
 model FreelancerProfile {
   id                String              @id @default(cuid())
   userId            String              @unique
+  personaId         String?             @unique
   headline          String
   bio               String?
   hourlyRateMinor   BigInt?
@@ -1637,6 +1779,7 @@ model FreelancerProfile {
   searchText        String?
   isPublic          Boolean             @default(true)
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  persona           AccountPersona?     @relation(fields: [personaId], references: [id], onDelete: SetNull)
   skills            FreelancerSkill[]
   portfolioItems    PortfolioItem[]
   workExperiences   WorkExperience[]

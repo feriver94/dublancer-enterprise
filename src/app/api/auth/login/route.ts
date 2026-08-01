@@ -47,6 +47,9 @@ export async function POST(request: NextRequest) {
           user: result.user,
           sessionId: result.sessionId,
           organizationId: result.organizationId,
+          activePersonaId: result.activePersonaId,
+          onboardingRequired: result.onboardingRequired,
+          onboardingStage: result.onboardingStage,
         });
       },
     );

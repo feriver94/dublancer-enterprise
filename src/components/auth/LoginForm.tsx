@@ -26,12 +26,12 @@ export default function LoginForm({ returnTo }: { returnTo?: string }) {
     setError("");
     const data = new FormData(event.currentTarget);
     try {
-      await apiMutation("/api/auth/login", "POST", {
+      const result = await apiMutation<{ onboardingRequired?: boolean }>("/api/auth/login", "POST", {
         email: data.get("email"),
         password: data.get("password"),
       });
       resetApiClientCsrf();
-      router.replace(safeReturnTo(returnTo));
+      router.replace(result.onboardingRequired ? "/onboarding" : safeReturnTo(returnTo));
       router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("requestFailed"));

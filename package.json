@@ -24,6 +24,7 @@
     "test:phase9:runtime": "node scripts/verify-phase9-runtime.mjs",
     "test:phase10:runtime": "node scripts/verify-phase10-runtime.mjs",
     "test:sprint1:runtime": "node scripts/verify-phase10-runtime.mjs",
+    "test:phase-a:runtime": "node scripts/verify-phase-a-runtime.mjs",
     "test:browser": "playwright test",
     "test:browser:list": "playwright test --list",
     "load:test": "node scripts/load-test.mjs",

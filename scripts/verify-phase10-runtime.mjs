@@ -276,11 +276,8 @@ try {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
-  assert.equal(migrations.length, 18, "Phase 10 must apply exactly 18 migrations.");
-  assert.equal(
-    migrations.at(-1),
-    "20260730150000_enterprise_production_performance",
-  );
+  assert.ok(migrations.length >= 18, "Phase 10 and later additive migrations must remain available.");
+  assert.ok(migrations.includes("20260730150000_enterprise_production_performance"));
   for (const migration of migrations) {
     await pglite.exec(
       await readFile(

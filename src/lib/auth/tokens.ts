@@ -9,11 +9,12 @@ function key() {
 }
 
 export async function signAccessToken(input: {
-  sub: string; sessionId: string; organizationId: string | null; isPlatformAdmin: boolean;
+  sub: string; sessionId: string; organizationId: string | null; activePersonaId?: string | null; isPlatformAdmin: boolean;
 }) {
   return new SignJWT({
     sessionId: input.sessionId,
     organizationId: input.organizationId,
+    activePersonaId: input.activePersonaId ?? null,
     isPlatformAdmin: input.isPlatformAdmin,
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
@@ -32,6 +33,7 @@ export async function verifyAccessToken(token: string) {
     sub: payload.sub,
     sessionId: payload.sessionId,
     organizationId: typeof payload.organizationId === "string" ? payload.organizationId : null,
+    activePersonaId: typeof payload.activePersonaId === "string" ? payload.activePersonaId : null,
     isPlatformAdmin: payload.isPlatformAdmin === true,
   };
 }

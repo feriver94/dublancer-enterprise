@@ -1,5 +1,20 @@
 # Sprint 29 Verification
 
+## Phase A verification
+
+```powershell
+npm.cmd test
+npm.cmd run test:phase-a:runtime
+npm.cmd run verify:migrations
+npm.cmd run verify:locales
+npm.cmd run verify:security
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run build
+```
+
+The Phase A runtime uses a new PostgreSQL-compatible database, applies all 19 chronological migrations, runs the real seed, boots the live application and proves one-account/three-persona onboarding, activation, session-bound switching, cross-account denial and persona-plus-RBAC marketplace authorization.
+
 Run the committed PowerShell verifier:
 
 ```powershell

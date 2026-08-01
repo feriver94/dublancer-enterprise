@@ -19,6 +19,9 @@ export async function GET() {
         isPlatformAdmin: true,
         createdAt: true,
         updatedAt: true,
+        onboardingProgress: {
+          select: { status: true, stage: true, selectedPersonaTypes: true, completedAt: true },
+        },
       },
     });
 
@@ -43,6 +46,11 @@ export async function GET() {
       user,
       authorization,
       organizationRequired: !context.organizationId,
+      activePersona: {
+        id: context.activePersonaId,
+        type: context.activePersonaType,
+      },
+      onboardingRequired: user.onboardingProgress?.status !== "COMPLETED",
     });
   } catch (error) {
     return apiError(error);

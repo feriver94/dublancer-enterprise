@@ -22,11 +22,19 @@ export default async function AuthenticatedShell({
 }) {
   let permissions: string[];
   let profile: { displayName: string | null; email: string } | null;
+  let personas: Array<{ id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; label: string; organizationName: string }> = [];
+  let activePersonaId: string | null = null;
   try {
     const context = await getAuthenticatedContext();
-    [permissions, profile] = await Promise.all([
+    activePersonaId = context.activePersonaId ?? null;
+    [permissions, profile, personas] = await Promise.all([
       resolveAuthorization(context).then((authorization) => authorization.permissions),
       prisma.user.findUnique({ where: { id: context.userId }, select: { displayName: true, email: true } }),
+      prisma.accountPersona.findMany({
+        where: { userId: context.userId, status: "ACTIVE", organization: { status: "ACTIVE" } },
+        select: { id: true, type: true, label: true, organization: { select: { name: true } } },
+        orderBy: [{ lastUsedAt: "desc" }, { type: "asc" }],
+      }).then((items) => items.map((item) => ({ id: item.id, type: item.type, label: item.label, organizationName: item.organization.name }))),
     ]);
   } catch (error) {
     if (isAppError(error) && [401, 403].includes(error.statusCode)) {
@@ -37,7 +45,7 @@ export default async function AuthenticatedShell({
 
   return (
     <>
-      <Navbar authenticated permissions={permissions} profile={profile} />
+      <Navbar authenticated permissions={permissions} profile={profile} personas={personas} activePersonaId={activePersonaId} />
       {children}
       <Footer />
     </>

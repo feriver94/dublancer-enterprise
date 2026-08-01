@@ -20,7 +20,12 @@ export async function getAuthenticatedContext() {
       expiresAt: { gt: new Date() },
       OR: [{ idleExpiresAt: null }, { idleExpiresAt: { gt: new Date() } }],
     },
-    include: { user: { select: { isPlatformAdmin: true } } },
+    include: {
+      user: { select: { isPlatformAdmin: true } },
+      activePersona: {
+        select: { id: true, userId: true, organizationId: true, type: true, status: true },
+      },
+    },
   });
   if (!session) throw new AppError("UNAUTHORIZED", "Session is no longer active.", 401);
 
@@ -30,6 +35,19 @@ export async function getAuthenticatedContext() {
       "Session organization context is invalid.",
       401,
     );
+  }
+
+  if (claims.activePersonaId !== session.activePersonaId) {
+    throw new AppError("UNAUTHORIZED", "Session persona context is invalid.", 401);
+  }
+
+  if (
+    session.activePersona &&
+    (session.activePersona.userId !== session.userId ||
+      session.activePersona.organizationId !== session.organizationId ||
+      session.activePersona.status !== "ACTIVE")
+  ) {
+    throw new AppError("FORBIDDEN", "The active persona is no longer available.", 403);
   }
 
   if (!session.user.isPlatformAdmin) {
@@ -86,6 +104,8 @@ export async function getAuthenticatedContext() {
     authMethod: session.authMethod,
     stepUpExpiresAt: session.stepUpExpiresAt,
     trustedDeviceId: session.trustedDeviceId,
+    activePersonaId: session.activePersona?.id ?? null,
+    activePersonaType: session.activePersona?.type ?? null,
   };
 }
 
