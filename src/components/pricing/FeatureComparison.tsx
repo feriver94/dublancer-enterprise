@@ -24,7 +24,7 @@ export default function FeatureComparison() {
             <div key={feature} style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) 90px 90px 110px", gap: 12, alignItems: "center", padding: 16, borderRadius: brand.radius.md, background: brand.colors.background, border: `1px solid ${brand.colors.border}` }}>
               <strong style={{ color: brand.colors.navy }}>{feature}</strong>
               <span style={{ color: brand.colors.muted }}>{starter}</span>
-              <span style={{ color: brand.colors.green, fontWeight: brand.typography.weight.bold }}>{business}</span>
+              <span style={{ color: "#00612B", fontWeight: brand.typography.weight.bold }}>{business}</span>
               <span style={{ color: brand.colors.navy, fontWeight: brand.typography.weight.bold }}>{enterprise}</span>
             </div>
           ))}

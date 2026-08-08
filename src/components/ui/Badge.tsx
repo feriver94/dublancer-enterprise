@@ -8,7 +8,7 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 const variants: Record<BadgeVariant, string> = {
-  success: "border-[#009A44]/30 bg-[#009A44]/10 text-[#009A44]",
+  success: "border-[#009A44]/30 bg-[#009A44]/10 text-[#00612B]",
   danger: "border-[#EF3340]/30 bg-[#EF3340]/10 text-[#EF3340]",
   info: "border-[#0F4C5C]/30 bg-[#0F4C5C]/10 text-[#0F4C5C]",
   neutral: "border-gray-200 bg-gray-50 text-gray-700",

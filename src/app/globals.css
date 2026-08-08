@@ -70,7 +70,7 @@ a {
 .enterprise-loading, .enterprise-empty { padding: 56px 12px; text-align: center; color: #657786; }
 .auth-form { display: grid; gap: 16px; max-width: 520px; }
 .auth-form label { display: grid; gap: 6px; font-weight: 700; }
-.auth-form button { border: 0; border-radius: 10px; padding: 13px 18px; background: #0d8b77; color: white; font-weight: 800; cursor: pointer; }
+.auth-form button { border: 0; border-radius: 10px; padding: 13px 18px; background: #00612b; color: white; font-weight: 800; cursor: pointer; }
 .auth-form button:disabled { opacity: .6; cursor: wait; }
 [dir="rtl"] .enterprise-console, [dir="rtl"] .auth-form { text-align: right; }
 @media (max-width: 860px) { .enterprise-console__grid { grid-template-columns: 1fr; } .enterprise-console__actions { position: static; } }
