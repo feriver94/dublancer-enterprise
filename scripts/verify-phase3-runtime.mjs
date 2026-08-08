@@ -12,12 +12,18 @@ import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const projectRoot = process.cwd();
 const runtimeBaseline = await captureRuntimeBaseline(projectRoot);
+const externalDatabaseUrl = process.env.PHASE3_DATABASE_URL?.trim() || null;
+const externalRedisUrl = process.env.PHASE3_REDIS_URL?.trim() || null;
+const externalRedisContainerId = process.env.PHASE3_REDIS_CONTAINER_ID?.trim() || null;
 const databasePort = Number(process.env.PHASE3_DATABASE_PORT ?? 55433);
-const redisPort = Number(process.env.PHASE3_REDIS_PORT ?? 6391);
+const redisPort = externalRedisUrl
+  ? Number(new URL(externalRedisUrl).port || 6379)
+  : Number(process.env.PHASE3_REDIS_PORT ?? 6391);
 const applicationPort = Number(process.env.PHASE3_APPLICATION_PORT ?? 3110);
 const productionRuntime = process.env.PHASE3_RUNTIME_SERVER === "production";
 const baseUrl = `http://127.0.0.1:${applicationPort}`;
-const databaseUrl = `postgresql://postgres:postgres@127.0.0.1:${databasePort}/postgres?schema=public`;
+const databaseUrl = externalDatabaseUrl
+  ?? `postgresql://postgres:postgres@127.0.0.1:${databasePort}/postgres?schema=public`;
 const temporaryDatabase = await mkdtemp(path.join(projectRoot, ".phase3-runtime-"));
 const prismaTemporaryDirectory = path.join(temporaryDatabase, "tmp");
 await mkdir(prismaTemporaryDirectory);
@@ -187,6 +193,27 @@ class TestRedisServer {
   }
 }
 
+class ExternalRedisServer {
+  constructor(containerId) {
+    this.containerId = containerId;
+  }
+
+  async start() {
+    if (!this.containerId) {
+      throw new Error("PHASE3_REDIS_CONTAINER_ID is required to verify real Redis recovery.");
+    }
+    await runRequired("docker", ["start", this.containerId]);
+    await waitForPort(redisPort);
+  }
+
+  async stop() {
+    if (!this.containerId) {
+      throw new Error("PHASE3_REDIS_CONTAINER_ID is required to verify a real Redis outage.");
+    }
+    await runRequired("docker", ["stop", "--time", "10", this.containerId]);
+  }
+}
+
 function startProcess(command, args, options = {}) {
   const child = spawn(command, args, {
     cwd: projectRoot,
@@ -304,12 +331,17 @@ function runRequired(command, args, env) {
   });
 }
 
-async function applyMigrations(database) {
+async function migrationDirectories() {
   const migrationsRoot = path.join(projectRoot, "prisma/migrations");
-  const entries = (await readdir(migrationsRoot, { withFileTypes: true }))
+  return (await readdir(migrationsRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
+}
+
+async function applyMigrations(database) {
+  const migrationsRoot = path.join(projectRoot, "prisma/migrations");
+  const entries = await migrationDirectories();
   assert.ok(entries.length > 0, "At least one migration is required.");
   for (const migration of entries) {
     const sql = await readFile(path.join(migrationsRoot, migration, "migration.sql"), "utf8");
@@ -319,23 +351,30 @@ async function applyMigrations(database) {
   return entries;
 }
 
-const redisServer = new TestRedisServer();
+const redisServer = externalRedisUrl
+  ? new ExternalRedisServer(externalRedisContainerId)
+  : new TestRedisServer();
 let prisma;
 let pglite;
 let postgresServer;
 
 try {
-  pglite = new PGlite(path.join(temporaryDatabase, "database"));
-  await pglite.waitReady;
-  const appliedMigrations = await applyMigrations(pglite);
-  postgresServer = new PGLiteSocketServer({
-    db: pglite,
-    port: databasePort,
-    host: "127.0.0.1",
-    maxConnections: 30,
-  });
-  await postgresServer.start();
-  await waitForPort(databasePort);
+  let appliedMigrations;
+  if (externalDatabaseUrl) {
+    appliedMigrations = await migrationDirectories();
+  } else {
+    pglite = new PGlite(path.join(temporaryDatabase, "database"));
+    await pglite.waitReady;
+    appliedMigrations = await applyMigrations(pglite);
+    postgresServer = new PGLiteSocketServer({
+      db: pglite,
+      port: databasePort,
+      host: "127.0.0.1",
+      maxConnections: 30,
+    });
+    await postgresServer.start();
+    await waitForPort(databasePort);
+  }
 
   const memoryShim = path.join(temporaryDatabase, "memory-shim.cjs");
   await writeFile(memoryShim, `
@@ -350,7 +389,7 @@ process.memoryUsage = safe;
     DATABASE_URL: databaseUrl,
     DATABASE_POOL_MAX: "1",
     APP_BASE_URL: baseUrl,
-    REDIS_URL: `redis://127.0.0.1:${redisPort}`,
+    REDIS_URL: externalRedisUrl ?? `redis://127.0.0.1:${redisPort}`,
     AUTH_SECRET: `${randomUUID()}${randomUUID()}`,
     INTERNAL_PUBLISHER_SECRET: randomUUID(),
     INTERNAL_NOTIFICATION_SECRET: randomUUID(),
@@ -367,7 +406,18 @@ process.memoryUsage = safe;
   await runRequired(process.execPath, ["prisma/seed.mjs"], applicationEnv);
 
   prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
-  await redisServer.start();
+  if (externalDatabaseUrl) {
+    const deployed = await prisma.$queryRawUnsafe(
+      'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name',
+    );
+    assert.deepEqual(
+      deployed.map((row) => row.migration_name),
+      appliedMigrations,
+      "Native PostgreSQL must contain exactly the committed migration history.",
+    );
+  } else {
+    await redisServer.start();
+  }
   if (!productionRuntime) {
     await rm(path.join(projectRoot, ".next"), { recursive: true, force: true });
   }
@@ -589,6 +639,8 @@ process.memoryUsage = safe;
     redis: "outage persistence, bounded 503 degradation and recovery verified",
     phase2CommercialRegression: "atomic award, contracts, invoices, settlement, refund and reconciliation rerun successfully",
     prismaMigrationAndSeed: `${appliedMigrations.length} chronological migrations and seed verified on a fresh database`,
+    databaseEngine: externalDatabaseUrl ? "native-postgresql" : "pglite-supplemental",
+    redisEngine: externalRedisUrl ? "real-redis" : "deterministic-protocol-harness",
     serverMode: productionRuntime ? "production build" : "development webpack",
   }, null, 2));
 } catch (error) {
@@ -599,7 +651,12 @@ process.memoryUsage = safe;
   try {
     await cleanupRuntime({
       root: projectRoot, baseline: runtimeBaseline, children: childProcesses,
-      close: [() => prisma?.$disconnect(), () => redisServer.stop(), () => postgresServer?.stop(), () => pglite?.close()],
+      close: [
+        () => prisma?.$disconnect(),
+        () => externalRedisUrl ? Promise.resolve() : redisServer.stop(),
+        () => postgresServer?.stop(),
+        () => pglite?.close(),
+      ],
       paths: [temporaryDatabase, path.join(projectRoot, ".next")],
     });
   } catch (error) { console.error(error); process.exitCode = 1; }

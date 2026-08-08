@@ -474,6 +474,17 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       expect((await searchProjects(page, renamedTitle)).some((item) => item.entityId === project.id), "The renamed project must be searchable immediately").toBe(true);
       await api(page, `/api/projects/${project.id}`, { method: "DELETE" });
       expect((await searchProjects(page, renamedTitle)).some((item) => item.entityId === project.id), "Deleted projects must leave search immediately").toBe(false);
+      const retainedProject = (await api<{ id: string }>(page, "/api/projects", {
+        method: "POST",
+        expected: [201],
+        body: {
+          title: `Backup restore evidence ${run}`,
+          slug: `backup-restore-${run}`,
+          description: "Representative project retained for encrypted backup and restore integrity verification.",
+          currency: "AED",
+        },
+      })).data;
+      expect(retainedProject.id).not.toBe("");
 
       await expect(page.locator("html")).toHaveAttribute("lang", "en-AE");
       await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
