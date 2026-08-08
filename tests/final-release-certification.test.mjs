@@ -136,5 +136,6 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   assert.match(browserJourney, /\/api\/finance\/charges/);
   assert.match(browserJourney, /charge\.succeeded/);
   assert.match(browserJourney, /\/closeout/);
+  assert.match(browserJourney, /waitForResponse[\s\S]*\/api\/profile\/settings/);
   assert.match(contractDetail, /status === 409 && \/\(changed\|concurrent\|newer\|stale\)\/i\.test\(reason\.message\)/);
 });

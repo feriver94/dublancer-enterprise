@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type ApiResult<T> = { status: number; data: T; error?: { code?: string; message?: string } };
 type Persona = { id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; status: string };
@@ -60,6 +60,15 @@ async function loginThroughUi(page: Page, email: string, password: string) {
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/(onboarding|dashboard)/);
+}
+
+async function saveProfileForm(page: Page, form: Locator) {
+  const saved = page.waitForResponse((response) =>
+    response.request().method() === "PATCH" && new URL(response.url()).pathname === "/api/profile/settings");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  await expect(page.getByRole("status")).toContainText("Changes saved");
 }
 
 async function completeOnboarding(page: Page, selected: Array<Persona["type"]>, label: string) {
@@ -494,26 +503,23 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await providerPage.goto("/settings/profiles");
       const personalForm = providerPage.locator("form.profile-form").filter({ has: providerPage.locator('input[name="username"]') });
       await personalForm.locator('input[name="username"]').fill(username);
-      await personalForm.getByRole("button", { name: "Save changes" }).click();
-      await expect(providerPage.getByRole("status")).toContainText("Changes saved");
+      await saveProfileForm(providerPage, personalForm);
       await providerPage.getByRole("button", { name: "Freelancer profile" }).click();
       const freelancerForm = providerPage.locator("form.profile-form").filter({ has: providerPage.locator('select[name="visibility"]') });
       await freelancerForm.locator('select[name="visibility"]').selectOption("PUBLIC");
-      await freelancerForm.getByRole("button", { name: "Save changes" }).click();
-      await expect(providerPage.getByRole("status")).toContainText("Changes saved");
+      await saveProfileForm(providerPage, freelancerForm);
       let response = await outsiderPage.goto(`/u/${username}/freelancer`);
       expect(response?.status()).toBe(200);
 
       await providerPage.getByRole("button", { name: "Freelancer profile" }).click();
       await freelancerForm.locator('select[name="visibility"]').selectOption("HIDDEN");
-      await freelancerForm.getByRole("button", { name: "Save changes" }).click();
-      await expect(providerPage.getByRole("status")).toContainText("Changes saved");
+      await saveProfileForm(providerPage, freelancerForm);
       response = await outsiderPage.goto(`/u/${username}/freelancer`);
       expect(response?.status()).toBe(404);
 
       await providerPage.getByRole("button", { name: "Freelancer profile" }).click();
       await freelancerForm.locator('select[name="visibility"]').selectOption("PUBLIC");
-      await freelancerForm.getByRole("button", { name: "Save changes" }).click();
+      await saveProfileForm(providerPage, freelancerForm);
     });
 
     await test.step("verify both dashboards, global-search keyboard behavior, English, Arabic RTL and viewport bounds", async () => {
