@@ -139,7 +139,7 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   assert.match(browserJourney, /\/closeout/);
   assert.match(browserJourney, /waitForResponse[\s\S]*\/api\/profile\/settings/);
   assert.doesNotMatch(accessibility, /waitUntil: "networkidle"/);
-  assert.match(accessibility, /waitUntil: "domcontentloaded"[\s\S]*locator\("main"\)/);
+  assert.match(accessibility, /waitUntil: "domcontentloaded"[\s\S]*locator\("body"\)/);
   assert.match(contractDetail, /status === 409 && \/\(changed\|concurrent\|newer\|stale\)\/i\.test\(reason\.message\)/);
   await assert.rejects(
     access(path.join(root, "src/app/u/[username]/loading.tsx")),
