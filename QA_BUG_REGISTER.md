@@ -2,18 +2,21 @@
 
 ## Summary
 
-Authoritative tested commit: `5b236e691294b4b8f095ab0673b3b7488ede8a17`
+Original audited product commit: `5b236e691294b4b8f095ab0673b3b7488ede8a17`
 
-| Severity | Count |
+Bug-fix sprint starting commit: `250f2e15da7a21c3930cd6c9a1cc0589bfe06f5d`
+
+Retest date: 2026-08-08
+
+| Resolution | Count |
 |---|---:|
-| BLOCKER | 0 |
-| CRITICAL | 0 |
-| HIGH | 2 |
-| MEDIUM | 2 |
-| LOW | 3 |
+| FIXED | 7 |
+| OPEN | 0 |
 | **Total** | **7** |
 
 Environment blockers are recorded after the defect register and are not counted as product defects.
+
+All seven repository defects have passing non-blocked regression evidence. Native PostgreSQL, real Redis, installed Playwright browsers, production credentials and operator-supplied backup evidence remain environment gates, not product passes.
 
 ## QA-001 — Readiness returns opaque HTTP 500 during database outage
 
@@ -25,6 +28,7 @@ Environment blockers are recorded after the defect register and are not counted 
 | Route | `GET /api/health/ready` |
 | Persona | Anonymous/system probe |
 | Environment | Development and optimized production build; PostgreSQL intentionally unavailable |
+| Status | **FIXED — verified 2026-08-08** |
 
 ### Steps to reproduce
 
@@ -80,6 +84,10 @@ Guard queue counts when database health is unavailable, or use bounded per-check
 
 Moderate. Health/readiness behavior affects load balancers, orchestration, rolling deployment and incident response. Add tests for database down, Redis down, both down and recovery.
 
+### Fix verification
+
+Readiness now evaluates database and Redis checks independently with per-probe deadlines, skips queue inspection when the database is unavailable, contains and bounds queue failures, and returns only structured non-sensitive output. Eleven focused tests cover healthy, database-down, Redis-down, both-down, dependency timeout, queue failure/timeout, dead-letter, recovery and sanitization paths. A production standalone smoke test returned `503` from both `/api/health/ready` and `/api/health/database` with an unreachable database, while `/api/health/live` remained `200`. The Phase 8 supplemental runtime also verified Redis-down readiness as a structured `503`.
+
 ## QA-002 — Browser suite does not cover authenticated end-to-end workflows
 
 | Field | Evidence |
@@ -90,6 +98,7 @@ Moderate. Health/readiness behavior affects load balancers, orchestration, rolli
 | Routes | Authenticated product surface |
 | Persona | Client, freelancer, organization, enterprise member |
 | Environment | `tests/browser/accessibility.spec.ts`, Playwright config |
+| Status | **FIXED IN REPOSITORY — browser execution remains ENV-003 BLOCKED** |
 
 ### Steps to reproduce
 
@@ -125,6 +134,10 @@ Add deterministic browser fixtures and authenticated journeys for the release-cr
 
 High release-assurance risk. API behavior can pass while navigation, hydration, focus, form state, localization or responsive UX fails.
 
+### Fix verification
+
+`tests/browser/authenticated-release.spec.ts` adds a deterministic authenticated release-critical journey covering registration, login/logout/session persistence, three client personas, freelancer onboarding and switching, listing/proposal edit-withdraw-shortlist-award flows, optimistic concurrency, both contract sides, milestones, review denial/duplication/dimensions/cross-tenant controls, public/hidden profiles, both dashboards, exact-title search, keyboard navigation, English LTR, Arabic RTL and mobile viewport bounds. Discovery now reports 40 cases across Chromium, Firefox, WebKit and Mobile Chromium. Actual browser execution is not marked passed because the browser installer is blocked by truncated downloads.
+
 ## QA-003 — Default Playwright web server is not self-contained on a clean checkout
 
 | Field | Evidence |
@@ -135,6 +148,7 @@ High release-assurance risk. API behavior can pass while navigation, hydration, 
 | Route | Default `webServer` startup and `/` probe |
 | Persona | Anonymous |
 | Environment | Clean checkout with no `.env` and no native services |
+| Status | **FIXED — verified 2026-08-08** |
 
 ### Steps to reproduce
 
@@ -173,6 +187,10 @@ Provide an explicit documented browser-test profile and setup/teardown command f
 
 Low product-behavior risk; medium CI/local reproducibility risk.
 
+### Fix verification
+
+Playwright now requires an explicit absolute `PLAYWRIGHT_BASE_URL`, starts no implicit development server, and runs bounded liveness/readiness preflight checks against a prestarted environment. With the variable absent it exits immediately with an actionable `TESTING.md` reference. `.env.playwright.example` and the browser release-profile documentation make native PostgreSQL, real Redis and browser prerequisites explicit.
+
 ## QA-004 — Production start script conflicts with standalone output mode
 
 | Field | Evidence |
@@ -183,6 +201,7 @@ Low product-behavior risk; medium CI/local reproducibility risk.
 | Route | Production process startup |
 | Persona | System |
 | Environment | Optimized production build |
+| Status | **FIXED — verified 2026-08-08** |
 
 ### Steps to reproduce
 
@@ -224,6 +243,10 @@ Align the production start command and deployment documentation with the standal
 
 Medium deployment risk. Validate Docker and non-Docker production launch paths after correction.
 
+### Fix verification
+
+`npm start` now prepares the standalone artifact and runs `.next/standalone/server.js`. The optimized production smoke test served the root route, a public asset, a generated static asset and health endpoints without the unsupported `next start` warning. Deployment documentation retains separate Docker and non-Docker instructions.
+
 ## QA-005 — Successful runtime harnesses leave repository residue
 
 | Field | Evidence |
@@ -234,6 +257,7 @@ Medium deployment risk. Validate Docker and non-Docker production launch paths a
 | Route | Phase A/B and Phase 4–10 harness teardown |
 | Persona | Test runner |
 | Environment | Successful sequential harness execution |
+| Status | **FIXED — verified 2026-08-08** |
 
 ### Steps to reproduce
 
@@ -269,6 +293,10 @@ Wait for child process exit, retry bounded removal for known generated paths, an
 
 Low product risk; moderate release-automation risk because guarded commits/publishes can include or detect residue.
 
+### Fix verification
+
+The affected harnesses now capture their starting repository state, retain and terminate isolated child process groups, close dependencies, retry removal, sweep newly generated `.phase*-runtime-*` directories, restore tracked generated files and fail on state drift. Dual Profile A/B/C and Phase 3–10 final runs passed; a delayed post-suite check found no `.phase*-runtime-*` or `.next` residue and no tracked generated-file drift.
+
 ## QA-006 — Backup verifier fails with raw ENOENT when evidence is absent
 
 | Field | Evidence |
@@ -279,6 +307,7 @@ Low product risk; moderate release-automation risk because guarded commits/publi
 | Route | `npm run verify:backup` |
 | Persona | Operator |
 | Environment | Clean checkout without generated backup evidence |
+| Status | **FIXED — verified 2026-08-08** |
 
 ### Steps to reproduce
 
@@ -314,6 +343,10 @@ Add a clear preflight error and document the backup generation/restore workflow 
 
 Low product risk; low-to-medium operational usability risk.
 
+### Fix verification
+
+The verifier now preflights manifest/artifact presence, invalid JSON and age configuration, prints a single actionable error by default, and exposes stack details only with `BACKUP_VERIFY_DEBUG=1`. Regression tests verify both missing-evidence failure and a current encrypted fixture with a matching checksum. Operator-supplied production backup evidence remains ENV-005 blocked.
+
 ## QA-007 — Phase A report naming is inconsistent with Phase B/C
 
 | Field | Evidence |
@@ -324,6 +357,7 @@ Low product risk; low-to-medium operational usability risk.
 | Route | Documentation artifact index |
 | Persona | Release reviewer |
 | Environment | Authoritative `master` |
+| Status | **FIXED — verified 2026-08-08** |
 
 ### Steps to reproduce
 
@@ -357,6 +391,10 @@ Add a documentation-only alias/report index or update the README/release index t
 
 Low. Documentation-only change.
 
+### Fix verification
+
+`DUAL_PROFILE_PHASE_A_REPORT.md` now provides the consistent Phase A report name and points to the protected canonical `PHASE_A_DUAL_PROFILE_ARCHITECTURE.md`; the README index points through the alias without duplicating protected implementation content.
+
 ## Environment blockers not counted as product defects
 
 ### ENV-001 — Native PostgreSQL unavailable
@@ -374,8 +412,8 @@ Low. Documentation-only change.
 ### ENV-003 — Playwright browsers unavailable
 
 - Missing: Chromium, Firefox, WebKit and mobile Chromium executable.
-- Installer failure: invalid/truncated Chromium ZIP on all five attempts.
-- Impact: 36/36 configured tests failed at browser launch; no UI assertion executed.
+- Installer failure: the Chromium archive was reported as 0 MiB/truncated on all five download attempts, so Firefox and WebKit installation could not begin.
+- Impact: 40 configured cases were discovered across four projects, but no browser assertion executed in this environment.
 
 ### ENV-004 — Production environment profile unavailable
 
@@ -385,17 +423,17 @@ Low. Documentation-only change.
 ### ENV-005 — Backup evidence unavailable
 
 - No encrypted backup artifact or `backup-manifest.json` was supplied.
-- Restore/age/checksum verification remains pending.
+- A deterministic fixture passed age/checksum verification; verification of an operator-supplied production artifact remains pending.
 
 ## Retest exit criteria
 
-1. Native PostgreSQL `migrate deploy` and seed pass on a fresh database.
-2. Real Redis online/outage/restoration scenarios pass.
-3. `QA-001` returns structured 503 responses for dependency outages.
-4. All four Playwright projects execute with real browsers.
-5. Authenticated browser coverage is added for release-critical workflows.
-6. Production startup uses the supported standalone command without warning.
-7. Runtime harnesses leave a clean worktree.
-8. Backup verification passes with a current encrypted artifact/manifest.
-9. Full requested negative review and proposal edit/withdraw scenarios pass.
-10. Final audit verdict can be reconsidered only after all mandatory blocked gates are completed.
+1. **BLOCKED:** Native PostgreSQL `migrate deploy` and seed pass on a fresh database.
+2. **BLOCKED:** Real Redis online/outage/restoration scenarios pass.
+3. **COMPLETE:** `QA-001` returns structured 503 responses for dependency outages.
+4. **BLOCKED:** All four Playwright projects execute with installed real browsers.
+5. **COMPLETE IN REPOSITORY:** Authenticated browser coverage exists for release-critical workflows; execution is covered by item 4.
+6. **COMPLETE:** Production startup uses the supported standalone command without warning.
+7. **COMPLETE:** Runtime harnesses leave the worktree at its starting state.
+8. **PARTIAL:** Backup fixture verification passes; an operator-supplied production artifact remains blocked.
+9. **COMPLETE IN REPOSITORY:** Requested negative review and proposal edit/withdraw scenarios are encoded in the authenticated suite; execution is covered by item 4.
+10. Final production release approval remains conditional on the five environment gates above.

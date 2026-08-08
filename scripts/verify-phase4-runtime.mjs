@@ -9,8 +9,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const root = process.cwd();
+const runtimeBaseline = await captureRuntimeBaseline(root);
 const databasePort = Number(process.env.PHASE4_DATABASE_PORT ?? 55434);
 const applicationPort = Number(process.env.PHASE4_APPLICATION_PORT ?? 3111);
 const providerPort = Number(process.env.PHASE4_PROVIDER_PORT ?? 4120);
@@ -37,9 +39,8 @@ class CookieJar {
 }
 
 function startProcess(command, args, options = {}) {
-  const child = spawn(command, args, { cwd: root, env: { ...process.env, ...options.env }, stdio: options.stdio ?? ["ignore", "pipe", "pipe"] });
+  const child = spawn(command, args, { cwd: root, env: { ...process.env, ...options.env }, stdio: options.stdio ?? ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
   children.add(child);
-  child.once("exit", () => children.delete(child));
   return child;
 }
 
@@ -409,14 +410,13 @@ process.memoryUsage=safe;
   console.error(error);
   console.error(nextLogs.slice(-50).join(""));
 } finally {
-  await prisma?.$disconnect().catch(() => undefined);
-  for (const child of children) child.kill("SIGTERM");
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  for (const child of children) child.kill("SIGKILL");
-  await provider.stop().catch(() => undefined);
-  await socketServer?.stop().catch(() => undefined);
-  await pglite?.close().catch(() => undefined);
-  await rm(temporary, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    await cleanupRuntime({
+      root, baseline: runtimeBaseline, children,
+      close: [() => prisma?.$disconnect(), () => provider.stop(), () => socketServer?.stop(), () => pglite?.close()],
+      paths: [temporary, path.join(root, ".next")],
+    });
+  } catch (error) { failure ??= error; console.error(error); }
 }
 
 if (failure) throw failure;

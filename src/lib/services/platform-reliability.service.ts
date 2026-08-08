@@ -19,6 +19,7 @@ import { distributedCache } from "@/lib/cache/distributed-cache";
 import { pingRedis } from "@/lib/realtime/redis";
 import { checkDatabaseHealth } from "@/lib/database/health";
 import { withSpan } from "@/lib/observability/telemetry";
+import { evaluateReadiness } from "@/lib/reliability/readiness";
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -965,31 +966,18 @@ export class PlatformReliabilityService {
   }
 
   async systemHealth() {
-    const [database, redis, pendingJobs, deadLetters] = await Promise.all([
-      checkDatabaseHealth(),
-      pingRedis(),
-      prisma.backgroundJob.count({ where: { status: "PENDING" } }),
-      prisma.backgroundJob.count({ where: { status: "DEAD_LETTER" } }),
-    ]);
-    return {
-      status:
-        database.status === "healthy" && deadLetters === 0
-          ? redis
-            ? "ready"
-            : "degraded"
-          : "unhealthy",
-      checks: {
-        database,
-        redis: { status: redis ? "healthy" : "degraded" },
-        queue: {
-          status: deadLetters ? "degraded" : "healthy",
-          pendingJobs,
-          deadLetters,
-        },
-        cache: distributedCache.health(),
+    return evaluateReadiness({
+      checkDatabase: checkDatabaseHealth,
+      checkRedis: pingRedis,
+      inspectQueue: async () => {
+        const [pendingJobs, deadLetters] = await Promise.all([
+          prisma.backgroundJob.count({ where: { status: "PENDING" } }),
+          prisma.backgroundJob.count({ where: { status: "DEAD_LETTER" } }),
+        ]);
+        return { pendingJobs, deadLetters };
       },
-      timestamp: new Date().toISOString(),
-    };
+      cacheHealth: () => distributedCache.health(),
+    });
   }
 
   private async queueAlert(

@@ -18,8 +18,10 @@ import {
   generateKeyPair,
   SignJWT,
 } from "jose";
+import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const root = process.cwd();
+const runtimeBaseline = await captureRuntimeBaseline(root);
 const databasePort = Number(process.env.PHASE8_DATABASE_PORT ?? 55438);
 const applicationPort = Number(process.env.PHASE8_APPLICATION_PORT ?? 3115);
 const providerPort = Number(process.env.PHASE8_PROVIDER_PORT ?? 4218);
@@ -63,9 +65,9 @@ function startProcess(command, args, env = {}) {
     cwd: root,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
   });
   children.add(child);
-  child.once("exit", () => children.delete(child));
   return child;
 }
 
@@ -797,8 +799,13 @@ try {
   assert.match(metricsText, /dublancer_http_responses_total/);
   assert.match(metricsText, /dublancer_cache_failover_total/);
   const readiness = await fetch(`${baseUrl}/api/health/ready`);
-  assert.equal(readiness.status, 200);
-  assert.equal((await readiness.json()).status, "degraded");
+  assert.equal(readiness.status, 503);
+  const readinessBody = await readiness.json();
+  assert.equal(readinessBody.status, "unhealthy");
+  assert.equal(readinessBody.checks.database.status, "healthy");
+  assert.equal(readinessBody.checks.redis.status, "unhealthy");
+  assert.equal(readinessBody.checks.queue.status, "healthy");
+  assert.doesNotMatch(JSON.stringify(readinessBody), /postgresql:\/\/|redis:\/\/|stack|exception/i);
 
   console.log(
     JSON.stringify(
@@ -811,6 +818,7 @@ try {
         scimProvisioning: "verified",
         privilegedAccess: "verified",
         tenantIsolation: "verified",
+        redisOutageReadiness: "structured 503 verified",
         cacheFailover: "verified",
         metricsTracingHealthSlo: "verified",
         auditExportAndScaling: "verified",
@@ -826,12 +834,15 @@ try {
     console.error(nextLogs.slice(-80).join(""));
   }
 } finally {
-  for (const child of children) child.kill("SIGTERM");
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  await new Promise((resolve) => provider?.close(resolve)).catch(() => undefined);
-  await prisma?.$disconnect().catch(() => undefined);
-  await socketServer?.stop().catch(() => undefined);
-  await pglite?.close().catch(() => undefined);
-  await rm(temporary, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    await cleanupRuntime({
+      root, baseline: runtimeBaseline, children,
+      close: [
+        () => provider ? new Promise((resolve) => provider.close(resolve)) : Promise.resolve(),
+        () => prisma?.$disconnect(), () => socketServer?.stop(), () => pglite?.close(),
+      ],
+      paths: [temporary, path.join(root, ".next")],
+    });
+  } catch (error) { failure ??= error; console.error(error); }
 }
 if (failure) process.exitCode = 1;

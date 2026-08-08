@@ -8,6 +8,16 @@ Deploy the additive `20260802100000_dual_profile_marketplace_phase_c` migration 
 
 Defines CI/CD pipeline, deployment workflow, rollback strategy, and release process.
 
+## Standalone production startup
+
+The repository builds Next.js with `output: "standalone"`. For a non-container deployment, run `npm run build` and then `npm start`. The start script prepares `public` and `.next/static` beneath `.next/standalone` and launches the supported server command:
+
+```bash
+node .next/standalone/server.js
+```
+
+Set `HOSTNAME` and `PORT` in the process environment as required. The Docker image already copies the same public/static assets into its standalone runtime root and starts `server.js` directly, so its architecture is unchanged. Do not use `next start` with this repository.
+
 ## Coordinated release procedure
 
 1. Provision PostgreSQL/Redis and provider credentials from `.env.example`; keep credentials in the deployment secret manager.

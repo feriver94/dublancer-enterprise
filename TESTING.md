@@ -1,5 +1,18 @@
 # Sprint 29 Verification
 
+## Browser release profile
+
+Playwright intentionally does not start an implicit development server. Provision a disposable environment with native PostgreSQL and real Redis, apply all migrations, run the real seed, configure normal application secrets, build/start Dublancer, and confirm both `/api/health/live` and `/api/health/ready` are healthy. Then set the credential-free target URL and run the suite:
+
+```bash
+cp .env.playwright.example .env.playwright
+export PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000
+npx playwright install --with-deps chromium firefox webkit
+npm run test:browser
+```
+
+The preflight uses bounded liveness/readiness probes and fails immediately with an actionable error when the URL, PostgreSQL, Redis or queue readiness is unavailable. It does not retry an unhealthy root page for two minutes. `PLAYWRIGHT_BASE_URL` may point to a prestarted CI environment, but must not contain credentials. Browser results are release evidence only when the actual configured engines launch and execute; discovery or simulated dependencies do not replace that gate.
+
 ## Dual-Profile Phase C verification
 
 Run `npm test`, `npm run test:phase-c:runtime`, `npm run test:phase-a:runtime` and `npm run test:phase-b:runtime`. Phase C static tests cover persona marketplace controls, separate actions, contracts, reviews/reputation, live search, AI governance and conflict recovery. The Phase C runtime replays all 21 migrations on a fresh PostgreSQL-compatible database and tests its constraints; the enhanced Phase B application runtime exercises immediate project search, public provider search, invite/proposal/award/acceptance and directional reputation flows on the Phase C schema. `npm run test:phase4:runtime` preserves indexed-search pagination/highlights and cross-tenant behavior. Native PostgreSQL CI must additionally run `npx prisma migrate deploy`.

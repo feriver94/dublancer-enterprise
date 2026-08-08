@@ -41,6 +41,7 @@ npm run verify:backup -- --manifest /restore/manifest.json --max-age-hours 26
 ```
 
 This verifies manifest completeness, encryption declaration, freshness, checksum format, and artifact checksum. A successful artifact check does not replace a database restore exercise.
+When no default `backup-manifest.json` is present, `--manifest` is required; first generate or download the encrypted artifact and its manifest through the backup workflow above. Set `BACKUP_VERIFY_DEBUG=1` only during controlled operator diagnosis when a stack trace is explicitly needed.
 
 ## Restore verification
 

@@ -1,7 +1,25 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = Number(process.env.PLAYWRIGHT_PORT ?? 3210);
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
+function browserBaseUrl() {
+  const value = process.env.PLAYWRIGHT_BASE_URL?.trim();
+  if (!value) {
+    throw new Error(
+      "Playwright environment is not configured. Set PLAYWRIGHT_BASE_URL to a prestarted Dublancer environment with healthy PostgreSQL and Redis; see TESTING.md.",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("PLAYWRIGHT_BASE_URL must be a valid absolute HTTP(S) URL.");
+  }
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+    throw new Error("PLAYWRIGHT_BASE_URL must use HTTP(S) and must not contain credentials.");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+const baseURL = browserBaseUrl();
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -11,20 +29,13 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
   outputDir: "test-results/playwright",
+  globalSetup: "./tests/browser/global-setup.ts",
   use: {
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
-  webServer: process.env.PLAYWRIGHT_BASE_URL
-    ? undefined
-    : {
-        command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
-      },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },

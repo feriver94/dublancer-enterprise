@@ -8,8 +8,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const projectRoot = process.cwd();
+const runtimeBaseline = await captureRuntimeBaseline(projectRoot);
 const databasePort = Number(process.env.PHASE3_DATABASE_PORT ?? 55433);
 const redisPort = Number(process.env.PHASE3_REDIS_PORT ?? 6391);
 const applicationPort = Number(process.env.PHASE3_APPLICATION_PORT ?? 3110);
@@ -190,9 +192,9 @@ function startProcess(command, args, options = {}) {
     cwd: projectRoot,
     env: { ...process.env, ...options.env },
     stdio: options.stdio ?? ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
   });
   childProcesses.add(child);
-  child.once("exit", () => childProcesses.delete(child));
   return child;
 }
 
@@ -594,12 +596,11 @@ process.memoryUsage = safe;
   console.error(nextLogs.slice(-50).join(""));
   process.exitCode = 1;
 } finally {
-  await prisma?.$disconnect().catch(() => undefined);
-  await redisServer.stop().catch(() => undefined);
-  for (const child of childProcesses) child.kill("SIGTERM");
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  for (const child of childProcesses) child.kill("SIGKILL");
-  await postgresServer?.stop().catch(() => undefined);
-  await pglite?.close().catch(() => undefined);
-  await rm(temporaryDatabase, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    await cleanupRuntime({
+      root: projectRoot, baseline: runtimeBaseline, children: childProcesses,
+      close: [() => prisma?.$disconnect(), () => redisServer.stop(), () => postgresServer?.stop(), () => pglite?.close()],
+      paths: [temporaryDatabase, path.join(projectRoot, ".next")],
+    });
+  } catch (error) { console.error(error); process.exitCode = 1; }
 }

@@ -6,8 +6,10 @@ import net from "node:net";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const root = process.cwd();
+const runtimeBaseline = await captureRuntimeBaseline(root);
 const databasePort = Number(process.env.PHASE_B_DATABASE_PORT ?? 55482);
 const applicationPort = Number(process.env.PHASE_B_APPLICATION_PORT ?? 3182);
 const baseUrl = `http://127.0.0.1:${applicationPort}`;
@@ -36,9 +38,8 @@ class CookieJar {
 }
 
 function startProcess(command, args, env = {}) {
-  const child = spawn(command, args, { cwd: root, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(command, args, { cwd: root, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
   children.add(child);
-  child.once("exit", () => children.delete(child));
   return child;
 }
 
@@ -307,11 +308,13 @@ try {
   console.error(error);
   if (nextLogs.length) console.error(nextLogs.slice(-100).join(""));
 } finally {
-  for (const child of children) child.kill("SIGTERM");
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  await socketServer?.stop().catch(() => undefined);
-  await pglite?.close().catch(() => undefined);
-  await rm(temporary, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    await cleanupRuntime({
+      root, baseline: runtimeBaseline, children,
+      close: [() => socketServer?.stop(), () => pglite?.close()],
+      paths: [temporary, path.join(root, ".next")],
+    });
+  } catch (error) { failure ??= error; console.error(error); }
 }
 
 if (failure) process.exitCode = 1;

@@ -19,7 +19,7 @@ Dublancer is a bilingual, UAE-ready enterprise work platform. This repository is
 
 Primary authenticated interfaces are available at `/onboarding`, `/account/personas`, `/platform`, `/marketplace`, `/workspace`, `/communications/chat`, `/notifications`, `/files`, `/ai-copilot`, `/contracts`, `/payments`, `/billing`, `/orchestration`, `/analytics`, `/search` and `/admin-control`.
 
-See `PHASE_A_DUAL_PROFILE_ARCHITECTURE.md` for the dual-profile account, session, activation, migration and authorization contracts.
+See `DUAL_PROFILE_PHASE_A_REPORT.md` for the Phase A report index and its canonical `PHASE_A_DUAL_PROFILE_ARCHITECTURE.md` account, session, activation, migration and authorization contracts.
 
 See `DUAL_PROFILE_PHASE_B_REPORT.md` for public serializers, dashboard read models, content CRUD, completion, visibility, migration and verification. Phase B routes include `/u/[username]/client`, `/u/[username]/freelancer`, `/org/[slug]`, `/dashboard/client`, `/dashboard/freelancer` and `/settings/profiles`.
 

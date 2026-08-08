@@ -8,8 +8,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const root = process.cwd();
+const runtimeBaseline = await captureRuntimeBaseline(root);
 const databasePort = Number(process.env.PHASE6_DATABASE_PORT ?? 55436);
 const applicationPort = Number(process.env.PHASE6_APPLICATION_PORT ?? 3113);
 const baseUrl = `http://127.0.0.1:${applicationPort}`;
@@ -30,8 +32,8 @@ class CookieJar {
 }
 
 function startProcess(command, args, options = {}) {
-  const child = spawn(command, args, { cwd: root, env: { ...process.env, ...options.env }, stdio: ["ignore", "pipe", "pipe"] });
-  children.add(child); child.once("exit", () => children.delete(child)); return child;
+  const child = spawn(command, args, { cwd: root, env: { ...process.env, ...options.env }, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
+  children.add(child); return child;
 }
 function runRequired(command, args, env) { return new Promise((resolve, reject) => { const child = startProcess(command, args, { env }); let output = ""; child.stdout.on("data", (chunk) => { output += chunk; process.stdout.write(chunk); }); child.stderr.on("data", (chunk) => { output += chunk; process.stderr.write(chunk); }); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} failed:\n${output}`))); }); }
 async function waitForPort(port, timeout = 30_000) { const deadline = Date.now() + timeout; while (Date.now() < deadline) { const open = await new Promise((resolve) => { const socket = net.createConnection({ host: "127.0.0.1", port }); socket.once("connect", () => { socket.destroy(); resolve(true); }); socket.once("error", () => resolve(false)); socket.setTimeout(300, () => { socket.destroy(); resolve(false); }); }); if (open) return; await new Promise((resolve) => setTimeout(resolve, 100)); } throw new Error(`Timed out waiting for port ${port}.`); }
@@ -140,8 +142,12 @@ try {
 
   console.log(JSON.stringify({ result: "PASS", migrations: migrations.length, contractLifecycle: "verified", amendmentDecision: "counterparty enforced", disputeEvents: dispute.events.length, reviews: reviews.data.length, workspaceDelivery: "verified", timesheetStatus: timesheet.status, tenantIsolation: "verified", permissions: "verified", localization: "en-AE/ar-AE", rtl: "verified" }, null, 2));
 } catch (error) { failure = error; console.error(error); } finally {
-  for (const child of children) child.kill("SIGTERM");
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  await prisma?.$disconnect().catch(() => undefined); await socketServer?.stop().catch(() => undefined); await pglite?.close().catch(() => undefined); await rm(temporary, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    await cleanupRuntime({
+      root, baseline: runtimeBaseline, children,
+      close: [() => prisma?.$disconnect(), () => socketServer?.stop(), () => pglite?.close()],
+      paths: [temporary, path.join(root, ".next")],
+    });
+  } catch (error) { failure ??= error; console.error(error); }
 }
 if (failure) process.exitCode = 1;

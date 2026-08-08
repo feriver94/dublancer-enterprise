@@ -9,8 +9,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { captureRuntimeBaseline, cleanupRuntime } from "./runtime-cleanup.mjs";
 
 const root = process.cwd();
+const runtimeBaseline = await captureRuntimeBaseline(root);
 const databasePort = Number(process.env.PHASE10_DATABASE_PORT ?? 55450);
 const applicationPort = Number(process.env.PHASE10_APPLICATION_PORT ?? 3120);
 const sinkPort = Number(process.env.PHASE10_SINK_PORT ?? 4220);
@@ -59,9 +61,9 @@ function startProcess(command, args, env = {}) {
     cwd: root,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
   });
   children.add(child);
-  child.once("exit", () => children.delete(child));
   return child;
 }
 
@@ -842,13 +844,16 @@ try {
   console.error(error);
   if (nextLogs.length) console.error(nextLogs.slice(-100).join(""));
 } finally {
-  for (const child of children) child.kill("SIGTERM");
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  await new Promise((resolve) => sink?.close(resolve)).catch(() => undefined);
-  await prisma?.$disconnect().catch(() => undefined);
-  await socketServer?.stop().catch(() => undefined);
-  await pglite?.close().catch(() => undefined);
-  await rm(temporary, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    await cleanupRuntime({
+      root, baseline: runtimeBaseline, children,
+      close: [
+        () => sink ? new Promise((resolve) => sink.close(resolve)) : Promise.resolve(),
+        () => prisma?.$disconnect(), () => socketServer?.stop(), () => pglite?.close(),
+      ],
+      paths: [temporary, path.join(root, ".next")],
+    });
+  } catch (error) { failure ??= error; console.error(error); }
 }
 
 if (failure) process.exitCode = 1;
