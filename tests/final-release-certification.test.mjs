@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = process.cwd();
@@ -138,4 +138,9 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   assert.match(browserJourney, /\/closeout/);
   assert.match(browserJourney, /waitForResponse[\s\S]*\/api\/profile\/settings/);
   assert.match(contractDetail, /status === 409 && \/\(changed\|concurrent\|newer\|stale\)\/i\.test\(reason\.message\)/);
+  await assert.rejects(
+    access(path.join(root, "src/app/u/[username]/loading.tsx")),
+    (error) => error instanceof Error && "code" in error && error.code === "ENOENT",
+    "The public-profile segment must not stream before notFound() can set HTTP 404.",
+  );
 });
