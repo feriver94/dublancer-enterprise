@@ -46,7 +46,7 @@ jobs:
             echo "REDIS_PASSWORD=$redis_password"
             echo "DATABASE_URL=$database_url"
             echo "REDIS_URL=$redis_url"
-            echo "APP_BASE_URL=https://release-ci.example.test"
+            echo "APP_BASE_URL=https://localhost:3443"
             echo "AUTH_SECRET=$auth_secret"
             echo "INTERNAL_PUBLISHER_SECRET=$publisher_secret"
             echo "INTERNAL_NOTIFICATION_SECRET=$notification_secret"
@@ -65,11 +65,12 @@ jobs:
             echo "NODE_ENV=production"
             echo "DEPLOYMENT_ENVIRONMENT=production"
             echo "EXPOSE_DEVELOPMENT_TOKENS=false"
-            echo "WEBAUTHN_ORIGIN=https://release-ci.example.test"
-            echo "WEBAUTHN_RP_ID=release-ci.example.test"
+            echo "WEBAUTHN_ORIGIN=https://localhost:3443"
+            echo "WEBAUTHN_RP_ID=localhost"
             echo "WEBAUTHN_RP_NAME=Dublancer Release CI"
             echo "NEXT_TELEMETRY_DISABLED=1"
-            echo "PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000"
+            echo "PLAYWRIGHT_BASE_URL=https://localhost:3443"
+            echo "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true"
           } >> "$GITHUB_ENV"
       - name: Start native PostgreSQL 18 and real Redis 8
         shell: bash
@@ -163,6 +164,20 @@ jobs:
             sleep 1
           done
           node scripts/verify-health-contract.mjs
+          tls_dir="$RUNNER_TEMP/dublancer-tls"
+          mkdir -p "$tls_dir"
+          openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+            -keyout "$tls_dir/key.pem" -out "$tls_dir/cert.pem" \
+            -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' >/dev/null 2>&1
+          TLS_KEY_PATH="$tls_dir/key.pem" TLS_CERT_PATH="$tls_dir/cert.pem" \
+          TLS_PROXY_TARGET=http://127.0.0.1:3000 TLS_PROXY_PORT=3443 \
+          node scripts/https-reverse-proxy.mjs > "$RUNNER_TEMP/dublancer-https-proxy.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dublancer-https-proxy.pid"
+          for attempt in $(seq 1 30); do
+            if curl --insecure --fail --silent https://localhost:3443/api/health/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --insecure --fail --silent https://localhost:3443/api/health/ready >/dev/null
       - name: Create representative authentication, profile, project and contract records
         run: npx playwright test tests/browser/authenticated-release.spec.ts --project=chromium
       - name: Confirm representative native database state
@@ -283,12 +298,13 @@ jobs:
             test-results/playwright
             playwright-report
             ${{ runner.temp }}/dublancer-primary.log
+            ${{ runner.temp }}/dublancer-https-proxy.log
             ${{ runner.temp }}/dublancer-restored.log
       - name: Stop disposable environment
         if: always()
         shell: bash
         run: |
-          for pid_file in "$RUNNER_TEMP/dublancer-primary.pid" "$RUNNER_TEMP/dublancer-restored.pid"; do
+          for pid_file in "$RUNNER_TEMP/dublancer-https-proxy.pid" "$RUNNER_TEMP/dublancer-primary.pid" "$RUNNER_TEMP/dublancer-restored.pid"; do
             if [ -f "$pid_file" ]; then kill "$(cat "$pid_file")" 2>/dev/null || true; fi
           done
           docker rm --force dublancer-release-redis dublancer-release-postgres >/dev/null 2>&1 || true

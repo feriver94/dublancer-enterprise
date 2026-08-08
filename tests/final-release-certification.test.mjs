@@ -15,6 +15,9 @@ test("real-browser CI provisions native dependencies and executes all four Playw
   assert.match(workflow, /redis:8\.2-alpine/);
   assert.match(workflow, /openssl rand -hex 48/);
   assert.match(workflow, /npm ci --include=dev/);
+  assert.match(workflow, /PLAYWRIGHT_BASE_URL=https:\/\/localhost:3443/);
+  assert.match(workflow, /https-reverse-proxy\.mjs/);
+  assert.match(workflow, /PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true/);
   assert.match(workflow, /npx prisma migrate deploy/);
   assert.match(workflow, /npm run seed/);
   assert.match(workflow, /npm run start/);
@@ -46,6 +49,8 @@ test("final certification CI covers production controls, real outages, backup an
   ]) assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(workflow, /verify:environment -- --profile production/);
   assert.match(workflow, /npm ci --include=dev/);
+  assert.match(workflow, /https-reverse-proxy\.mjs/);
+  assert.match(workflow, /curl --insecure --fail --silent https:\/\/localhost:3443/);
   assert.match(workflow, /docker stop --time 15 dublancer-release-postgres/);
   assert.match(workflow, /docker stop --time 15 dublancer-release-redis/);
   assert.match(workflow, /pg_dump[\s\S]*--format custom/);
@@ -73,6 +78,7 @@ test("native state, Redis, health and restored-auth verifiers avoid secret outpu
   const redis = await read("scripts/verify-real-redis.mjs");
   const health = await read("scripts/verify-health-contract.mjs");
   const restoredAuth = await read("scripts/verify-restored-auth.mjs");
+  const proxy = await read("scripts/https-reverse-proxy.mjs");
   assert.match(native, /_prisma_migrations/);
   assert.match(native, /Representative project record is missing|representativeIds/);
   assert.match(redis, /publish\(channel/);
@@ -82,7 +88,23 @@ test("native state, Redis, health and restored-auth verifiers avoid secret outpu
   assert.match(health, /\["DATABASE_URL", "REDIS_URL"\]/);
   assert.match(health, /!text\.includes\(value\)/);
   assert.match(restoredAuth, /Restored authentication fixture could not log in/);
-  for (const source of [native, redis, health, restoredAuth]) {
+  assert.match(proxy, /"x-forwarded-proto": "https"/);
+  assert.doesNotMatch(proxy, /console\.log\([^\n]*(key|certificate)/i);
+  for (const source of [native, redis, health, restoredAuth, proxy]) {
     assert.doesNotMatch(source, /console\.log\([^\n]*(DATABASE_URL|REDIS_URL|databaseUrl|redisUrl)/);
   }
+});
+
+test("real-browser product fixes preserve secure auth, accessible actions, and mobile pricing containment", async () => {
+  const config = await read("playwright.config.ts");
+  const navbar = await read("src/components/layout/NavbarClient.tsx");
+  const button = await read("src/components/ui/Button.tsx");
+  const comparison = await read("src/components/pricing/FeatureComparison.tsx");
+  assert.match(config, /PLAYWRIGHT_IGNORE_HTTPS_ERRORS/);
+  assert.match(config, /ignoreHTTPSErrors/);
+  assert.match(navbar, /bg-\[#007A36\][^\n]*hover:bg-\[#00612B\][^\n]*labels\.startFree/);
+  assert.match(button, /bg-\[#007A36\][^\n]*hover:bg-\[#00612B\]/);
+  assert.doesNotMatch(navbar, /bg-\[#009A44\][^\n]*labels\.startFree/);
+  assert.match(comparison, /maxWidth: "100%", overflowX: "auto"/);
+  assert.match(comparison, /minWidth: 560/);
 });
