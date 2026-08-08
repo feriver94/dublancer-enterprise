@@ -5,8 +5,9 @@ const publicRoutes = ["/", "/login", "/register", "/pricing"];
 
 for (const route of publicRoutes) {
   test(`${route} has no serious accessibility violations`, async ({ page }) => {
-    const response = await page.goto(route, { waitUntil: "networkidle" });
+    const response = await page.goto(route, { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
+    await expect(page.locator("main")).toBeVisible();
     const scan = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();

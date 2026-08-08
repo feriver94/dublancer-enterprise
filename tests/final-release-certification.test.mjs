@@ -115,6 +115,7 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   const cta = await read("src/components/sections/CTA.tsx");
   const marketplace = await read("src/components/marketplace/MarketplaceClient.tsx");
   const browserJourney = await read("tests/browser/authenticated-release.spec.ts");
+  const accessibility = await read("tests/browser/accessibility.spec.ts");
   const contractDetail = await read("src/components/contracts/ContractDetailClient.tsx");
   assert.match(config, /PLAYWRIGHT_IGNORE_HTTPS_ERRORS/);
   assert.match(config, /ignoreHTTPSErrors/);
@@ -137,6 +138,8 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   assert.match(browserJourney, /charge\.succeeded/);
   assert.match(browserJourney, /\/closeout/);
   assert.match(browserJourney, /waitForResponse[\s\S]*\/api\/profile\/settings/);
+  assert.doesNotMatch(accessibility, /waitUntil: "networkidle"/);
+  assert.match(accessibility, /waitUntil: "domcontentloaded"[\s\S]*locator\("main"\)/);
   assert.match(contractDetail, /status === 409 && \/\(changed\|concurrent\|newer\|stale\)\/i\.test\(reason\.message\)/);
   await assert.rejects(
     access(path.join(root, "src/app/u/[username]/loading.tsx")),
