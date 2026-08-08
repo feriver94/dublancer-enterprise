@@ -100,10 +100,10 @@ jobs:
             --env REDIS_PASSWORD="$REDIS_PASSWORD" \
             redis:8.2-alpine sh -c 'exec redis-server --save "" --appendonly no --requirepass "$REDIS_PASSWORD"'
           for attempt in $(seq 1 60); do
-            if docker exec dublancer-release-postgres pg_isready -U dublancer_release -d dublancer_release >/dev/null 2>&1; then break; fi
+            if docker exec dublancer-release-postgres pg_isready -h 127.0.0.1 -U dublancer_release -d dublancer_release >/dev/null 2>&1; then break; fi
             sleep 1
           done
-          docker exec dublancer-release-postgres pg_isready -U dublancer_release -d dublancer_release
+          docker exec dublancer-release-postgres pg_isready -h 127.0.0.1 -U dublancer_release -d dublancer_release
           for attempt in $(seq 1 60); do
             if docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli PING 2>/dev/null | grep -qx PONG; then break; fi
             sleep 1

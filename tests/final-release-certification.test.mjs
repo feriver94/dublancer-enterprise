@@ -13,6 +13,7 @@ test("real-browser CI provisions native dependencies and executes all four Playw
   }
   assert.match(workflow, /postgres:18-alpine/);
   assert.match(workflow, /redis:8\.2-alpine/);
+  assert.match(workflow, /pg_isready -h 127\.0\.0\.1/);
   assert.match(workflow, /openssl rand -hex 48/);
   assert.match(workflow, /npm ci --include=dev/);
   assert.match(workflow, /PLAYWRIGHT_BASE_URL=https:\/\/localhost:3443/);
@@ -50,6 +51,7 @@ test("final certification CI covers production controls, real outages, backup an
     "npm run verify:release",
   ]) assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(workflow, /verify:environment -- --profile production/);
+  assert.match(workflow, /pg_isready -h 127\.0\.0\.1/);
   assert.match(workflow, /npm ci --include=dev/);
   assert.match(workflow, /https-reverse-proxy\.mjs/);
   assert.match(workflow, /payment-provider-fixture\.mjs/);
