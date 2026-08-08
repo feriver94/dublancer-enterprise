@@ -34,7 +34,9 @@ jobs:
           mfa_pepper="$(openssl rand -hex 48)"
           integration_pepper="$(openssl rand -hex 48)"
           cache_secret="$(openssl rand -hex 48)"
-          for value in "$db_password" "$redis_password" "$auth_secret" "$publisher_secret" "$notification_secret" "$email_secret" "$worker_secret" "$identity_key" "$mfa_pepper" "$integration_pepper" "$cache_secret"; do
+          payment_api_key="$(openssl rand -hex 48)"
+          payment_webhook_secret="$(openssl rand -hex 48)"
+          for value in "$db_password" "$redis_password" "$auth_secret" "$publisher_secret" "$notification_secret" "$email_secret" "$worker_secret" "$identity_key" "$mfa_pepper" "$integration_pepper" "$cache_secret" "$payment_api_key" "$payment_webhook_secret"; do
             echo "::add-mask::$value"
           done
           database_url="postgresql://dublancer_release:$db_password@127.0.0.1:5432/dublancer_release?schema=public"
@@ -57,6 +59,9 @@ jobs:
             echo "MFA_BACKUP_CODE_PEPPER=$mfa_pepper"
             echo "INTEGRATION_API_KEY_PEPPER=$integration_pepper"
             echo "CACHE_INVALIDATION_SECRET=$cache_secret"
+            echo "PAYMENT_PROVIDER_BASE_URL=http://127.0.0.1:4210"
+            echo "PAYMENT_PROVIDER_API_KEY=$payment_api_key"
+            echo "PAYMENT_WEBHOOK_SECRET=$payment_webhook_secret"
             echo "OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.release-ci.example.test"
             echo "DEPLOYMENT_REGION=uae-north"
             echo "DEPLOYMENT_REGIONS=uae-north,europe-west"
@@ -157,6 +162,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/payment-provider-fixture.mjs > "$RUNNER_TEMP/dublancer-payment-provider.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dublancer-payment-provider.pid"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4210/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4210/health >/dev/null
           HOSTNAME=127.0.0.1 PORT=3000 npm run start > "$RUNNER_TEMP/dublancer-primary.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/dublancer-primary.pid"
           for attempt in $(seq 1 90); do
@@ -299,12 +311,13 @@ jobs:
             playwright-report
             ${{ runner.temp }}/dublancer-primary.log
             ${{ runner.temp }}/dublancer-https-proxy.log
+            ${{ runner.temp }}/dublancer-payment-provider.log
             ${{ runner.temp }}/dublancer-restored.log
       - name: Stop disposable environment
         if: always()
         shell: bash
         run: |
-          for pid_file in "$RUNNER_TEMP/dublancer-https-proxy.pid" "$RUNNER_TEMP/dublancer-primary.pid" "$RUNNER_TEMP/dublancer-restored.pid"; do
+          for pid_file in "$RUNNER_TEMP/dublancer-https-proxy.pid" "$RUNNER_TEMP/dublancer-primary.pid" "$RUNNER_TEMP/dublancer-restored.pid" "$RUNNER_TEMP/dublancer-payment-provider.pid"; do
             if [ -f "$pid_file" ]; then kill "$(cat "$pid_file")" 2>/dev/null || true; fi
           done
           docker rm --force dublancer-release-redis dublancer-release-postgres >/dev/null 2>&1 || true

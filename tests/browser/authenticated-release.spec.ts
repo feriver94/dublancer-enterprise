@@ -1,10 +1,15 @@
+import { createHmac } from "node:crypto";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 type ApiResult<T> = { status: number; data: T; error?: { code?: string; message?: string } };
 type Persona = { id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; status: string };
 type PersonaOverview = { activePersonaId: string | null; account: { accountPersonas: Persona[] } };
 type Proposal = { id: string; status: string; version: number; coverLetter: string; listing?: { id: string; title: string }; contract?: { id: string } | null };
-type ContractView = { id: string; title: string; status: string; version: number; viewerParty: "CLIENT" | "PROVIDER"; termsHash: string };
+type Submission = { id: string; status: string; version: number };
+type Milestone = { id: string; status: string; version: number; submissions: Submission[] };
+type ContractView = { id: string; title: string; status: string; version: number; valueMinor: string; currency: string; viewerParty: "CLIENT" | "PROVIDER"; termsHash: string; milestones: Milestone[] };
+type Invoice = { id: string; status: string; version: number; paymentSchedules: Array<{ status: string }> };
+type Charge = { id: string; status: string; organizationId: string; providerRef: string; amountMinor: string; currency: string };
 
 function suffix(testInfo: TestInfo) {
   return `${testInfo.project.name.replace(/[^a-z0-9]/gi, "").toLowerCase()}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -341,6 +346,93 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       completedContractId = contract.id;
       await acceptContract(page, completedContractId);
       await acceptContract(providerPage, completedContractId);
+
+      let clientContract = (await api<ContractView>(page, `/api/contracts/${completedContractId}`)).data;
+      const milestone = (await api<Milestone>(page, `/api/contracts/${completedContractId}/milestones`, {
+        method: "POST",
+        expected: [201],
+        body: {
+          title: `Browser settlement ${run}`,
+          description: "Release-certified governed delivery and settlement evidence.",
+          amountMinor: clientContract.valueMinor,
+          currency: clientContract.currency,
+        },
+      })).data;
+      const providerContract = (await api<ContractView>(providerPage, `/api/contracts/${completedContractId}`)).data;
+      const providerMilestone = providerContract.milestones.find((item) => item.id === milestone.id);
+      expect(providerMilestone).toBeTruthy();
+      await api<Submission>(providerPage, `/api/contracts/${completedContractId}/milestones/${milestone.id}/submissions`, {
+        method: "POST",
+        expected: [201],
+        body: { note: "Authenticated browser delivery evidence.", expectedMilestoneVersion: providerMilestone?.version },
+      });
+      clientContract = (await api<ContractView>(page, `/api/contracts/${completedContractId}`)).data;
+      const submittedMilestone = clientContract.milestones.find((item) => item.id === milestone.id);
+      const submission = submittedMilestone?.submissions[0];
+      expect(submittedMilestone?.status).toBe("SUBMITTED");
+      expect(submission).toBeTruthy();
+      await api(page, `/api/contracts/${completedContractId}/milestones/${milestone.id}/submissions`, {
+        method: "PATCH",
+        body: {
+          submissionId: submission?.id,
+          decision: "APPROVED",
+          note: "Authenticated browser delivery accepted.",
+          expectedMilestoneVersion: submittedMilestone?.version,
+          expectedSubmissionVersion: submission?.version,
+        },
+      });
+
+      const dueAt = new Date(Date.now() + 14 * 86_400_000).toISOString();
+      let invoice = (await api<Invoice>(page, "/api/finance/invoices", {
+        method: "POST",
+        expected: [201],
+        body: {
+          number: `BROWSER-${run}`,
+          contractId: completedContractId,
+          contractMilestoneId: milestone.id,
+          currency: clientContract.currency,
+          dueAt,
+          lines: [{ description: "Authenticated browser settlement", quantity: 1, unitAmountMinor: clientContract.valueMinor, taxRateBasisPoints: 0 }],
+        },
+      })).data;
+      invoice = (await api<Invoice>(page, `/api/finance/invoices/${invoice.id}`, {
+        method: "PATCH",
+        body: { action: "ISSUE", expectedVersion: invoice.version, dueAt },
+      })).data;
+      const charge = (await api<Charge>(page, "/api/finance/charges", {
+        method: "POST",
+        expected: [202],
+        body: { invoiceId: invoice.id, idempotencyKey: `browser-charge-${run}` },
+      })).data;
+      expect(charge.status).toBe("PROCESSING");
+      const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+      expect(webhookSecret, "PAYMENT_WEBHOOK_SECRET must be configured for release settlement").toBeTruthy();
+      const webhookBody = JSON.stringify({
+        type: "charge.succeeded",
+        organizationId: charge.organizationId,
+        providerReference: charge.providerRef,
+        amountMinor: charge.amountMinor,
+        currency: charge.currency,
+      });
+      const webhook = await page.context().request.post("/api/webhooks/payments/payment-broker", {
+        headers: {
+          "content-type": "application/json",
+          "x-provider-event-id": `browser-charge-${run}`,
+          "x-provider-signature": createHmac("sha256", webhookSecret ?? "").update(webhookBody).digest("hex"),
+        },
+        data: webhookBody,
+      });
+      expect(webhook.status(), await webhook.text()).toBe(202);
+      invoice = (await api<Invoice>(page, `/api/finance/invoices/${invoice.id}`)).data;
+      expect(invoice.status).toBe("PAID");
+      expect(invoice.paymentSchedules[0]?.status).toBe("RELEASED");
+      clientContract = (await api<ContractView>(page, `/api/contracts/${completedContractId}`)).data;
+      const releasedMilestone = clientContract.milestones.find((item) => item.id === milestone.id);
+      expect(releasedMilestone?.status).toBe("RELEASED");
+      await api(page, `/api/contracts/${completedContractId}/milestones/${milestone.id}/closeout`, {
+        method: "POST",
+        body: { note: "Payment and authenticated browser evidence reconciled.", expectedVersion: releasedMilestone?.version },
+      });
 
       const premature = await api(page, `/api/contracts/${completedContractId}/reviews`, {
         method: "POST",

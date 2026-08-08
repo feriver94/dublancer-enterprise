@@ -17,6 +17,8 @@ test("real-browser CI provisions native dependencies and executes all four Playw
   assert.match(workflow, /npm ci --include=dev/);
   assert.match(workflow, /PLAYWRIGHT_BASE_URL=https:\/\/localhost:3443/);
   assert.match(workflow, /https-reverse-proxy\.mjs/);
+  assert.match(workflow, /payment-provider-fixture\.mjs/);
+  assert.match(workflow, /PAYMENT_PROVIDER_BASE_URL=http:\/\/127\.0\.0\.1:4210/);
   assert.match(workflow, /PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true/);
   assert.match(workflow, /npx prisma migrate deploy/);
   assert.match(workflow, /npm run seed/);
@@ -50,6 +52,8 @@ test("final certification CI covers production controls, real outages, backup an
   assert.match(workflow, /verify:environment -- --profile production/);
   assert.match(workflow, /npm ci --include=dev/);
   assert.match(workflow, /https-reverse-proxy\.mjs/);
+  assert.match(workflow, /payment-provider-fixture\.mjs/);
+  assert.match(workflow, /PAYMENT_PROVIDER_BASE_URL=http:\/\/127\.0\.0\.1:4210/);
   assert.match(workflow, /curl --insecure --fail --silent https:\/\/localhost:3443/);
   assert.match(workflow, /docker stop --time 15 dublancer-release-postgres/);
   assert.match(workflow, /docker stop --time 15 dublancer-release-redis/);
@@ -79,6 +83,7 @@ test("native state, Redis, health and restored-auth verifiers avoid secret outpu
   const health = await read("scripts/verify-health-contract.mjs");
   const restoredAuth = await read("scripts/verify-restored-auth.mjs");
   const proxy = await read("scripts/https-reverse-proxy.mjs");
+  const paymentFixture = await read("scripts/payment-provider-fixture.mjs");
   assert.match(native, /_prisma_migrations/);
   assert.match(native, /Representative project record is missing|representativeIds/);
   assert.match(redis, /publish\(channel/);
@@ -90,7 +95,10 @@ test("native state, Redis, health and restored-auth verifiers avoid secret outpu
   assert.match(restoredAuth, /Restored authentication fixture could not log in/);
   assert.match(proxy, /"x-forwarded-proto": "https"/);
   assert.doesNotMatch(proxy, /console\.log\([^\n]*(key|certificate)/i);
-  for (const source of [native, redis, health, restoredAuth, proxy]) {
+  assert.match(paymentFixture, /timingSafeEqual/);
+  assert.match(paymentFixture, /idempotency-key/);
+  assert.doesNotMatch(paymentFixture, /console\.log\([^\n]*(PAYMENT_PROVIDER_API_KEY|apiKey)/);
+  for (const source of [native, redis, health, restoredAuth, proxy, paymentFixture]) {
     assert.doesNotMatch(source, /console\.log\([^\n]*(DATABASE_URL|REDIS_URL|databaseUrl|redisUrl)/);
   }
 });
@@ -105,6 +113,7 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   const cta = await read("src/components/sections/CTA.tsx");
   const marketplace = await read("src/components/marketplace/MarketplaceClient.tsx");
   const browserJourney = await read("tests/browser/authenticated-release.spec.ts");
+  const contractDetail = await read("src/components/contracts/ContractDetailClient.tsx");
   assert.match(config, /PLAYWRIGHT_IGNORE_HTTPS_ERRORS/);
   assert.match(config, /ignoreHTTPSErrors/);
   assert.match(navbar, /bg-\[#007A36\][^\n]*hover:bg-\[#00612B\][^\n]*labels\.startFree/);
@@ -122,4 +131,8 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   assert.match(cta, /color: brand\.colors\.white/);
   assert.match(marketplace, /if \(listing\.loading && !listing\.data\)/);
   assert.match(browserJourney, /body: \{ overall: 5[^\n]*Premature review denied\./);
+  assert.match(browserJourney, /\/api\/finance\/charges/);
+  assert.match(browserJourney, /charge\.succeeded/);
+  assert.match(browserJourney, /\/closeout/);
+  assert.match(contractDetail, /status === 409 && \/\(changed\|concurrent\|newer\|stale\)\/i\.test\(reason\.message\)/);
 });
