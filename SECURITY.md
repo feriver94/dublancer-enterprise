@@ -1,5 +1,9 @@
 # Sprint 29 Security Controls
 
+## Dual-Profile Phase B privacy boundary
+
+Public routes require `PUBLIC` or `VERIFIED` visibility, an active Phase A persona and no soft-delete marker; other states return 404. Public Prisma selects structurally omit email, phone, billing, private contracts, memberships, RBAC and audit data. Verified spend is opt-in and freelancer earnings remain authenticated-only. Mutations require CSRF, session, the correct active persona, applicable RBAC, membership, ownership and optimistic versions. Sensitive writes create audit evidence without copying private values into public responses.
+
 ## Authorization boundaries
 
 - Authenticated tenant context is derived only from the signed access token and active server-side session.

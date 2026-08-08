@@ -4,6 +4,7 @@ Dublancer is a bilingual, UAE-ready enterprise work platform. This repository is
 
 ## Product capabilities
 
+- Privacy-governed client, freelancer/provider and organization public profiles, persona dashboards, complete profile settings, owned professional content and dynamic completion.
 - One secure account with separate client, freelancer/provider and organization personas, guided bilingual onboarding, session-bound persona switching and persona-plus-RBAC authorization.
 - Signed secure sessions, refresh rotation, account recovery, CSRF, lockout controls, organizations, invitations, RBAC, audit and tenant isolation.
 - Marketplace opportunities, profiles, skills, proposals and revisions, saved listings, talent pools, vendor onboarding and explainable matching.
@@ -19,6 +20,8 @@ Dublancer is a bilingual, UAE-ready enterprise work platform. This repository is
 Primary authenticated interfaces are available at `/onboarding`, `/account/personas`, `/platform`, `/marketplace`, `/workspace`, `/communications/chat`, `/notifications`, `/files`, `/ai-copilot`, `/contracts`, `/payments`, `/billing`, `/orchestration`, `/analytics`, `/search` and `/admin-control`.
 
 See `PHASE_A_DUAL_PROFILE_ARCHITECTURE.md` for the dual-profile account, session, activation, migration and authorization contracts.
+
+See `DUAL_PROFILE_PHASE_B_REPORT.md` for public serializers, dashboard read models, content CRUD, completion, visibility, migration and verification. Phase B routes include `/u/[username]/client`, `/u/[username]/freelancer`, `/org/[slug]`, `/dashboard/client`, `/dashboard/freelancer` and `/settings/profiles`.
 
 ## Windows installation
 

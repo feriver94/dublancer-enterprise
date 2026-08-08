@@ -26,6 +26,7 @@ const phase8MigrationName = "20260728120000_enterprise_identity_observability_sc
 const phase9MigrationName = "20260729100000_enterprise_crm_talent_knowledge_integrations";
 const phase10MigrationName = "20260730150000_enterprise_production_performance";
 const phaseAMigrationName = "20260801090000_dual_profile_marketplace_phase_a";
+const phaseBMigrationName = "20260801150000_dual_profile_marketplace_phase_b";
 const commercialSql = migrationSql[entries.indexOf(commercialMigrationName)];
 const phase4Sql = migrationSql[entries.indexOf(phase4MigrationName)];
 const phase5Sql = migrationSql[entries.indexOf(phase5MigrationName)];
@@ -35,6 +36,7 @@ const phase8Sql = migrationSql[entries.indexOf(phase8MigrationName)];
 const phase9Sql = migrationSql[entries.indexOf(phase9MigrationName)];
 const phase10Sql = migrationSql[entries.indexOf(phase10MigrationName)];
 const phaseASql = migrationSql[entries.indexOf(phaseAMigrationName)];
+const phaseBSql = migrationSql[entries.indexOf(phaseBMigrationName)];
 for (const table of ["WorkGraphNode", "WorkflowDefinition", "WorkflowRun", "WorkflowApproval", "TalentMatch", "RateLimitBucket"]) {
   if (!completeSql.includes(`CREATE TABLE "${table}"`)) throw new Error(`Migration history is missing ${table}.`);
 }
@@ -68,6 +70,12 @@ for (const table of ["PersonalIdentity", "OnboardingProgress", "AccountPersona",
 for (const index of ["AccountPersona_one_client_per_account_key", "AccountPersona_one_freelancer_per_account_key", "AuthSession_activePersonaId_status_idx"]) {
   if (!phaseASql?.includes(`CREATE UNIQUE INDEX \"${index}\"`) && !phaseASql?.includes(`CREATE INDEX \"${index}\"`)) throw new Error(`Phase A migration is missing ${index}.`);
 }
-if (entries.at(-1) !== phaseAMigrationName) throw new Error("Phase A migration must be the latest chronological migration.");
+for (const table of ["Education", "Certification", "ProfileSocialLink", "SavedProvider"]) {
+  if (!phaseBSql?.includes(`CREATE TABLE \"${table}\"`)) throw new Error(`Phase B migration is missing ${table}.`);
+}
+for (const index of ["User_username_key", "PortfolioItem_freelancerProfileId_contentType_visibility_sortOrder_idx", "Education_freelancerProfileId_visibility_endedAt_idx", "Certification_freelancerProfileId_visibility_issuedAt_idx"]) {
+  if (!phaseBSql?.includes(`CREATE UNIQUE INDEX \"${index}\"`) && !phaseBSql?.includes(`CREATE INDEX \"${index}\"`)) throw new Error(`Phase B migration is missing ${index}.`);
+}
+if (entries.at(-1) !== phaseBMigrationName) throw new Error("Phase B migration must be the latest chronological migration.");
 if (/\bDROP\s+(TABLE|COLUMN|TYPE)\b/i.test(finalSql)) throw new Error("Final migration contains a destructive DROP statement.");
-console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial, Phase 4-10 and Dual-Profile Phase A migrations).`);
+console.log(`Migration compatibility checks passed (${entries.length} ordered migrations; additive commercial, Phase 4-10 and Dual-Profile Phase A-B migrations).`);

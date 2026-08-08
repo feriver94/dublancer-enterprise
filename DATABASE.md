@@ -1,5 +1,11 @@
 # Database — Sprint 29 Chat Domain
 
+## Dual-Profile Phase B
+
+Apply `20260801150000_dual_profile_marketplace_phase_b` after Phase A. It adds public presentation and visibility fields to canonical profiles, `ProfileVisibility`, `ProfileContentType`, unique search-ready usernames, education, certification, social links and saved providers. Portfolio and experience reuse existing models with version, visibility and soft deletion. Five legacy indexes are replaced with visibility-aware equivalents; no table, column or type is dropped.
+
+The complete `prisma/schema.prisma` remains authoritative. Shared deployments use `prisma migrate deploy`, never `prisma db push`. See `DUAL_PROFILE_PHASE_B_REPORT.md` for the environment-specific PGlite schema-engine caveat and successful 20-migration fresh replay.
+
 ## Phase A dual-profile foundation
 
 The complete `prisma/schema.prisma` now includes `PersonalIdentity`, `OnboardingProgress`, `AccountPersona`, `ClientProfile` and `PersonaEvent`, an optional `FreelancerProfile.personaId`, and `AuthSession.activePersonaId`. Apply `prisma/migrations/20260801090000_dual_profile_marketplace_phase_a/migration.sql` after the 18 Phase 0-10 migrations. The migration is additive and backfills existing accounts, memberships and provider profiles without rebinding live sessions or deleting released data.

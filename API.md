@@ -1,5 +1,11 @@
 # Sprint 29 Chat API
 
+## Dual-Profile Phase B
+
+Public GET endpoints are `/api/public/users/[username]/client`, `/api/public/users/[username]/freelancer` and `/api/public/organizations/[slug]`. They return explicit public allowlists and 404 unless profile visibility and the Phase A persona state permit publication.
+
+Authenticated dashboards are `GET /api/dashboard/client` and `GET /api/dashboard/freelancer`. Profile administration uses `GET|PATCH /api/profile/settings`, `GET|POST /api/profile/content/[kind]`, `PATCH|DELETE /api/profile/content/[kind]/[id]`, `POST /api/profiles/follow/[id]` and `POST /api/profiles/report`. Mutations require CSRF, server validation, the correct session persona and ownership. Content PATCH/DELETE requires the current version and returns 409 for stale or cross-owner writes.
+
 All browser routes require the existing authenticated session. Every `POST`, `PATCH`, and `DELETE` route also requires the existing `x-csrf-token` header and matching `dublancer_csrf` cookie. Responses use the existing `{ data, meta? }` and `{ error }` envelopes.
 
 ## Channels

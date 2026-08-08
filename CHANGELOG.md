@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase B — Dual-Profile Public Profiles and Dashboards — 2026-08-08
+
+- Added privacy-governed client and freelancer/provider public profiles plus an organization public-profile foundation.
+- Added database-backed persona dashboards, four-identity settings and portfolio, case study, publication, research, experience, education, certification and social-link management.
+- Added dynamic completion, search-ready usernames, optimistic conflicts, soft deletion, visibility lifecycle, saved providers and strict public serializers.
+- Added migration `20260801150000_dual_profile_marketplace_phase_b`, bilingual responsive dark/light/RTL UX, Phase B static/runtime verification and documentation.
+- Preserved Phase 0–10, Sprint 1 and Phase A; deferred reviews/reputation, marketplace redesign, contract-persona integration, search expansion, AI profile assistance and matching to Phase C.
+
 ## Phase A — Dual-Profile Marketplace Architecture — 2026-08-01
 
 - Added one-account client, freelancer/provider and organization persona architecture with personal identity and guided-onboarding state.

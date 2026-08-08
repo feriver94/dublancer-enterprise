@@ -1,5 +1,9 @@
 # Architecture — Sprint 29
 
+## Dual-Profile Phase B presentation layer
+
+Phase B consumes rather than replaces Phase A identity and authorization. `User` is the login principal, `AccountPersona` is operating context, active membership is the tenant boundary, and client/freelancer/company profiles are presentation records. Public serializers use separate allowlisted queries; dashboards use tenant-scoped read models over existing product tables; settings/content writes combine persona/RBAC, ownership predicates, versions and audit events. Completion is calculated from stored data and never persisted as a score.
+
 ## Write path
 
 1. The route verifies the existing authenticated server-side session and CSRF token.

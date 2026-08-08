@@ -71,6 +71,22 @@ enum AccountPersonaStatus {
   ARCHIVED
 }
 
+enum ProfileVisibility {
+  DRAFT
+  HIDDEN
+  PUBLIC
+  VERIFIED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum ProfileContentType {
+  PORTFOLIO
+  CASE_STUDY
+  PUBLICATION
+  RESEARCH
+}
+
 enum OnboardingStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -97,6 +113,7 @@ enum PersonaEventType {
 model User {
   id                         String                    @id @default(cuid())
   email                      String                    @unique
+  username                   String?                   @unique
   displayName                String?
   passwordHash               String?
   emailVerified              DateTime?
@@ -174,6 +191,8 @@ model User {
   onboardingProgress         OnboardingProgress?
   accountPersonas            AccountPersona[]
   personaEvents              PersonaEvent[]             @relation("PersonaEventActor")
+  profileSocialLinks         ProfileSocialLink[]
+  savedProviders             SavedProvider[]
   createdListings            MarketplaceListing[]      @relation("ListingCreator")
   savedListings              SavedListing[]
   submittedProposals         Proposal[]                @relation("ProposalSubmitter")
@@ -261,6 +280,8 @@ model Organization {
   companyProfile           CompanyProfile?
   accountPersonas          AccountPersona[]
   personaEvents            PersonaEvent[]
+  savedProviderScopes      SavedProvider[]               @relation("SavedProviderScope")
+  savedAsProvider          SavedProvider[]               @relation("SavedProviderOrganization")
   marketplaceListings      MarketplaceListing[]
   talentPools              TalentPool[]
   vendorOnboardings        VendorOnboarding[]            @relation("VendorClientOrganization")
@@ -637,6 +658,20 @@ model ClientProfile {
   displayName    String
   headline       String?
   about          String?
+  visibility     ProfileVisibility @default(DRAFT)
+  bannerUrl      String?
+  avatarUrl      String?
+  industry       String?
+  companySize    String?
+  website        String?
+  languages      String[]       @default([])
+  responseTimeMinutes Int?
+  hiringAvailable Boolean       @default(true)
+  showVerifiedSpend Boolean     @default(false)
+  hiringPreferences Json?
+  engagementModels String[]     @default([])
+  version         Int            @default(1)
+  deletedAt       DateTime?
   countryCode    String         @default("AE")
   timezone       String         @default("Asia/Dubai")
   locale         String         @default("en-AE")
@@ -645,7 +680,8 @@ model ClientProfile {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  @@index([countryCode, updatedAt])
+  @@index([visibility, countryCode, updatedAt])
+  @@index([deletedAt, visibility])
 }
 
 model PersonaEvent {
@@ -1778,19 +1814,36 @@ model FreelancerProfile {
   yearsExperience   Int                 @default(0)
   searchText        String?
   isPublic          Boolean             @default(true)
+  visibility        ProfileVisibility   @default(PUBLIC)
+  bannerUrl         String?
+  avatarUrl         String?
+  languages         String[]            @default([])
+  industries        String[]            @default([])
+  services          String[]            @default([])
+  fixedPriceAvailable Boolean           @default(true)
+  resumeUrl         String?
+  videoUrl          String?
+  githubUrl         String?
+  linkedinUrl       String?
+  version           Int                 @default(1)
+  deletedAt         DateTime?
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   persona           AccountPersona?     @relation(fields: [personaId], references: [id], onDelete: SetNull)
   skills            FreelancerSkill[]
   portfolioItems    PortfolioItem[]
   workExperiences   WorkExperience[]
+  educations        Education[]
+  certifications    Certification[]
+  savedBy           SavedProvider[]
   proposals         Proposal[]
   talentPoolMembers TalentPoolMember[]
   talentMatches     TalentMatch[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  @@index([isPublic, availability, updatedAt])
+  @@index([visibility, isPublic, availability, updatedAt])
   @@index([countryCode, currency])
+  @@index([deletedAt, visibility])
 }
 
 model CompanyProfile {
@@ -1804,11 +1857,22 @@ model CompanyProfile {
   taxRegistrationNumber String?
   procurementMetadata   Json?
   verifiedAt            DateTime?
+  visibility            ProfileVisibility @default(DRAFT)
+  logoUrl               String?
+  bannerUrl             String?
+  industry              String?
+  locations             Json?
+  services              String[]     @default([])
+  technologies          String[]     @default([])
+  portfolio             Json?
+  version               Int          @default(1)
+  deletedAt             DateTime?
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
-  @@index([countryCode, verifiedAt])
+  @@index([visibility, countryCode, verifiedAt])
+  @@index([deletedAt, visibility])
 }
 
 model Skill {
@@ -1850,11 +1914,18 @@ model PortfolioItem {
   projectUrl          String?
   completedAt         DateTime?
   metadata            Json?
+  contentType         ProfileContentType @default(PORTFOLIO)
+  visibility          ProfileVisibility  @default(PUBLIC)
+  mediaUrl            String?
+  sortOrder           Int                @default(0)
+  version             Int                @default(1)
+  deletedAt           DateTime?
   freelancerProfile   FreelancerProfile @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
-  @@index([freelancerProfileId, createdAt])
+  @@index([freelancerProfileId, contentType, visibility, sortOrder])
+  @@index([freelancerProfileId, deletedAt, createdAt])
 }
 
 model WorkExperience {
@@ -1865,11 +1936,90 @@ model WorkExperience {
   description         String?
   startedAt           DateTime
   endedAt             DateTime?
+  visibility          ProfileVisibility  @default(PUBLIC)
+  version             Int                @default(1)
+  deletedAt           DateTime?
   freelancerProfile   FreelancerProfile @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
-  @@index([freelancerProfileId, startedAt])
+  @@index([freelancerProfileId, visibility, startedAt])
+  @@index([freelancerProfileId, deletedAt])
+}
+
+model Education {
+  id                  String            @id @default(cuid())
+  freelancerProfileId String
+  institution         String
+  degree              String
+  fieldOfStudy        String?
+  startedAt           DateTime?
+  endedAt             DateTime?
+  description         String?
+  visibility          ProfileVisibility @default(PUBLIC)
+  version             Int               @default(1)
+  deletedAt           DateTime?
+  freelancerProfile   FreelancerProfile @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([freelancerProfileId, visibility, endedAt])
+  @@index([freelancerProfileId, deletedAt])
+}
+
+model Certification {
+  id                  String            @id @default(cuid())
+  freelancerProfileId String
+  name                String
+  issuer              String
+  credentialId        String?
+  credentialUrl       String?
+  issuedAt            DateTime?
+  expiresAt           DateTime?
+  visibility          ProfileVisibility @default(PUBLIC)
+  version             Int               @default(1)
+  deletedAt           DateTime?
+  freelancerProfile   FreelancerProfile @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([freelancerProfileId, visibility, issuedAt])
+  @@index([freelancerProfileId, deletedAt])
+}
+
+model ProfileSocialLink {
+  id          String             @id @default(cuid())
+  userId      String
+  personaType AccountPersonaType
+  platform    String
+  url         String
+  visibility  ProfileVisibility  @default(PUBLIC)
+  version     Int                @default(1)
+  deletedAt   DateTime?
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([userId, personaType, platform])
+  @@index([userId, personaType, visibility])
+  @@index([userId, deletedAt])
+}
+
+model SavedProvider {
+  id                     String             @id @default(cuid())
+  userId                 String
+  organizationId         String
+  freelancerProfileId    String?
+  providerOrganizationId String?
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization           Organization       @relation("SavedProviderScope", fields: [organizationId], references: [id], onDelete: Cascade)
+  freelancerProfile      FreelancerProfile? @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
+  providerOrganization   Organization?       @relation("SavedProviderOrganization", fields: [providerOrganizationId], references: [id], onDelete: Cascade)
+  createdAt              DateTime            @default(now())
+
+  @@unique([userId, organizationId, freelancerProfileId, providerOrganizationId])
+  @@index([organizationId, freelancerProfileId, createdAt])
+  @@index([organizationId, providerOrganizationId, createdAt])
 }
 
 model VerifiedCredential {

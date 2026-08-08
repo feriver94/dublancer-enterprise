@@ -19,10 +19,12 @@ export class AuthService {
       throw new AppError("CONFLICT","An account with this email already exists.",409);
     }
     const passwordHash = await hashPassword(input.password);
+    const baseUsername = input.displayName.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "member";
     return prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data:{
           email:input.email,
+          username:`${baseUsername}-${randomBytes(4).toString("hex")}`,
           displayName:input.displayName,
           passwordHash,
           personalIdentity: {
@@ -44,7 +46,7 @@ export class AuthService {
         },
         select:{id:true,email:true,displayName:true,isPlatformAdmin:true},
       });
-      const baseSlug = input.displayName.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "workspace";
+      const baseSlug = baseUsername || "workspace";
       const organization = await tx.organization.create({ data: {
         name: `${input.displayName}'s Workspace`,
         slug: `${baseSlug}-${randomBytes(4).toString("hex")}`,

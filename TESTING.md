@@ -1,5 +1,11 @@
 # Sprint 29 Verification
 
+## Dual-Profile Phase B verification
+
+Run `npm test` for Phase B privacy, CRUD, completion, dashboard, ownership, authorization, localization and responsive UI contracts. Run `npm run test:phase-b:runtime` for a new 20-migration database, exact seed, live two-account tenant isolation, fresh three-persona onboarding, public/hidden profiles, all content families, conflicts, dashboards and organization publication.
+
+Standard Prisma validate/generate/deploy, seed, TypeScript, ESLint, build, security, migration, locale, secret and aggregate release gates remain mandatory. The runtime verifier uses chronological SQL replay because Prisma's schema engine cannot target the PGlite socket available in this container; native PostgreSQL environments must additionally execute `npx prisma migrate deploy`.
+
 ## Phase A verification
 
 ```powershell
