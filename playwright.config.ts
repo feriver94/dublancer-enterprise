@@ -20,6 +20,7 @@ function browserBaseUrl() {
 }
 
 const baseURL = browserBaseUrl();
+const ignoreHTTPSErrors = process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === "true";
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -32,6 +33,7 @@ export default defineConfig({
   globalSetup: "./tests/browser/global-setup.ts",
   use: {
     baseURL,
+    ignoreHTTPSErrors,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

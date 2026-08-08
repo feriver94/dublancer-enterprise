@@ -47,7 +47,13 @@ export default function ContractDetailClient({ contractId }: { contractId: strin
   async function mutate(key: string, operation: () => Promise<unknown>, success: string) {
     setPending(key); setError(""); setNotice("");
     try { await operation(); setNotice(success); await contract.refresh(); return true; }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t("actionFailed")); if (reason instanceof ApiClientError && reason.status === 409) setNotice(phaseC("newerData")); return false; }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("actionFailed"));
+      if (reason instanceof ApiClientError && reason.status === 409 && /(changed|concurrent|newer|stale)/i.test(reason.message)) {
+        setNotice(phaseC("newerData"));
+      }
+      return false;
+    }
     finally { setPending(""); }
   }
 

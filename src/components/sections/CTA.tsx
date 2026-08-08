@@ -7,7 +7,7 @@ export default function CTA() {
     <section className="py-20 md:py-28">
       <Container>
         <div className="rounded-[2rem] p-10 text-white md:p-16" style={{ backgroundColor: brand.colors.navy }}>
-          <p className="font-bold" style={{ color: brand.colors.green }}>Powered by SoasTech</p>
+          <p className="font-bold" style={{ color: brand.colors.white }}>Powered by SoasTech</p>
           <h2 className="mt-4 max-w-3xl text-4xl font-black md:text-6xl">
             From proposal to delivery, Dublancer keeps freelancers moving forward.
           </h2>

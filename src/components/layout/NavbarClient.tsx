@@ -278,7 +278,7 @@ export default function NavbarClient({
         ) : (
           <>
             <Link href="/login" className="hidden font-bold text-[#0F4C5C] sm:block">{labels.login}</Link>
-            <Link href="/register" className="rounded-full bg-[#009A44] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#007A36]">{labels.startFree}</Link>
+            <Link href="/register" className="rounded-full bg-[#007A36] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00612B]">{labels.startFree}</Link>
           </>
         )}
       </div>

@@ -18,15 +18,22 @@ export default function FeatureComparison() {
       <h2 style={{ color: brand.colors.navy, fontSize: brand.typography.heading.h3, fontWeight: brand.typography.weight.bold, marginTop: 18, marginBottom: 24 }}>
         Compare platform capabilities
       </h2>
-      <div style={{ display: "grid", gap: 12 }}>
-        {rows.map(([feature, starter, business, enterprise]) => (
-          <div key={feature} style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 140px", gap: 14, alignItems: "center", padding: 16, borderRadius: brand.radius.md, background: brand.colors.background, border: `1px solid ${brand.colors.border}` }}>
-            <strong style={{ color: brand.colors.navy }}>{feature}</strong>
-            <span style={{ color: brand.colors.muted }}>{starter}</span>
-            <span style={{ color: brand.colors.green, fontWeight: brand.typography.weight.bold }}>{business}</span>
-            <span style={{ color: brand.colors.navy, fontWeight: brand.typography.weight.bold }}>{enterprise}</span>
-          </div>
-        ))}
+      <div
+        role="region"
+        aria-label="Pricing feature comparison"
+        tabIndex={0}
+        style={{ maxWidth: "100%", overflowX: "auto" }}
+      >
+        <div style={{ display: "grid", gap: 12, minWidth: 560 }}>
+          {rows.map(([feature, starter, business, enterprise]) => (
+            <div key={feature} style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) 90px 90px 110px", gap: 12, alignItems: "center", padding: 16, borderRadius: brand.radius.md, background: brand.colors.background, border: `1px solid ${brand.colors.border}` }}>
+              <strong style={{ color: brand.colors.navy }}>{feature}</strong>
+              <span style={{ color: brand.colors.muted }}>{starter}</span>
+              <span style={{ color: "#00612B", fontWeight: brand.typography.weight.bold }}>{business}</span>
+              <span style={{ color: brand.colors.navy, fontWeight: brand.typography.weight.bold }}>{enterprise}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </Card>
   );

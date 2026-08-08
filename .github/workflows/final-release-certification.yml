@@ -1,0 +1,323 @@
+name: Final native release certification
+
+on:
+  pull_request:
+  push:
+    branches: [master, release-certification]
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Native services, production controls, backup and restore
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Generate protected production-style release environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_password="$(openssl rand -hex 48)"
+          redis_password="$(openssl rand -hex 48)"
+          auth_secret="$(openssl rand -hex 48)"
+          publisher_secret="$(openssl rand -hex 48)"
+          notification_secret="$(openssl rand -hex 48)"
+          email_secret="$(openssl rand -hex 48)"
+          worker_secret="$(openssl rand -hex 48)"
+          identity_key="$(openssl rand -hex 32)"
+          mfa_pepper="$(openssl rand -hex 48)"
+          integration_pepper="$(openssl rand -hex 48)"
+          cache_secret="$(openssl rand -hex 48)"
+          payment_api_key="$(openssl rand -hex 48)"
+          payment_webhook_secret="$(openssl rand -hex 48)"
+          for value in "$db_password" "$redis_password" "$auth_secret" "$publisher_secret" "$notification_secret" "$email_secret" "$worker_secret" "$identity_key" "$mfa_pepper" "$integration_pepper" "$cache_secret" "$payment_api_key" "$payment_webhook_secret"; do
+            echo "::add-mask::$value"
+          done
+          database_url="postgresql://dublancer_release:$db_password@127.0.0.1:5432/dublancer_release?schema=public"
+          redis_url="redis://:$redis_password@127.0.0.1:6379"
+          echo "::add-mask::$database_url"
+          echo "::add-mask::$redis_url"
+          {
+            echo "DB_PASSWORD=$db_password"
+            echo "REDIS_PASSWORD=$redis_password"
+            echo "DATABASE_URL=$database_url"
+            echo "REDIS_URL=$redis_url"
+            echo "APP_BASE_URL=https://localhost:3443"
+            echo "AUTH_SECRET=$auth_secret"
+            echo "INTERNAL_PUBLISHER_SECRET=$publisher_secret"
+            echo "INTERNAL_NOTIFICATION_SECRET=$notification_secret"
+            echo "INTERNAL_EMAIL_SECRET=$email_secret"
+            echo "INTERNAL_WORKER_SECRET=$worker_secret"
+            echo "INTERNAL_CHAT_MAINTENANCE_SECRET=$worker_secret"
+            echo "IDENTITY_ENCRYPTION_KEY=$identity_key"
+            echo "MFA_BACKUP_CODE_PEPPER=$mfa_pepper"
+            echo "INTEGRATION_API_KEY_PEPPER=$integration_pepper"
+            echo "CACHE_INVALIDATION_SECRET=$cache_secret"
+            echo "PAYMENT_PROVIDER_BASE_URL=http://127.0.0.1:4210"
+            echo "PAYMENT_PROVIDER_API_KEY=$payment_api_key"
+            echo "PAYMENT_WEBHOOK_SECRET=$payment_webhook_secret"
+            echo "OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.release-ci.example.test"
+            echo "DEPLOYMENT_REGION=uae-north"
+            echo "DEPLOYMENT_REGIONS=uae-north,europe-west"
+            echo "DISASTER_RECOVERY_REGION=europe-west"
+            echo "APP_VERSION=$GITHUB_SHA"
+            echo "NODE_ENV=production"
+            echo "DEPLOYMENT_ENVIRONMENT=production"
+            echo "EXPOSE_DEVELOPMENT_TOKENS=false"
+            echo "WEBAUTHN_ORIGIN=https://localhost:3443"
+            echo "WEBAUTHN_RP_ID=localhost"
+            echo "WEBAUTHN_RP_NAME=Dublancer Release CI"
+            echo "NEXT_TELEMETRY_DISABLED=1"
+            echo "PLAYWRIGHT_BASE_URL=https://localhost:3443"
+            echo "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true"
+          } >> "$GITHUB_ENV"
+      - name: Start native PostgreSQL 18 and real Redis 8
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name dublancer-release-postgres \
+            --publish 127.0.0.1:5432:5432 \
+            --env POSTGRES_USER=dublancer_release \
+            --env POSTGRES_PASSWORD="$DB_PASSWORD" \
+            --env POSTGRES_DB=dublancer_release \
+            postgres:18-alpine
+          docker run --detach --name dublancer-release-redis \
+            --publish 127.0.0.1:6379:6379 \
+            --env REDIS_PASSWORD="$REDIS_PASSWORD" \
+            redis:8.2-alpine sh -c 'exec redis-server --save "" --appendonly yes --requirepass "$REDIS_PASSWORD"'
+          for attempt in $(seq 1 60); do
+            if docker exec dublancer-release-postgres pg_isready -h 127.0.0.1 -U dublancer_release -d dublancer_release >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec dublancer-release-postgres pg_isready -h 127.0.0.1 -U dublancer_release -d dublancer_release
+          for attempt in $(seq 1 60); do
+            if docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli PING 2>/dev/null | grep -qx PONG; then break; fi
+            sleep 1
+          done
+          docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli PING | grep -qx PONG
+          docker exec dublancer-release-postgres postgres --version
+          docker exec dublancer-release-postgres psql --version
+          docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli INFO server | grep '^redis_version:'
+      - name: Locked dependency installation
+        run: npm ci --include=dev
+      - name: Validate production controls without printing values
+        run: |
+          npm run verify:environment -- --profile production
+          npm run verify:production-config
+      - name: Deploy all native PostgreSQL migrations and seed
+        run: |
+          npx prisma validate
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run seed
+          npm run seed
+          node scripts/verify-native-state.mjs
+      - name: Verify real Redis protocol capabilities
+        run: node scripts/verify-real-redis.mjs
+      - name: Execute all static, security, supply-chain and release gates
+        run: |
+          npm test
+          npm run typecheck
+          npm run lint
+          npm run verify:migrations
+          npm run verify:locales
+          npm run verify:security
+          npm run verify:secrets
+          npm run verify:production-config
+          npm run verify:ui
+          npm run verify:supply-chain
+          npm run verify:release-docs
+          npm run audit:production
+          npm run verify:release
+      - name: Execute Dual Profile and Phase 3-10 runtime regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:phase-a:runtime
+          npm run test:phase-b:runtime
+          npm run test:phase-c:runtime
+          redis_container_id="$(docker inspect --format '{{.Id}}' dublancer-release-redis)"
+          PHASE3_DATABASE_URL="$DATABASE_URL" \
+          PHASE3_REDIS_URL="$REDIS_URL" \
+          PHASE3_REDIS_CONTAINER_ID="$redis_container_id" \
+          npm run test:phase3:runtime
+          npm run test:phase4:runtime
+          npm run test:phase5:runtime
+          npm run test:phase6:runtime
+          npm run test:phase7:runtime
+          npm run test:phase8:runtime
+          npm run test:phase9:runtime
+          npm run test:phase10:runtime
+      - name: Build standalone application and install real Chromium
+        run: |
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Start production application and verify healthy native dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/payment-provider-fixture.mjs > "$RUNNER_TEMP/dublancer-payment-provider.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dublancer-payment-provider.pid"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4210/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4210/health >/dev/null
+          HOSTNAME=127.0.0.1 PORT=3000 npm run start > "$RUNNER_TEMP/dublancer-primary.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dublancer-primary.pid"
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/verify-health-contract.mjs
+          tls_dir="$RUNNER_TEMP/dublancer-tls"
+          mkdir -p "$tls_dir"
+          openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+            -keyout "$tls_dir/key.pem" -out "$tls_dir/cert.pem" \
+            -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' >/dev/null 2>&1
+          TLS_KEY_PATH="$tls_dir/key.pem" TLS_CERT_PATH="$tls_dir/cert.pem" \
+          TLS_PROXY_TARGET=http://127.0.0.1:3000 TLS_PROXY_PORT=3443 \
+          node scripts/https-reverse-proxy.mjs > "$RUNNER_TEMP/dublancer-https-proxy.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dublancer-https-proxy.pid"
+          for attempt in $(seq 1 30); do
+            if curl --insecure --fail --silent https://localhost:3443/api/health/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --insecure --fail --silent https://localhost:3443/api/health/ready >/dev/null
+      - name: Create representative authentication, profile, project and contract records
+        run: npx playwright test tests/browser/authenticated-release.spec.ts --project=chromium
+      - name: Confirm representative native database state
+        run: node scripts/verify-native-state.mjs --require-representative-records
+      - name: Verify PostgreSQL outage and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop --time 15 dublancer-release-postgres
+          sleep 2
+          EXPECT_DATABASE_HTTP=503 EXPECT_DATABASE_STATUS=unhealthy \
+          EXPECT_READINESS_HTTP=503 EXPECT_READINESS_STATUS=unhealthy \
+          node scripts/verify-health-contract.mjs
+          docker start dublancer-release-postgres
+          for attempt in $(seq 1 60); do
+            if docker exec dublancer-release-postgres pg_isready -U dublancer_release -d dublancer_release >/dev/null 2>&1 && curl --fail --silent http://127.0.0.1:3000/api/health/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node scripts/verify-health-contract.mjs
+          node scripts/verify-native-state.mjs --require-representative-records
+      - name: Verify Redis outage, bounded degradation and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop --time 15 dublancer-release-redis
+          sleep 2
+          EXPECT_DATABASE_HTTP=200 EXPECT_DATABASE_STATUS=healthy \
+          EXPECT_READINESS_HTTP=503 EXPECT_READINESS_STATUS=unhealthy \
+          node scripts/verify-health-contract.mjs
+          docker start dublancer-release-redis
+          for attempt in $(seq 1 60); do
+            if docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli PING 2>/dev/null | grep -qx PONG && curl --fail --silent http://127.0.0.1:3000/api/health/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node scripts/verify-health-contract.mjs
+          node scripts/verify-real-redis.mjs
+      - name: Generate and verify encrypted native PostgreSQL backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          backup_dir="$RUNNER_TEMP/dublancer-backup"
+          mkdir -p "$backup_dir"
+          docker exec --env PGPASSWORD="$DB_PASSWORD" dublancer-release-postgres \
+            pg_dump --username dublancer_release --dbname dublancer_release --format custom \
+            > "$backup_dir/dublancer.dump"
+          openssl rand -hex -out "$backup_dir/backup.key" 48
+          chmod 600 "$backup_dir/backup.key"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in "$backup_dir/dublancer.dump" \
+            -out "$backup_dir/dublancer.dump.enc" \
+            -pass file:"$backup_dir/backup.key"
+          rm "$backup_dir/dublancer.dump"
+          sha256="$(sha256sum "$backup_dir/dublancer.dump.enc" | awk '{print $1}')"
+          migration="$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tail -n 1)"
+          BACKUP_DIR="$backup_dir" BACKUP_SHA256="$sha256" BACKUP_MIGRATION="$migration" node --input-type=module -e '
+            import { writeFile } from "node:fs/promises";
+            import path from "node:path";
+            await writeFile(path.join(process.env.BACKUP_DIR, "backup-manifest.json"), JSON.stringify({
+              artifact: "dublancer.dump.enc",
+              sha256: process.env.BACKUP_SHA256,
+              createdAt: new Date().toISOString(),
+              region: "uae-north",
+              migration: process.env.BACKUP_MIGRATION,
+              encrypted: true,
+              encryption: "AES-256-CBC/PBKDF2-SHA256/200000",
+              source: "native PostgreSQL pg_dump custom format"
+            }, null, 2) + "\n");'
+          npm run verify:backup -- --manifest "$backup_dir/backup-manifest.json" --max-age-hours 1
+          echo "BACKUP_DIR=$backup_dir" >> "$GITHUB_ENV"
+      - name: Restore encrypted backup and verify application integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in "$BACKUP_DIR/dublancer.dump.enc" \
+            -out "$BACKUP_DIR/dublancer-restored.dump" \
+            -pass file:"$BACKUP_DIR/backup.key"
+          docker exec --env PGPASSWORD="$DB_PASSWORD" dublancer-release-postgres \
+            createdb --username dublancer_release dublancer_restore
+          docker exec --interactive --env PGPASSWORD="$DB_PASSWORD" dublancer-release-postgres \
+            pg_restore --username dublancer_release --dbname dublancer_restore --no-owner --no-privileges \
+            < "$BACKUP_DIR/dublancer-restored.dump"
+          rm "$BACKUP_DIR/dublancer-restored.dump"
+          restore_url="postgresql://dublancer_release:$DB_PASSWORD@127.0.0.1:5432/dublancer_restore?schema=public"
+          echo "::add-mask::$restore_url"
+          echo "RESTORE_DATABASE_URL=$restore_url" >> "$GITHUB_ENV"
+      - name: Verify restored migrations, records, startup and authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATABASE_URL="$RESTORE_DATABASE_URL" npx prisma migrate deploy
+          RESTORE_DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/verify-native-state.mjs --require-representative-records
+          if [ -f "$RUNNER_TEMP/dublancer-primary.pid" ]; then kill "$(cat "$RUNNER_TEMP/dublancer-primary.pid")" 2>/dev/null || true; fi
+          DATABASE_URL="$RESTORE_DATABASE_URL" HOSTNAME=127.0.0.1 PORT=3001 npm run start > "$RUNNER_TEMP/dublancer-restored.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dublancer-restored.pid"
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3001/api/health/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          HEALTH_BASE_URL=http://127.0.0.1:3001 DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/verify-health-contract.mjs
+          DATABASE_URL="$RESTORE_DATABASE_URL" RESTORE_BASE_URL=http://127.0.0.1:3001 RESTORE_FIXTURE_PASSWORD='Browser!Release12345' node scripts/verify-restored-auth.mjs
+      - name: Upload encrypted backup evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-native-postgresql-backup
+          retention-days: 7
+          path: |
+            ${{ env.BACKUP_DIR }}/dublancer.dump.enc
+            ${{ env.BACKUP_DIR }}/backup-manifest.json
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-certification-failure-evidence
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            test-results/playwright
+            playwright-report
+            ${{ runner.temp }}/dublancer-primary.log
+            ${{ runner.temp }}/dublancer-https-proxy.log
+            ${{ runner.temp }}/dublancer-payment-provider.log
+            ${{ runner.temp }}/dublancer-restored.log
+      - name: Stop disposable environment
+        if: always()
+        shell: bash
+        run: |
+          for pid_file in "$RUNNER_TEMP/dublancer-https-proxy.pid" "$RUNNER_TEMP/dublancer-primary.pid" "$RUNNER_TEMP/dublancer-restored.pid" "$RUNNER_TEMP/dublancer-payment-provider.pid"; do
+            if [ -f "$pid_file" ]; then kill "$(cat "$pid_file")" 2>/dev/null || true; fi
+          done
+          docker rm --force dublancer-release-redis dublancer-release-postgres >/dev/null 2>&1 || true

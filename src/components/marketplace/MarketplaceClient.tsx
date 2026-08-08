@@ -412,7 +412,7 @@ function ListingDetail({ listingId, activePersonaType }: { listingId: string; ac
   const listing = useApiResource<Listing>(
     `/api/marketplace/listings/${listingId}`,
   );
-  if (listing.loading)
+  if (listing.loading && !listing.data)
     return <p className="enterprise-loading py-24">{t("loadingProject")}</p>;
   if (!listing.data)
     return (

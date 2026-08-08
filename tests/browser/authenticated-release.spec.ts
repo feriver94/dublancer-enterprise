@@ -1,10 +1,15 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { createHmac } from "node:crypto";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type ApiResult<T> = { status: number; data: T; error?: { code?: string; message?: string } };
 type Persona = { id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; status: string };
 type PersonaOverview = { activePersonaId: string | null; account: { accountPersonas: Persona[] } };
 type Proposal = { id: string; status: string; version: number; coverLetter: string; listing?: { id: string; title: string }; contract?: { id: string } | null };
-type ContractView = { id: string; title: string; status: string; version: number; viewerParty: "CLIENT" | "PROVIDER"; termsHash: string };
+type Submission = { id: string; status: string; version: number };
+type Milestone = { id: string; status: string; version: number; submissions: Submission[] };
+type ContractView = { id: string; title: string; status: string; version: number; valueMinor: string; currency: string; viewerParty: "CLIENT" | "PROVIDER"; termsHash: string; milestones: Milestone[] };
+type Invoice = { id: string; status: string; version: number; paymentSchedules: Array<{ status: string }> };
+type Charge = { id: string; status: string; organizationId: string; providerRef: string; amountMinor: string; currency: string };
 
 function suffix(testInfo: TestInfo) {
   return `${testInfo.project.name.replace(/[^a-z0-9]/gi, "").toLowerCase()}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -55,6 +60,15 @@ async function loginThroughUi(page: Page, email: string, password: string) {
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/(onboarding|dashboard)/);
+}
+
+async function saveProfileForm(page: Page, form: Locator) {
+  const saved = page.waitForResponse((response) =>
+    response.request().method() === "PATCH" && new URL(response.url()).pathname === "/api/profile/settings");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  await expect(page.getByRole("status")).toContainText("Changes saved");
 }
 
 async function completeOnboarding(page: Page, selected: Array<Persona["type"]>, label: string) {
@@ -342,12 +356,99 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await acceptContract(page, completedContractId);
       await acceptContract(providerPage, completedContractId);
 
-      const invalid = await api(page, `/api/contracts/${completedContractId}/reviews`, {
+      let clientContract = (await api<ContractView>(page, `/api/contracts/${completedContractId}`)).data;
+      const milestone = (await api<Milestone>(page, `/api/contracts/${completedContractId}/milestones`, {
+        method: "POST",
+        expected: [201],
+        body: {
+          title: `Browser settlement ${run}`,
+          description: "Release-certified governed delivery and settlement evidence.",
+          amountMinor: clientContract.valueMinor,
+          currency: clientContract.currency,
+        },
+      })).data;
+      const providerContract = (await api<ContractView>(providerPage, `/api/contracts/${completedContractId}`)).data;
+      const providerMilestone = providerContract.milestones.find((item) => item.id === milestone.id);
+      expect(providerMilestone).toBeTruthy();
+      await api<Submission>(providerPage, `/api/contracts/${completedContractId}/milestones/${milestone.id}/submissions`, {
+        method: "POST",
+        expected: [201],
+        body: { note: "Authenticated browser delivery evidence.", expectedMilestoneVersion: providerMilestone?.version },
+      });
+      clientContract = (await api<ContractView>(page, `/api/contracts/${completedContractId}`)).data;
+      const submittedMilestone = clientContract.milestones.find((item) => item.id === milestone.id);
+      const submission = submittedMilestone?.submissions[0];
+      expect(submittedMilestone?.status).toBe("SUBMITTED");
+      expect(submission).toBeTruthy();
+      await api(page, `/api/contracts/${completedContractId}/milestones/${milestone.id}/submissions`, {
+        method: "PATCH",
+        body: {
+          submissionId: submission?.id,
+          decision: "APPROVED",
+          note: "Authenticated browser delivery accepted.",
+          expectedMilestoneVersion: submittedMilestone?.version,
+          expectedSubmissionVersion: submission?.version,
+        },
+      });
+
+      const dueAt = new Date(Date.now() + 14 * 86_400_000).toISOString();
+      let invoice = (await api<Invoice>(page, "/api/finance/invoices", {
+        method: "POST",
+        expected: [201],
+        body: {
+          number: `BROWSER-${run}`,
+          contractId: completedContractId,
+          contractMilestoneId: milestone.id,
+          currency: clientContract.currency,
+          dueAt,
+          lines: [{ description: "Authenticated browser settlement", quantity: 1, unitAmountMinor: clientContract.valueMinor, taxRateBasisPoints: 0 }],
+        },
+      })).data;
+      invoice = (await api<Invoice>(page, `/api/finance/invoices/${invoice.id}`, {
+        method: "PATCH",
+        body: { action: "ISSUE", expectedVersion: invoice.version, dueAt },
+      })).data;
+      const charge = (await api<Charge>(page, "/api/finance/charges", {
+        method: "POST",
+        expected: [202],
+        body: { invoiceId: invoice.id, idempotencyKey: `browser-charge-${run}` },
+      })).data;
+      expect(charge.status).toBe("PROCESSING");
+      const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+      expect(webhookSecret, "PAYMENT_WEBHOOK_SECRET must be configured for release settlement").toBeTruthy();
+      const webhookBody = JSON.stringify({
+        type: "charge.succeeded",
+        organizationId: charge.organizationId,
+        providerReference: charge.providerRef,
+        amountMinor: charge.amountMinor,
+        currency: charge.currency,
+      });
+      const webhook = await page.context().request.post("/api/webhooks/payments/payment-broker", {
+        headers: {
+          "content-type": "application/json",
+          "x-provider-event-id": `browser-charge-${run}`,
+          "x-provider-signature": createHmac("sha256", webhookSecret ?? "").update(webhookBody).digest("hex"),
+        },
+        data: webhookBody,
+      });
+      expect(webhook.status(), await webhook.text()).toBe(202);
+      invoice = (await api<Invoice>(page, `/api/finance/invoices/${invoice.id}`)).data;
+      expect(invoice.status).toBe("PAID");
+      expect(invoice.paymentSchedules[0]?.status).toBe("RELEASED");
+      clientContract = (await api<ContractView>(page, `/api/contracts/${completedContractId}`)).data;
+      const releasedMilestone = clientContract.milestones.find((item) => item.id === milestone.id);
+      expect(releasedMilestone?.status).toBe("RELEASED");
+      await api(page, `/api/contracts/${completedContractId}/milestones/${milestone.id}/closeout`, {
+        method: "POST",
+        body: { note: "Payment and authenticated browser evidence reconciled.", expectedVersion: releasedMilestone?.version },
+      });
+
+      const premature = await api(page, `/api/contracts/${completedContractId}/reviews`, {
         method: "POST",
         expected: [409],
-        body: { overall: 6, quality: 5, communication: 5, delivery: 5, expertise: 5, professionalism: 5, body: "Invalid and premature." },
+        body: { overall: 5, quality: 5, communication: 5, delivery: 5, expertise: 5, professionalism: 5, body: "Premature review denied." },
       });
-      expect(invalid.status).toBe(409);
+      expect(premature.status).toBe(409);
 
       await page.goto(`/contracts/${completedContractId}`);
       const completion = page.locator("form.enterprise-form").filter({ has: page.locator('textarea[name="note"]') }).filter({ hasText: "Confirm milestone closeout" });
@@ -402,26 +503,23 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await providerPage.goto("/settings/profiles");
       const personalForm = providerPage.locator("form.profile-form").filter({ has: providerPage.locator('input[name="username"]') });
       await personalForm.locator('input[name="username"]').fill(username);
-      await personalForm.getByRole("button", { name: "Save changes" }).click();
-      await expect(providerPage.getByRole("status")).toContainText("Changes saved");
+      await saveProfileForm(providerPage, personalForm);
       await providerPage.getByRole("button", { name: "Freelancer profile" }).click();
       const freelancerForm = providerPage.locator("form.profile-form").filter({ has: providerPage.locator('select[name="visibility"]') });
       await freelancerForm.locator('select[name="visibility"]').selectOption("PUBLIC");
-      await freelancerForm.getByRole("button", { name: "Save changes" }).click();
-      await expect(providerPage.getByRole("status")).toContainText("Changes saved");
+      await saveProfileForm(providerPage, freelancerForm);
       let response = await outsiderPage.goto(`/u/${username}/freelancer`);
       expect(response?.status()).toBe(200);
 
       await providerPage.getByRole("button", { name: "Freelancer profile" }).click();
       await freelancerForm.locator('select[name="visibility"]').selectOption("HIDDEN");
-      await freelancerForm.getByRole("button", { name: "Save changes" }).click();
-      await expect(providerPage.getByRole("status")).toContainText("Changes saved");
+      await saveProfileForm(providerPage, freelancerForm);
       response = await outsiderPage.goto(`/u/${username}/freelancer`);
       expect(response?.status()).toBe(404);
 
       await providerPage.getByRole("button", { name: "Freelancer profile" }).click();
       await freelancerForm.locator('select[name="visibility"]').selectOption("PUBLIC");
-      await freelancerForm.getByRole("button", { name: "Save changes" }).click();
+      await saveProfileForm(providerPage, freelancerForm);
     });
 
     await test.step("verify both dashboards, global-search keyboard behavior, English, Arabic RTL and viewport bounds", async () => {
@@ -474,6 +572,17 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       expect((await searchProjects(page, renamedTitle)).some((item) => item.entityId === project.id), "The renamed project must be searchable immediately").toBe(true);
       await api(page, `/api/projects/${project.id}`, { method: "DELETE" });
       expect((await searchProjects(page, renamedTitle)).some((item) => item.entityId === project.id), "Deleted projects must leave search immediately").toBe(false);
+      const retainedProject = (await api<{ id: string }>(page, "/api/projects", {
+        method: "POST",
+        expected: [201],
+        body: {
+          title: `Backup restore evidence ${run}`,
+          slug: `backup-restore-${run}`,
+          description: "Representative project retained for encrypted backup and restore integrity verification.",
+          currency: "AED",
+        },
+      })).data;
+      expect(retainedProject.id).not.toBe("");
 
       await expect(page.locator("html")).toHaveAttribute("lang", "en-AE");
       await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
