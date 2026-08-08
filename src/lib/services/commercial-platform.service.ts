@@ -100,20 +100,37 @@ export class ContractLifecycleService {
     return row;
   }
 
-  private party(context: TenantContext, row: { organizationId: string; providerOrganizationId: string | null; providerUserId: string | null }, requested?: "CLIENT" | "PROVIDER") {
+  private party(context: TenantContext, row: {
+    organizationId: string; providerOrganizationId: string | null; providerUserId: string | null; clientAccountId: string | null;
+    clientPersonaId: string | null; providerPersonaId: string | null; clientPersonaType: import("@prisma/client").AccountPersonaType | null; providerPersonaType: import("@prisma/client").AccountPersonaType | null;
+  }, requested?: "CLIENT" | "PROVIDER") {
+    if (row.clientAccountId && row.providerUserId && row.clientAccountId === row.providerUserId) throw new AppError("CONFLICT", "A normal external marketplace contract cannot have the same account on both sides.", 409);
     const client = row.organizationId === context.organizationId;
     const provider = row.providerOrganizationId === context.organizationId || row.providerUserId === context.userId;
-    if (requested === "CLIENT" && client) return "CLIENT" as const;
-    if (requested === "PROVIDER" && provider) return "PROVIDER" as const;
-    if (!requested && client) return "CLIENT" as const;
-    if (!requested && provider) return "PROVIDER" as const;
+    const legacy = !row.clientPersonaType && !row.providerPersonaType;
+    const clientPersona = legacy || (
+      row.clientPersonaType === "CLIENT"
+        ? context.activePersonaType === "CLIENT" && context.userId === row.clientAccountId && (!row.clientPersonaId || context.activePersonaId === row.clientPersonaId)
+        : row.clientPersonaType === "ORGANIZATION" && context.activePersonaType === "ORGANIZATION" && client
+    );
+    const providerPersona = legacy || (
+      row.providerPersonaType === "FREELANCER"
+        ? context.activePersonaType === "FREELANCER" && context.userId === row.providerUserId && (!row.providerPersonaId || context.activePersonaId === row.providerPersonaId)
+        : row.providerPersonaType === "ORGANIZATION" && context.activePersonaType === "ORGANIZATION" && row.providerOrganizationId === context.organizationId
+    );
+    if (requested === "CLIENT" && client && clientPersona) return "CLIENT" as const;
+    if (requested === "PROVIDER" && provider && providerPersona) return "PROVIDER" as const;
+    if (!requested && client && clientPersona) return "CLIENT" as const;
+    if (!requested && provider && providerPersona) return "PROVIDER" as const;
+    if ((client || provider) && !legacy) throw new AppError("FORBIDDEN", "Switch to the marketplace persona recorded for this contract side.", 403, { code: "CONTRACT_PERSONA_MISMATCH", activePersonaType: context.activePersonaType });
     throw new AppError("FORBIDDEN", "The active tenant is not an eligible contract party.", 403);
   }
 
   async get(context: TenantContext, id: string) {
     await requirePermission(context, "marketplace.contract.manage");
     const row = await this.access(context, id);
-    return { ...row, viewerParty: this.party(context, row), termsHash: hashContractTerms(row.terms) };
+    const viewerParty = this.party(context, row);
+    return { ...row, viewerParty, actingAs: viewerParty === "CLIENT" ? "CLIENT" : "PROVIDER", legacyPersonaCompatibility: !row.clientPersonaType && !row.providerPersonaType, termsHash: hashContractTerms(row.terms) };
   }
 
   async transition(context: TenantContext, id: string, status: "PENDING_SIGNATURES" | "ACTIVE" | "PAUSED" | "COMPLETED" | "TERMINATED" | "DISPUTED", expectedVersion: number) {
@@ -159,7 +176,8 @@ export class ContractLifecycleService {
 
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.contractAcceptance.create({ data: { contractId: id, party, acceptedById: context.userId, organizationId: context.organizationId, termsHash, method: input.method, ipAddress: evidence.ipAddress, userAgent: evidence.userAgent } });
+        const membership = await tx.membership.findFirst({ where: { organizationId: context.organizationId, userId: context.userId, status: "ACTIVE" }, select: { id: true } });
+        await tx.contractAcceptance.create({ data: { contractId: id, party, acceptedById: context.userId, organizationId: context.organizationId, personaId: context.activePersonaId ?? null, personaType: context.activePersonaType ?? null, membershipId: membership?.id ?? null, termsHash, method: input.method, ipAddress: evidence.ipAddress, userAgent: evidence.userAgent } });
         const acceptanceCount = await tx.contractAcceptance.count({ where: { contractId: id } });
         const changed = await tx.contract.updateMany({
           where: { id, status: "PENDING_SIGNATURES", version: input.expectedVersion },

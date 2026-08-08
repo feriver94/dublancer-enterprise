@@ -330,19 +330,22 @@ export class ProfileManagementService {
   }
 
   async toggleFollow(context: TenantContext, freelancerProfileId: string) {
-    requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
+    requireActivePersona(context, ["CLIENT", "FREELANCER", "ORGANIZATION"]);
     const target = await prisma.freelancerProfile.findFirst({
       where: { id: freelancerProfileId, deletedAt: null, visibility: { in: ["PUBLIC", "VERIFIED"] }, isPublic: true },
       select: { id: true, userId: true },
     });
     if (!target) throw new AppError("NOT_FOUND", "Freelancer profile not found.", 404);
     if (target.userId === context.userId) throw new AppError("CONFLICT", "You cannot follow your own profile.", 409);
-    const existing = await prisma.savedProvider.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, freelancerProfileId } });
+    const targetKey = `FREELANCER:${freelancerProfileId}`;
+    const existing = await prisma.profileFollow.findUnique({ where: { userId_organizationId_targetKey: { userId: context.userId, organizationId: context.organizationId, targetKey } } });
     if (existing) {
-      await prisma.savedProvider.delete({ where: { id: existing.id } });
-      return { saved: false };
+      await prisma.profileFollow.delete({ where: { id: existing.id } });
+      await audit(context, "profile.unfollowed", "FreelancerProfile", freelancerProfileId, []);
+      return { following: false };
     }
-    await prisma.savedProvider.create({ data: { userId: context.userId, organizationId: context.organizationId, freelancerProfileId } });
-    return { saved: true };
+    await prisma.profileFollow.create({ data: { userId: context.userId, organizationId: context.organizationId, freelancerProfileId, targetKey } });
+    await audit(context, "profile.followed", "FreelancerProfile", freelancerProfileId, []);
+    return { following: true };
   }
 }

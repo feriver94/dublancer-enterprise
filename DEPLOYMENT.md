@@ -1,5 +1,9 @@
 # Deployment
 
+## Phase C rollout
+
+Deploy the additive `20260802100000_dual_profile_marketplace_phase_c` migration before Phase C web/workers. Do not backfill synthetic contract personas or reviews. Existing contracts remain compatible; monitor `CONTRACT_PERSONA_MISMATCH`, invitation conflicts, search synchronization warnings and AI policy-unavailable results. Search workers and Redis remain valuable accelerators, but current project/profile correctness no longer depends on worker availability because canonical live read-through is authoritative. Roll back application code without reversing the additive migration, then correct forward if needed.
+
 ## Overview
 
 Defines CI/CD pipeline, deployment workflow, rollback strategy, and release process.

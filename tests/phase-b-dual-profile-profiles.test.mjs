@@ -26,7 +26,8 @@ test("client public profile uses an explicit privacy allowlist and live hiring a
 test("freelancer public profile contains complete portfolio and credential sections without earnings", async () => {
   const [service, page] = await Promise.all([read("src/lib/services/public-profile.service.ts"), read("src/app/u/[username]/freelancer/page.tsx")]);
   for (const field of ["portfolioItems", "workExperiences", "educations", "certifications", "skills", "resumeUrl", "videoUrl", "githubUrl", "linkedinUrl"]) assert.match(service, new RegExp(field));
-  assert.match(service, /reviewsSummary: \{ value: null, count: 0, status: "placeholder"/);
+  assert.match(service, /ReputationService/);
+  assert.match(service, /reviewsSummary: \{ value: reputation\.overall/);
   assert.doesNotMatch(service.slice(service.indexOf("async freelancer"), service.indexOf("async organization")), /financialTransaction|earnings/);
   for (const section of ["caseStudies", "publications", "research", "education", "certifications"]) assert.match(page, new RegExp(section));
 });

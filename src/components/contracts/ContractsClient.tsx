@@ -12,7 +12,7 @@ import { useApiResource } from "@/lib/client/use-api-resource";
 type Contract = { id: string; title: string; status: string; viewerParty: "CLIENT" | "PROVIDER"; valueMinor: string; currency: string; project?: { id: string; title: string } | null; milestones: Array<{ id: string }> };
 type Project = { id: string; title: string; status: string };
 
-export default function ContractsClient() {
+export default function ContractsClient({ activePersonaType }: { activePersonaType: "CLIENT" | "FREELANCER" | "ORGANIZATION" | null }) {
   const t = useTranslations("Contracts");
   const common = useTranslations("Common");
   const status = useTranslations("Status");
@@ -68,11 +68,11 @@ export default function ContractsClient() {
     </div>
     {error || contracts.error || projects.error ? <p className="enterprise-error mb-5" role="alert">{error || contracts.error || projects.error}</p> : null}
     {notice ? <p className="enterprise-notice mb-5" role="status">{notice}</p> : null}
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className={`grid gap-6 ${activePersonaType === "FREELANCER" ? "" : "xl:grid-cols-[minmax(0,1fr)_380px]"}`}>
       <Card variant="elevated">
         {contracts.loading ? <p className="enterprise-loading">{t("loading")}</p> : contracts.data?.length ? <div className="grid gap-4">{contracts.data.map((contract) => <Link key={contract.id} href={`/contracts/${contract.id}`} className="rounded-2xl border border-slate-200 p-5 hover:border-[#009A44]"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-[#0F4C5C]">{contract.title}</h2><p className="text-sm text-slate-500">{contract.project?.title ?? t("standalone")} · {t("milestoneCount", { count: contract.milestones.length })} · {t("actingAs", { party: label(contract.viewerParty).toLocaleLowerCase(locale) })}</p></div><Badge variant={contract.status === "ACTIVE" ? "success" : "info"}>{label(contract.status)}</Badge></div><p className="mt-4 font-bold text-[#009A44]">{formatAed(Number(contract.valueMinor) / 100, locale)}</p></Link>)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center"><p className="enterprise-empty">{t("empty")}</p><a href="#contract-create" className="mt-4 inline-block rounded-full bg-[#009A44] px-5 py-3 font-bold text-white">{t("createFirst")}</a></div>}
       </Card>
-      <Card id="contract-create" variant="elevated">
+      {activePersonaType !== "FREELANCER" ? <Card id="contract-create" variant="elevated">
         <h2 className="text-2xl font-bold text-[#0F4C5C]">{t("createContract")}</h2>
         <p className="mt-2 text-sm text-slate-600">{t("createHelp")}</p>
         <form className="enterprise-form mt-5" onSubmit={(event) => void create(event)}>
@@ -85,7 +85,7 @@ export default function ContractsClient() {
           <details className="rounded-xl border p-3"><summary className="cursor-pointer font-bold">{t("providerIdentifiers")}</summary><div className="mt-3 grid gap-3"><label>{t("providerOrganizationId")}<input name="providerOrganizationId" /></label><label>{t("providerUserId")}<input name="providerUserId" /></label></div></details>
           <Button disabled={pending}>{pending ? common("saving") : t("createContract")}</Button>
         </form>
-      </Card>
+      </Card> : null}
     </div>
   </main>;
 }

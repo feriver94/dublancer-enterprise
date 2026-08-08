@@ -128,8 +128,8 @@ try {
   assert.ok(milestone.closedAt);
   contractView = (await request(client.jar, `/api/contracts/${contract.id}`)).data;
   await request(client.jar, `/api/contracts/${contract.id}/completion`, { method: "POST", body: { note: "All contract and delivery obligations are complete.", checklist: { milestoneCloseout: true, deliveryAccepted: true, disputesResolved: true }, expectedVersion: contractView.version } });
-  await request(client.jar, `/api/contracts/${contract.id}/reviews`, { method: "POST", expected: [201], body: { rating: 5, title: "Excellent delivery", body: "All governed outcomes were achieved." } });
-  await request(provider.jar, `/api/contracts/${contract.id}/reviews`, { method: "POST", expected: [201], body: { rating: 5, title: "Excellent client", body: "Decisions and payments were clear." } });
+  await request(client.jar, `/api/contracts/${contract.id}/reviews`, { method: "POST", expected: [201], body: { overall: 5, quality: 5, communication: 5, delivery: 5, expertise: 5, professionalism: 5, title: "Excellent delivery", body: "All governed outcomes were achieved." } });
+  await request(provider.jar, `/api/contracts/${contract.id}/reviews`, { method: "POST", expected: [201], body: { overall: 5, hiringClarity: 5, communication: 5, paymentReliability: 5, professionalConduct: 5, title: "Excellent client", body: "Decisions and payments were clear." } });
   const reviews = await request(client.jar, `/api/contracts/${contract.id}/reviews`); assert.equal(reviews.data.length, 2);
   await request(outsider.jar, `/api/contracts/${contract.id}`, { expected: [404] });
 

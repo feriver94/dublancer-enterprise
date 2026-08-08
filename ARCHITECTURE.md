@@ -1,5 +1,9 @@
 # Architecture — Sprint 29
 
+## Dual-Profile Phase C integration
+
+Phase C keeps `User` as principal, `AccountPersona` as session-bound operating context, `Membership` as tenant authority and Phase B profiles as presentation identities. `PhaseCMarketplaceService` owns separate save/follow/invite/compare workflows; marketplace awards and contract lifecycle services persist and enforce immutable side-persona evidence; `ReputationService` projects only published eligible reviews. Search now combines authoritative permission-filtered canonical reads with the durable index as an accelerator/supplement, preventing worker availability from becoming a correctness dependency. AI profile help is an input-minimizing adapter over the Phase 5 governance service and never persists generated text.
+
 ## Dual-Profile Phase B presentation layer
 
 Phase B consumes rather than replaces Phase A identity and authorization. `User` is the login principal, `AccountPersona` is operating context, active membership is the tenant boundary, and client/freelancer/company profiles are presentation records. Public serializers use separate allowlisted queries; dashboards use tenant-scoped read models over existing product tables; settings/content writes combine persona/RBAC, ownership predicates, versions and audit events. Completion is calculated from stored data and never persisted as a score.

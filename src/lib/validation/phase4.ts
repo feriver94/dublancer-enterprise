@@ -53,7 +53,7 @@ export const phase4UnlockFileSchema = z.object({ lockToken: z.string().trim().mi
 
 export const phase4SearchSchema = z.object({
   q: z.string().trim().min(2).max(200),
-  entityType: z.enum(["all", "project", "task", "user", "file", "contract", "organization", "listing", "knowledge_article", "knowledge_faq"]).default("all"),
+  entityType: z.enum(["all", "project", "task", "user", "file", "contract", "organization", "listing", "client_profile", "freelancer_profile", "public_organization", "knowledge_article", "knowledge_faq"]).default("all"),
   projectId: id.optional(),
   locale: z.enum(["en-AE", "ar-AE"]).optional(),
   cursor: z.string().trim().min(1).max(1000).optional(),

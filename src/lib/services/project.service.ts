@@ -11,6 +11,13 @@ import {
 import { AuditRepository } from "@/lib/repositories/audit.repository";
 import { requirePermission } from "@/lib/authorization/permission-resolver";
 import { requireProjectAccess } from "@/lib/authorization/project-access";
+import { SearchIndexService } from "@/lib/services/search-index.service";
+import { logger } from "@/lib/observability/logger";
+
+async function synchronizeProject(organizationId: string, projectId: string, action: "UPSERT" | "DELETE") {
+  try { await new SearchIndexService().synchronizeEntity(organizationId, "PROJECT", projectId, action); }
+  catch (error) { logger.warn("search.project_synchronization_failed", { organizationId, projectId, action, error }); }
+}
 
 export class ProjectService {
   async list(
@@ -65,7 +72,7 @@ export class ProjectService {
     await requirePermission(context, "project.create");
 
     try {
-      return await withTransaction(async (tx) => {
+      const created = await withTransaction(async (tx) => {
         const projects = new ProjectRepository(tx);
         const audit = new AuditRepository(tx);
 
@@ -103,6 +110,8 @@ export class ProjectService {
 
         return project;
       });
+      await synchronizeProject(context.organizationId, created.id, "UPSERT");
+      return created;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -128,7 +137,7 @@ export class ProjectService {
     await requirePermission(context, "project.update");
     await requireProjectAccess(context, projectId, ["OWNER", "MANAGER"]);
 
-    return withTransaction(async (tx) => {
+    const updated = await withTransaction(async (tx) => {
       const projects = new ProjectRepository(tx);
       const audit = new AuditRepository(tx);
 
@@ -176,6 +185,8 @@ export class ProjectService {
 
       return updated;
     });
+    await synchronizeProject(context.organizationId, projectId, "UPSERT");
+    return updated;
   }
 
   async delete(context: TenantContext, projectId: string) {
@@ -183,7 +194,7 @@ export class ProjectService {
     await requirePermission(context, "project.delete");
     await requireProjectAccess(context, projectId, ["OWNER"]);
 
-    return withTransaction(async (tx) => {
+    const deleted = await withTransaction(async (tx) => {
       const projects = new ProjectRepository(tx);
       const audit = new AuditRepository(tx);
 
@@ -216,5 +227,7 @@ export class ProjectService {
 
       return deleted;
     });
+    await synchronizeProject(context.organizationId, projectId, "DELETE");
+    return deleted;
   }
 }

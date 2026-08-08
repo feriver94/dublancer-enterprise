@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function FreelancerPublicProfile({ params }: { params: Promise<{ username: string }> }) {
   const t = await getTranslations("ProfilePhaseB");
+  const c = await getTranslations("PhaseC");
   let data;
   try { data = await new PublicProfileService().freelancer((await params).username.toLowerCase()); }
   catch (error) { if (isAppError(error) && error.statusCode === 404) notFound(); throw error; }
@@ -18,9 +19,9 @@ export default async function FreelancerPublicProfile({ params }: { params: Prom
   const timeline = (items: Array<Record<string, unknown>>, primary: string, secondary: string) => <div className="profile-timeline">{items.map((item) => <article key={String(item.id)}><h3>{String(item[primary])}</h3><p>{String(item[secondary] ?? "")}</p>{item.description ? <p>{String(item.description)}</p> : null}</article>)}</div>;
   const projects = (items: typeof p.portfolio) => <div className="profile-projects">{items.map((item) => <article key={item.id}><h3>{item.title}</h3><p>{item.description}</p>{item.projectUrl ? <a href={item.projectUrl} rel="noreferrer" target="_blank">{t("viewProject")}</a> : null}</article>)}</div>;
   return <><Navbar /><main className="profile-page"><ProfileHero bannerUrl={p.bannerUrl} avatarUrl={p.avatarUrl} title={p.headline} subtitle={`${p.countryCode} · ${p.availability}`} badges={<>{data.trustBadges.identity ? <span>{t("verifiedIdentity")}</span> : null}{data.trustBadges.verifiedSkills ? <span>{t("verifiedSkills")}: {data.trustBadges.verifiedSkills}</span> : null}</>}>
-    <PublicProfileActions sharePath={data.actions.share} report={data.actions.report} inviteHref={data.actions.invite} hireHref={data.actions.hire} messageHref={data.actions.message} followId={p.id} labels={{ invite: t("invite"), hire: t("hire"), message: t("message"), follow: t("follow"), share: t("share"), report: t("report"), reported: t("reported") }} />
+    <PublicProfileActions sharePath={data.actions.share} report={data.actions.report} messageHref={data.actions.message} labels={{ invite: t("invite"), hire: t("hire"), message: t("message"), follow: t("follow"), share: t("share"), report: t("report"), reported: t("reported"), save: c("save"), unsave: c("unsave"), unfollow: c("unfollow"), compare: c("compare"), selectProject: c("selectProject"), invited: c("invited"), retry: c("retry"), unavailable: c("unavailable") }} />
   </ProfileHero>
-  <ProfileStats items={[{ label: t("hourlyRate"), value: p.hourlyRateMinor ? `${p.hourlyRateMinor} ${p.currency}` : "—" }, { label: t("yearsExperience"), value: p.yearsExperience }, { label: t("fixedPrice"), value: p.fixedPriceAvailable ? t("available") : t("unavailable") }, { label: t("reviews"), value: t("phaseCPlaceholder") }]} />
+  <ProfileStats items={[{ label: t("hourlyRate"), value: p.hourlyRateMinor ? `${p.hourlyRateMinor} ${p.currency}` : "—" }, { label: t("yearsExperience"), value: p.yearsExperience }, { label: t("fixedPrice"), value: p.fixedPriceAvailable ? t("available") : t("unavailable") }, { label: t("reviews"), value: data.reviewsSummary.status === "AVAILABLE" ? `${data.reviewsSummary.value} / 5 (${data.reviewsSummary.count})` : c("notEnoughData") }]} />
   <div className="profile-layout"><div>
     <ProfileSection title={t("summary")} empty={!p.summary}><p className="profile-copy">{p.summary}</p></ProfileSection>
     <ProfileSection title={t("services")} empty={!p.services.length}><TagList items={p.services} /></ProfileSection>
@@ -32,5 +33,6 @@ export default async function FreelancerPublicProfile({ params }: { params: Prom
     <ProfileSection title={t("certifications")} empty={!p.certifications.length}>{timeline(p.certifications, "name", "issuer")}</ProfileSection>
     <ProfileSection title={t("publications")} empty={!p.publications.length}>{projects(p.publications)}</ProfileSection>
     <ProfileSection title={t("research")} empty={!p.research.length}>{projects(p.research)}</ProfileSection>
+    <ProfileSection title={c("reputation")} empty={data.reviewsSummary.status !== "AVAILABLE"}><div className="profile-projects">{data.reviewsSummary.recentReviews.map((review) => <article key={review.id}><h3>{review.title ?? `${review.rating} / 5`}</h3><p>{review.body}</p></article>)}</div></ProfileSection>
   </div><aside className="profile-aside"><dl><dt>{t("languages")}</dt><dd>{p.languages.join(", ") || "—"}</dd><dt>{t("industries")}</dt><dd>{p.industries.join(", ") || "—"}</dd><dt>{t("memberSince")}</dt><dd>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(p.memberSince))}</dd><dt>{t("videoIntroduction")}</dt><dd>{p.videoIntroduction.status === "available" ? t("available") : t("placeholder")}</dd></dl><div className="profile-links">{p.github ? <a href={p.github} rel="noreferrer" target="_blank">GitHub</a> : null}{p.linkedin ? <a href={p.linkedin} rel="noreferrer" target="_blank">LinkedIn</a> : null}{p.resume ? <a href={p.resume} rel="noreferrer" target="_blank">{t("resume")}</a> : null}{p.socialLinks.map((link) => <a key={link.platform} href={link.url} rel="noreferrer" target="_blank">{link.platform}</a>)}</div></aside></div></main><Footer /></>;
 }

@@ -1,5 +1,23 @@
 # Sprint 29 Chat API
 
+## Dual-Profile Phase C
+
+| Method | Route | Persona-aware purpose |
+|---|---|---|
+| `GET` | `/api/profile-actions` | Derive save/follow/invite/compare/message capabilities and state for one public target. |
+| `POST` | `/api/profile-actions` | Perform distinct `SAVE`, `FOLLOW` or listing-bound `INVITE` mutations. |
+| `GET/POST` | `/api/marketplace/invitations` | List provider invitations or create a client invitation. |
+| `PATCH` | `/api/marketplace/invitations/:id` | Version-guarded provider accept/decline. |
+| `GET` | `/api/marketplace/providers/compare?ids=...` | Compare two to four eligible public providers. |
+| `PATCH` | `/api/marketplace/proposals/:id` | Provider draft/revision update/withdraw or client shortlist/reject according to persona. |
+| `POST` | `/api/marketplace/proposals/:id/award` | Existing atomic award with persisted client/provider persona evidence. |
+| `POST` | `/api/contracts/:id/acceptances` | Accept only the contract side recorded for the active persona. |
+| `POST` | `/api/contracts/:id/reviews` | Create one immutable directional completed-engagement review. |
+| `POST` | `/api/profile/ai-assistance` | Request optional Phase 5-governed profile assistance; never writes a profile. |
+| `GET` | `/api/search` | Authoritative internal/public live search with indexed/federated supplements. |
+
+All Phase C writes require the authenticated session, CSRF, active persona, existing RBAC, tenant/ownership checks and bounded validation. Conflict responses preserve the contextual server message and applicable recovery detail.
+
 ## Dual-Profile Phase B
 
 Public GET endpoints are `/api/public/users/[username]/client`, `/api/public/users/[username]/freelancer` and `/api/public/organizations/[slug]`. They return explicit public allowlists and 404 unless profile visibility and the Phase A persona state permit publication.

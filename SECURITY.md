@@ -1,5 +1,9 @@
 # Sprint 29 Security Controls
 
+## Dual-Profile Phase C authorization
+
+Marketplace and contract authority is the intersection of the signed session’s active persona, existing RBAC and active tenant membership. Listing/proposal/award/acceptance/review routes never accept an acting persona from the browser. New contracts record both sides; wrong persona, wrong side, wrong tenant and same-account external contracting are rejected. Directional review uniqueness, completed-contract eligibility and one-to-five database constraints limit manipulation. Public comparison, reputation and search apply Phase B visibility/persona-state allowlists and exclude private profile fields and earnings. AI assistance sends a minimal persona-scoped allowlist through the existing Phase 5 policy, budget, approval and audit boundary and cannot publish content.
+
 ## Dual-Profile Phase B privacy boundary
 
 Public routes require `PUBLIC` or `VERIFIED` visibility, an active Phase A persona and no soft-delete marker; other states return 404. Public Prisma selects structurally omit email, phone, billing, private contracts, memberships, RBAC and audit data. Verified spend is opt-in and freelancer earnings remain authenticated-only. Mutations require CSRF, session, the correct active persona, applicable RBAC, membership, ownership and optimistic versions. Sensitive writes create audit evidence without copying private values into public responses.

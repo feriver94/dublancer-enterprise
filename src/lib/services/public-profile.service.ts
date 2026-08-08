@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
+import { ReputationService } from "@/lib/services/reputation.service";
 
 const publicVisibility = ["PUBLIC", "VERIFIED"] as const;
 
@@ -69,7 +70,7 @@ export class PublicProfileService {
     }
 
     const organizationId = profile.persona.organizationId;
-    const [openProjects, activeProjects, completedProjects, contracts, spend] = await Promise.all([
+    const [openProjects, activeProjects, completedProjects, contracts, spend, reputation] = await Promise.all([
       prisma.marketplaceListing.count({ where: { organizationId, status: "PUBLISHED" } }),
       prisma.project.count({ where: { organizationId, status: "IN_PROGRESS" } }),
       prisma.project.count({ where: { organizationId, status: "COMPLETED" } }),
@@ -83,6 +84,7 @@ export class PublicProfileService {
             _sum: { amountMinor: true },
           })
         : Promise.resolve(null),
+      new ReputationService().client(profile.id),
     ]);
 
     const providerKeys = contracts.map((contract) => contract.providerOrganizationId ?? contract.providerUserId).filter(Boolean) as string[];
@@ -129,10 +131,11 @@ export class PublicProfileService {
         verifiedSpendMinor: profile.showVerifiedSpend ? (spend?._sum.amountMinor ?? BigInt(0)).toString() : null,
         numberOfHires: hires,
         repeatHireRate: hires ? Math.round((repeated / hires) * 100) : 0,
-        clientRating: { value: null, count: 0, deferredTo: "Phase C" },
+        clientRating: { value: reputation.overall, count: reputation.reviewCount, status: reputation.status },
+        reputation,
       },
       organization: organizationPublic ? { name: profile.persona.organization.name, slug: profile.persona.organization.slug } : null,
-      actions: actionLinks("CLIENT_PROFILE", profile.id, user.username),
+      actions: { message: `/communications/chat?user=${user.id}`, ...actionLinks("CLIENT_PROFILE", profile.id, user.username) },
     };
   }
 
@@ -202,7 +205,7 @@ export class PublicProfileService {
     if (!user?.username || !profile || profile.persona?.status !== "ACTIVE") {
       throw new AppError("NOT_FOUND", "Freelancer profile not found.", 404);
     }
-    const credentials = verifiedTypes(user.verifiedCredentials);
+    const [credentials, reputation] = [verifiedTypes(user.verifiedCredentials), await new ReputationService().provider(profile.id)];
     const byType = (type: "PORTFOLIO" | "CASE_STUDY" | "PUBLICATION" | "RESEARCH") => profile.portfolioItems.filter((item) => item.contentType === type);
 
     return {
@@ -243,7 +246,8 @@ export class PublicProfileService {
         verifiedSkills: profile.skills.filter((skill) => Boolean(skill.verifiedAt)).length,
         credentials: [...credentials],
       },
-      reviewsSummary: { value: null, count: 0, status: "placeholder", deferredTo: "Phase C" },
+      reviewsSummary: { value: reputation.overall, count: reputation.reviewCount, status: reputation.status, dimensions: reputation.dimensions, recentReviews: reputation.recentReviews },
+      reputation,
       actions: {
         invite: `/marketplace/invitations/new?provider=${profile.id}`,
         hire: `/marketplace/contracts/new?provider=${profile.id}`,
@@ -305,7 +309,7 @@ export class PublicProfileService {
       portfolio: organization.companyProfile.portfolio,
       completedProjects: organization._count.projects,
       verification: { verified: Boolean(organization.companyProfile.verifiedAt), verifiedAt: organization.companyProfile.verifiedAt },
-      actions: { share: `/org/${organization.slug}`, report: { endpoint: "/api/profiles/report", resourceType: "ORGANIZATION_PROFILE" as const, resourceId: organization.id } },
+      actions: { message: `/communications/chat?organization=${organization.id}`, share: `/org/${organization.slug}`, report: { endpoint: "/api/profiles/report", resourceType: "ORGANIZATION_PROFILE" as const, resourceId: organization.id } },
     };
   }
 }

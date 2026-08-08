@@ -1,5 +1,14 @@
 # Changelog
 
+## Phase C — Dual-Profile Marketplace Integration and Reputation — 2026-08-08
+
+- Added persona-aware client/provider marketplace navigation, distinct save/follow/invite workflows, provider comparison and governed invitation responses.
+- Added immutable contract-side persona/profile evidence, persona-bound acceptance and legacy compatibility without fabricated associations.
+- Extended the existing review domain with independent client/provider dimensions and deterministic public reputation with explicit insufficient-data states.
+- Fixed Global Search false negatives with immediate project synchronization plus authoritative case-insensitive partial live reads for six internal and three public identity types.
+- Preserved optimistic concurrency while exposing contextual recovery, and integrated optional profile help with existing Phase 5 AI policy, budgets, approvals and audit.
+- Added additive migration `20260802100000_dual_profile_marketplace_phase_c`, 90-test static coverage, fresh 21-migration verification and expanded Phase A/B/search runtime regressions.
+
 ## Phase B — Dual-Profile Public Profiles and Dashboards — 2026-08-08
 
 - Added privacy-governed client and freelancer/provider public profiles plus an organization public-profile foundation.

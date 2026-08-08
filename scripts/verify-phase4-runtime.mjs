@@ -365,7 +365,8 @@ process.memoryUsage=safe;
   const secondPage = await request(owner.jar, `/api/search?q=Phase&entityType=all&take=1&cursor=${encodeURIComponent(search.meta.nextCursor)}`);
   assert.equal(secondPage.data.length, 1);
   const outsiderSearch = await request(outsider.jar, "/api/search?q=Phase&entityType=all&take=20");
-  assert.equal(outsiderSearch.data.length, 0);
+  assert.ok(!outsiderSearch.data.some((result) => result.entityType === "PROJECT" && result.entityId === project.id));
+  assert.ok(!outsiderSearch.data.some((result) => result.entityType === "FILE" && result.entityId === first.file.id));
   await request(restricted.jar, "/api/search?q=Phase&entityType=all", { expected: [403] });
   await request(restricted.jar, "/api/files/upload-intents", { method: "POST", expected: [403], body: { name: "denied.txt", mimeType: "text/plain", sizeBytes: 1, checksumSha256: bufferHash(Buffer.from("x")) } });
 

@@ -165,6 +165,7 @@ export class MarketplaceService {
         data: {
           organizationId: context.organizationId,
           postedById: context.userId,
+          actingPersonaId: context.activePersonaId ?? null,
           title: input.title,
           description: input.description,
           engagementType: input.engagementType,
@@ -222,6 +223,7 @@ export class MarketplaceService {
           listingId: listing.id,
           freelancerProfileId: profile.id,
           submittedById: context.userId,
+          providerPersonaId: context.activePersonaId ?? null,
           providerOrganizationId: context.organizationId,
           coverLetter: input.coverLetter,
           bidMinor: input.bidMinor,
@@ -235,6 +237,30 @@ export class MarketplaceService {
       });
       await event(tx, { ...context, organizationId: listing.organizationId }, "marketplace.proposal.submitted", "Proposal", proposal.id, { listingId: listing.id });
       return proposal;
+    });
+  }
+
+  async updateProposal(context: TenantContext, proposalId: string, input: {
+    coverLetter: string; bidMinor: bigint; currency: string; estimatedDays?: number; submit: boolean; expectedVersion: number;
+  }) {
+    requireActivePersona(context, ["FREELANCER", "ORGANIZATION"]);
+    await requirePermission(context, "marketplace.proposal.manage");
+    const proposal = await prisma.proposal.findFirst({
+      where: { id: proposalId, submittedById: context.userId, providerPersonaId: context.activePersonaId },
+      include: { listing: { select: { status: true } } },
+    });
+    if (!proposal) throw new AppError("NOT_FOUND", "Proposal not found for the active provider persona.", 404);
+    if (!["DRAFT", "REVISION_REQUESTED"].includes(proposal.status) || proposal.listing.status !== "PUBLISHED") throw new AppError("CONFLICT", "Only a draft or requested revision can be edited while the listing is open.", 409);
+    const nextStatus = input.submit ? "SUBMITTED" : "DRAFT";
+    return prisma.$transaction(async (tx) => {
+      const changed = await tx.proposal.updateMany({
+        where: { id: proposal.id, version: input.expectedVersion, status: proposal.status, submittedById: context.userId, providerPersonaId: context.activePersonaId },
+        data: { coverLetter: input.coverLetter, bidMinor: input.bidMinor, currency: input.currency, estimatedDays: input.estimatedDays, status: nextStatus, submittedAt: input.submit ? new Date() : proposal.submittedAt, currentRevision: { increment: 1 }, version: { increment: 1 } },
+      });
+      if (changed.count !== 1) throw new AppError("CONFLICT", "Newer proposal data exists. Reload before deliberately retrying.", 409, { recovery: "RELOAD", preserveInput: true });
+      await tx.proposalRevision.create({ data: { proposalId: proposal.id, createdById: context.userId, revision: proposal.currentRevision + 1, coverLetter: input.coverLetter, bidMinor: input.bidMinor, currency: input.currency, estimatedDays: input.estimatedDays, changeSummary: proposal.status === "REVISION_REQUESTED" ? "Provider response to requested revision" : "Provider draft update" } });
+      await audit(tx, context, input.submit ? "marketplace.proposal.submitted" : "marketplace.proposal.draft.updated", "Proposal", proposal.id, { previousStatus: proposal.status, revision: proposal.currentRevision + 1 });
+      return tx.proposal.findUniqueOrThrow({ where: { id: proposal.id }, include: { listing: { select: { id: true, title: true, status: true } }, revisions: { orderBy: { revision: "desc" }, take: 5 } } });
     });
   }
 
@@ -367,6 +393,8 @@ export class MarketplaceService {
           where: { id: proposalId, listing: { organizationId: context.organizationId } },
           include: {
             listing: true,
+            providerPersona: { select: { id: true, type: true, status: true, userId: true, organizationId: true } },
+            freelancerProfile: { select: { id: true, userId: true, personaId: true } },
             submittedBy: {
               select: {
                 memberships: {
@@ -379,6 +407,11 @@ export class MarketplaceService {
         });
         if (!proposal) throw new AppError("NOT_FOUND", "Proposal not found.", 404);
         requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
+        if (!context.activePersonaId || !context.activePersonaType) throw new AppError("FORBIDDEN", "An active client persona is required for award.", 403);
+        if (!proposal.providerPersona || proposal.providerPersona.status !== "ACTIVE" || proposal.providerPersona.userId !== proposal.submittedById) {
+          throw new AppError("CONFLICT", "The proposal no longer has a valid active provider persona.", 409);
+        }
+        if (proposal.submittedById === context.userId) throw new AppError("CONFLICT", "The same account cannot represent both sides of an external marketplace contract.", 409);
         if (!proposal.providerOrganizationId || !proposal.submittedBy.memberships.some((membership) => membership.organizationId === proposal.providerOrganizationId)) {
           throw new AppError("CONFLICT", "The provider no longer has an active membership in the proposing organization.", 409);
         }
@@ -424,6 +457,13 @@ export class MarketplaceService {
             proposalId: proposal.id,
             projectId: input.projectId ?? proposal.listing.workspaceProjectId,
             createdById: context.userId,
+            clientAccountId: context.userId,
+            clientProfileId: (await tx.clientProfile.findUnique({ where: { userId: context.userId }, select: { id: true } }))?.id ?? null,
+            providerProfileId: proposal.freelancerProfile.id,
+            clientPersonaId: context.activePersonaId,
+            providerPersonaId: proposal.providerPersona.id,
+            clientPersonaType: context.activePersonaType,
+            providerPersonaType: proposal.providerPersona.type,
             title: input.title,
             status: "PENDING_SIGNATURES",
             valueMinor: proposal.bidMinor,
@@ -477,16 +517,31 @@ export class MarketplaceService {
 
 export class ContractService {
   async list(context: TenantContext) {
+    requireActivePersona(context, ["CLIENT", "FREELANCER", "ORGANIZATION"]);
+    const where: Prisma.ContractWhereInput = context.activePersonaType === "CLIENT"
+      ? { OR: [{ clientPersonaId: context.activePersonaId ?? "__missing__" }, { clientPersonaType: null, organizationId: context.organizationId }] }
+      : context.activePersonaType === "FREELANCER"
+        ? { OR: [{ providerPersonaId: context.activePersonaId ?? "__missing__" }, { providerPersonaType: null, providerUserId: context.userId }] }
+        : { OR: [
+            { clientPersonaType: "ORGANIZATION", organizationId: context.organizationId },
+            { providerPersonaType: "ORGANIZATION", providerOrganizationId: context.organizationId },
+            { clientPersonaType: null, providerPersonaType: null, OR: [{ organizationId: context.organizationId }, { providerOrganizationId: context.organizationId }] },
+          ] };
     const contracts = await prisma.contract.findMany({
-      where: { OR: [{ organizationId: context.organizationId }, { providerOrganizationId: context.organizationId }, { providerUserId: context.userId }] },
+      where,
       include: { milestones: true, proposal: { select: { id: true, status: true } }, project: { select: { id: true, title: true } } },
       orderBy: { updatedAt: "desc" },
       take: 100,
     });
-    return contracts.map((contract) => ({
-      ...contract,
-      viewerParty: contract.organizationId === context.organizationId ? "CLIENT" as const : "PROVIDER" as const,
-    }));
+    return contracts.map((contract) => {
+      const legacy = !contract.clientPersonaType && !contract.providerPersonaType;
+      const viewerParty = context.activePersonaType !== "FREELANCER" && contract.organizationId === context.organizationId && (
+        contract.clientPersonaId === context.activePersonaId ||
+        context.activePersonaType === "ORGANIZATION" && (contract.clientPersonaType === "ORGANIZATION" || legacy) ||
+        context.activePersonaType === "CLIENT" && (contract.clientPersonaType === "CLIENT" || legacy)
+      ) ? "CLIENT" as const : "PROVIDER" as const;
+      return { ...contract, viewerParty };
+    });
   }
 
   async create(context: TenantContext, input: {
@@ -494,6 +549,8 @@ export class ContractService {
     title: string; valueMinor: bigint; currency: string; taxRateBasisPoints: number; platformFeeBasisPoints: number;
     terms: Record<string, unknown>; startsAt?: Date; endsAt?: Date;
   }) {
+    requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
+    await requirePermission(context, "marketplace.contract.manage");
     if (input.proposalId) {
       throw new AppError(
         "CONFLICT",
@@ -503,6 +560,13 @@ export class ContractService {
     }
     if (input.projectId) await projectInTenant(context.organizationId, input.projectId);
     const providerUserId = input.providerUserId;
+    if (!providerUserId && !input.providerOrganizationId) throw new AppError("VALIDATION_ERROR", "A governed provider identity is required.", 422);
+    if (providerUserId === context.userId) throw new AppError("CONFLICT", "The same account cannot represent both sides of an external marketplace contract.", 409);
+    const [clientProfile, providerProfile] = await Promise.all([
+      prisma.clientProfile.findUnique({ where: { userId: context.userId }, select: { id: true } }),
+      providerUserId ? prisma.freelancerProfile.findFirst({ where: { userId: providerUserId, deletedAt: null, persona: { status: "ACTIVE" } }, select: { id: true, personaId: true } }) : Promise.resolve(null),
+    ]);
+    if (providerUserId && !providerProfile) throw new AppError("CONFLICT", "The selected provider does not have an active freelancer identity.", 409);
     const listingId = input.listingId;
     if (listingId) {
       const listing = await prisma.marketplaceListing.findFirst({
@@ -513,7 +577,21 @@ export class ContractService {
     }
     return withTransaction(async (tx) => {
       const contract = await tx.contract.create({
-        data: { ...input, listingId, providerUserId, organizationId: context.organizationId, createdById: context.userId, terms: json(input.terms) },
+        data: {
+          ...input,
+          listingId,
+          providerUserId,
+          organizationId: context.organizationId,
+          createdById: context.userId,
+          clientAccountId: context.userId,
+          clientProfileId: clientProfile?.id ?? null,
+          providerProfileId: providerProfile?.id ?? null,
+          clientPersonaId: context.activePersonaId,
+          providerPersonaId: providerProfile?.personaId ?? null,
+          clientPersonaType: context.activePersonaType,
+          providerPersonaType: providerProfile ? "FREELANCER" : "ORGANIZATION",
+          terms: json(input.terms),
+        },
       });
       await event(tx, context, "contract.created", "Contract", contract.id, { status: contract.status }, input.projectId);
       return contract;

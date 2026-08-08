@@ -44,6 +44,7 @@ type Profile = {
   yearsExperience: number;
   isPublic: boolean;
 };
+type PersonaType = "CLIENT" | "FREELANCER" | "ORGANIZATION" | null;
 
 const money = (
   minor: string | null | undefined,
@@ -55,18 +56,25 @@ export default function MarketplaceClient({
   listingId,
   proposalForId,
   profile = false,
+  activePersonaType,
 }: {
   listingId?: string;
   proposalForId?: string;
   profile?: boolean;
+  activePersonaType: PersonaType;
 }) {
-  if (profile) return <ProfileEditor />;
-  if (proposalForId) return <ProposalEditor listingId={proposalForId} />;
-  if (listingId) return <ListingDetail listingId={listingId} />;
-  return <ListingDirectory />;
+  if (profile) return activePersonaType === "FREELANCER" ? <ProfileEditor /> : <PersonaRequired persona="FREELANCER" />;
+  if (proposalForId) return activePersonaType === "FREELANCER" ? <ProposalEditor listingId={proposalForId} /> : <PersonaRequired persona="FREELANCER" />;
+  if (listingId) return <ListingDetail listingId={listingId} activePersonaType={activePersonaType} />;
+  return <ListingDirectory activePersonaType={activePersonaType} />;
 }
 
-function ListingDirectory() {
+function PersonaRequired({ persona }: { persona: "CLIENT" | "FREELANCER" }) {
+  const phase = useTranslations("PhaseC");
+  return <main className="py-24"><Card variant="elevated"><p className="enterprise-notice">{phase("switchPersona", { persona })}</p><Link className="mt-4 inline-block font-bold text-[#009A44]" href="/account/personas">{phase("managePersonas")}</Link></Card></main>;
+}
+
+function ListingDirectory({ activePersonaType }: { activePersonaType: PersonaType }) {
   const t = useTranslations("Marketplace");
   const common = useTranslations("Common");
   const status = useTranslations("Status");
@@ -81,6 +89,8 @@ function ListingDirectory() {
   const proposals = useApiResource<MarketplaceProposal[]>(
     "/api/marketplace/proposals",
   );
+  const canHire = activePersonaType === "CLIENT" || activePersonaType === "ORGANIZATION";
+  const canProvide = activePersonaType === "FREELANCER";
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -117,12 +127,7 @@ function ListingDirectory() {
           </p>
           <h1 className="text-4xl font-bold text-[#0F4C5C]">{t("title")}</h1>
         </div>
-        <Link
-          href="/marketplace/profile"
-          className="rounded-full bg-[#0F4C5C] px-5 py-3 font-bold text-white"
-        >
-          {t("manageProfile")}
-        </Link>
+        {canProvide ? <Link href="/marketplace/profile" className="rounded-full bg-[#0F4C5C] px-5 py-3 font-bold text-white">{t("manageProfile")}</Link> : null}
       </div>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="grid gap-6">
@@ -197,9 +202,9 @@ function ListingDirectory() {
               <p className="enterprise-empty">{t("noListings")}</p>
             )}
           </Card>
-          <ProviderProposalTracking resource={proposals} />
+          {canProvide ? <><InvitationTracking /><ProviderProposalTracking resource={proposals} /></> : null}
         </section>
-        <aside>
+        {canHire ? <aside>
           <Card variant="elevated">
             <h2 className="mb-4 text-xl font-bold text-[#0F4C5C]">
               {t("publishProject")}
@@ -244,10 +249,49 @@ function ListingDirectory() {
               </Button>
             </form>
           </Card>
-        </aside>
+        </aside> : null}
       </div>
     </main>
   );
+}
+
+type Invitation = {
+  id: string;
+  status: string;
+  version: number;
+  message?: string | null;
+  listing: { id: string; title: string; organization: { name: string } };
+};
+
+function InvitationTracking() {
+  const phase = useTranslations("PhaseC");
+  const status = useTranslations("Status");
+  const resource = useApiResource<Invitation[]>("/api/marketplace/invitations");
+  const [pending, setPending] = useState("");
+  const [error, setError] = useState("");
+  async function decide(invitation: Invitation, decision: "ACCEPTED" | "DECLINED") {
+    setPending(invitation.id);
+    setError("");
+    try {
+      await apiMutation(`/api/marketplace/invitations/${invitation.id}`, "PATCH", { decision, expectedVersion: invitation.version });
+      await resource.refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : phase("actionFailed"));
+    } finally {
+      setPending("");
+    }
+  }
+  return <Card variant="elevated">
+    <h2 className="text-xl font-bold text-[#0F4C5C]">{phase("invitations")}</h2>
+    {resource.loading ? <p className="enterprise-loading mt-4">{phase("loading")}</p> : null}
+    {resource.error || error ? <p className="enterprise-error mt-4">{resource.error || error}</p> : null}
+    {resource.data?.length ? <div className="mt-4 grid gap-3">{resource.data.map((invitation) => <article key={invitation.id} className="rounded-xl border p-4">
+      <Link href={`/marketplace/project/${invitation.listing.id}`} className="font-bold text-[#0F4C5C]">{invitation.listing.title}</Link>
+      <p className="text-sm text-slate-500">{invitation.listing.organization.name}</p>
+      <Badge variant={invitation.status === "ACCEPTED" ? "success" : "info"}>{status.has(invitation.status) ? status(invitation.status) : invitation.status}</Badge>
+      {invitation.status === "PENDING" ? <div className="mt-3 flex gap-2"><Button disabled={Boolean(pending)} onClick={() => void decide(invitation, "ACCEPTED")}>{phase("accept")}</Button><Button variant="secondary" disabled={Boolean(pending)} onClick={() => void decide(invitation, "DECLINED")}>{phase("decline")}</Button></div> : null}
+    </article>)}</div> : !resource.loading ? <p className="enterprise-empty mt-4">{phase("noInvitations")}</p> : null}
+  </Card>;
 }
 
 function ProviderProposalTracking({
@@ -361,7 +405,7 @@ function ProviderProposalTracking({
   );
 }
 
-function ListingDetail({ listingId }: { listingId: string }) {
+function ListingDetail({ listingId, activePersonaType }: { listingId: string; activePersonaType: PersonaType }) {
   const t = useTranslations("Marketplace");
   const status = useTranslations("Status");
   const locale = useLocale() as AppLocale;
@@ -460,7 +504,7 @@ function ListingDetail({ listingId }: { listingId: string }) {
                 </dd>
               </div>
             </dl>
-            {!row.isOwner && row.status === "PUBLISHED" ? (
+            {!row.isOwner && row.status === "PUBLISHED" && activePersonaType === "FREELANCER" ? (
               <Link
                 href={`/marketplace/project/${row.id}/proposal`}
                 className="mt-6 block rounded-full bg-[#009A44] px-5 py-3 text-center font-bold text-white"

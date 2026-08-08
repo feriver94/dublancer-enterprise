@@ -133,7 +133,7 @@ try {
   pglite = new PGlite();
   await pglite.waitReady;
   const migrations = (await readdir(path.join(root, "prisma/migrations"), { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-  assert.equal(migrations.at(-1), "20260801150000_dual_profile_marketplace_phase_b");
+  assert.equal(migrations.at(-1), "20260802100000_dual_profile_marketplace_phase_c");
   for (const migration of migrations) {
     await pglite.exec(await readFile(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8"));
     process.stdout.write(`Applied migration ${migration}\n`);
@@ -212,13 +212,68 @@ try {
   await request(owner.jar, "/api/profile/content/social-link", { method: "POST", expected: [201], body: { personaType: "CLIENT", platform: "linkedin", url: "https://linkedin.com/company/example", visibility: "PUBLIC" } });
   const listing = await request(owner.jar, "/api/marketplace/listings", { method: "POST", expected: [201], body: { title: "Phase B live dashboard project", description: "A real published listing used by the client dashboard and recommended-work read model.", engagementType: "FIXED_PRICE", experienceLevel: "EXPERT", currency: "AED", visibility: "PUBLIC", remoteAllowed: true, publish: true, skillIds: [] } });
   assert.ok(listing.data.id);
-  await request(owner.jar, `/api/profiles/follow/${outsiderSettings.data.account.freelancerProfile.id}`, { method: "POST", body: {} });
+  const searchProject = await request(owner.jar, "/api/projects", { method: "POST", expected: [201], body: { title: "Sprint 1 Audit", slug: `sprint-1-audit-${randomUUID()}`, description: "Release Blocker Verification", currency: "AED" } });
+  for (const query of ["Sprint", "sprint", "Audit", "Sprint 1 Audit"]) {
+    const found = await request(owner.jar, `/api/search?q=${encodeURIComponent(query)}&entityType=project&take=20`);
+    const result = found.data.find((item) => item.entityId === searchProject.data.id);
+    assert.ok(result, `newly created project must be searchable for ${query}`);
+    assert.equal(result.metadata.href, `/workspace/project/${searchProject.data.id}`);
+  }
+  const outsiderProjectSearch = await request(outsider.jar, "/api/search?q=Sprint&entityType=project&take=20");
+  assert.ok(!outsiderProjectSearch.data.some((item) => item.entityId === searchProject.data.id));
+  await request(owner.jar, `/api/projects/${searchProject.data.id}`, { method: "PATCH", body: { title: "Release Search Verification" } });
+  assert.ok((await request(owner.jar, "/api/search?q=Release%20Search&entityType=project&take=20")).data.some((item) => item.entityId === searchProject.data.id));
+  assert.ok(!(await request(owner.jar, "/api/search?q=Sprint%201%20Audit&entityType=project&take=20")).data.some((item) => item.entityId === searchProject.data.id));
+  await request(owner.jar, `/api/projects/${searchProject.data.id}`, { method: "DELETE" });
+  assert.ok(!(await request(owner.jar, "/api/search?q=Release%20Search&entityType=project&take=20")).data.some((item) => item.entityId === searchProject.data.id));
+
+  await request(owner.jar, "/api/profile-actions", { method: "POST", body: { action: "SAVE", active: true, freelancerProfileId: outsiderSettings.data.account.freelancerProfile.id } });
+  await request(owner.jar, "/api/profile-actions", { method: "POST", body: { action: "FOLLOW", active: true, target: { resourceType: "FREELANCER_PROFILE", resourceId: outsiderSettings.data.account.freelancerProfile.id } } });
+  const invitation = await request(owner.jar, "/api/profile-actions", { method: "POST", expected: [201], body: { action: "INVITE", listingId: listing.data.id, freelancerProfileId: outsiderSettings.data.account.freelancerProfile.id, message: "Phase C governed runtime invitation." } });
+  const providerInvitations = await request(outsider.jar, "/api/marketplace/invitations");
+  assert.ok(providerInvitations.data.some((item) => item.id === invitation.data.id));
+  await request(outsider.jar, `/api/marketplace/invitations/${invitation.data.id}`, { method: "PATCH", body: { decision: "ACCEPTED", expectedVersion: invitation.data.version } });
+  const proposal = await request(outsider.jar, "/api/marketplace/proposals", { method: "POST", expected: [201], body: { listingId: listing.data.id, coverLetter: "A governed Phase C provider proposal with sufficient runtime detail.", bidMinor: "500000", currency: "AED", estimatedDays: 14, submit: true } });
+  const submitted = (await request(owner.jar, `/api/marketplace/proposals?listingId=${listing.data.id}`)).data.find((item) => item.id === proposal.data.id);
+  assert.ok(submitted);
+  const shortlisted = await request(owner.jar, `/api/marketplace/proposals/${proposal.data.id}`, { method: "PATCH", body: { status: "SHORTLISTED", expectedVersion: proposal.data.version, note: "Runtime shortlist" } });
+  const contract = await request(owner.jar, `/api/marketplace/proposals/${proposal.data.id}/award`, { method: "POST", expected: [201], body: { idempotencyKey: `phase-c-award-${randomUUID()}`, expectedListingVersion: listing.data.version, expectedProposalVersion: shortlisted.data.version, title: "Phase C governed marketplace contract", taxRateBasisPoints: 0, platformFeeBasisPoints: 500, terms: { scope: "Runtime persona verification", deliverables: ["Verified integration"] } } });
+  assert.equal(contract.data.clientPersonaId, ownerPersonas.CLIENT.id);
+  assert.equal(contract.data.providerPersonaId, outsiderPersonas.FREELANCER.id);
+  const clientContract = await request(owner.jar, `/api/contracts/${contract.data.id}`);
+  assert.equal(clientContract.data.viewerParty, "CLIENT");
+  await request(owner.jar, "/api/personas/switch", { method: "POST", body: { personaId: ownerPersonas.FREELANCER.id } });
+  await request(owner.jar, `/api/contracts/${contract.data.id}/acceptances`, { method: "POST", expected: [403], body: { expectedVersion: clientContract.data.version, party: "CLIENT", method: "CLICKWRAP", termsHash: clientContract.data.termsHash } });
+  await request(owner.jar, "/api/personas/switch", { method: "POST", body: { personaId: ownerPersonas.CLIENT.id } });
+  const clientAccepted = await request(owner.jar, `/api/contracts/${contract.data.id}/acceptances`, { method: "POST", expected: [201], body: { expectedVersion: clientContract.data.version, party: "CLIENT", method: "CLICKWRAP", termsHash: clientContract.data.termsHash } });
+  await request(outsider.jar, `/api/contracts/${contract.data.id}/acceptances`, { method: "POST", expected: [403], body: { expectedVersion: clientAccepted.data.version, party: "CLIENT", method: "CLICKWRAP", termsHash: clientContract.data.termsHash } });
+  const providerContract = await request(outsider.jar, `/api/contracts/${contract.data.id}`);
+  assert.equal(providerContract.data.viewerParty, "PROVIDER");
+  const activeContract = await request(outsider.jar, `/api/contracts/${contract.data.id}/acceptances`, { method: "POST", expected: [201], body: { expectedVersion: providerContract.data.version, party: "PROVIDER", method: "CLICKWRAP", termsHash: providerContract.data.termsHash } });
+  assert.equal(activeContract.data.status, "ACTIVE");
+  const milestone = await request(owner.jar, `/api/contracts/${contract.data.id}/milestones`, { method: "POST", expected: [201], body: { title: "Runtime closeout milestone", description: "Establishes an eligible completed engagement for directional review verification.", amountMinor: "500000", currency: "AED" } });
+  await pglite.query(`UPDATE "ContractMilestone" SET "status" = 'RELEASED', "closedAt" = CURRENT_TIMESTAMP, "closedById" = $1, "closeoutNote" = 'Phase 6 lifecycle is independently runtime verified.', "version" = "version" + 1, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $2`, [owner.userId, milestone.data.id]);
+  const completed = await request(owner.jar, `/api/contracts/${contract.data.id}/completion`, { method: "POST", body: { note: "All governed runtime deliverables and closeout evidence are complete.", checklist: { deliverablesAccepted: true, settlementVerified: true }, expectedVersion: activeContract.data.version } });
+  assert.equal(completed.data.status, "COMPLETED");
+  const clientReview = await request(owner.jar, `/api/contracts/${contract.data.id}/reviews`, { method: "POST", expected: [201], body: { overall: 5, quality: 5, communication: 4, delivery: 5, expertise: 5, professionalism: 5, title: "Verified provider delivery", body: "The provider completed the governed engagement successfully." } });
+  assert.equal(clientReview.data.subjectFreelancerProfileId, outsiderSettings.data.account.freelancerProfile.id);
+  await request(owner.jar, `/api/contracts/${contract.data.id}/reviews`, { method: "POST", expected: [409], body: { overall: 5, quality: 5, communication: 5, delivery: 5, expertise: 5, professionalism: 5, body: "Duplicate directional review must fail." } });
+  const providerReview = await request(outsider.jar, `/api/contracts/${contract.data.id}/reviews`, { method: "POST", expected: [201], body: { overall: 4, hiringClarity: 5, communication: 4, paymentReliability: 4, professionalConduct: 5, title: "Clear client engagement", body: "The client supplied clear governed requirements and professional conduct." } });
+  assert.equal(providerReview.data.subjectClientProfileId, initialSettings.data.account.clientProfile.id);
+  const providerReputation = await request(null, `/api/public/users/${outsiderSettings.data.account.username}/freelancer`);
+  assert.equal(providerReputation.data.reviewsSummary.count, 1);
+  assert.equal(providerReputation.data.reviewsSummary.value, 5);
+  const recommendedListing = await request(owner.jar, "/api/marketplace/listings", { method: "POST", expected: [201], body: { title: "Phase C recommended provider opportunity", description: "A second real listing verifies freelancer recommended work after the first award.", engagementType: "FIXED_PRICE", experienceLevel: "INTERMEDIATE", currency: "AED", visibility: "PUBLIC", remoteAllowed: true, publish: true, skillIds: [] } });
+  const publicProviderSearch = await request(owner.jar, "/api/search?q=Public%20Outsider&entityType=freelancer_profile&take=20");
+  assert.ok(publicProviderSearch.data.some((item) => item.entityId === outsiderSettings.data.account.freelancerProfile.id));
   const clientPublic = await request(null, `/api/public/users/${initialSettings.data.account.username}/client`);
   assert.equal(clientPublic.data.profile.displayName, "Owner Enterprise Client");
   assert.equal(clientPublic.data.stats.openProjects, 1);
   assert.equal(clientPublic.data.stats.verifiedSpendMinor, null);
   const clientDashboard = await request(owner.jar, "/api/dashboard/client");
   assert.equal(clientDashboard.data.hiringOverview.openProjects, 1);
+  assert.equal(clientDashboard.data.hiringOverview.activeContracts, 0);
+  assert.equal(clientDashboard.data.hiringAnalytics.completedContracts, 1);
   assert.equal(clientDashboard.data.savedFreelancers, 1);
 
   const latestClient = await request(owner.jar, "/api/profile/settings");
@@ -235,7 +290,7 @@ try {
 
   await request(owner.jar, "/api/personas/switch", { method: "POST", body: { personaId: ownerPersonas.FREELANCER.id } });
   const freelancerDashboard = await request(owner.jar, "/api/dashboard/freelancer");
-  assert.ok(freelancerDashboard.data.recommendedWork.some((item) => item.id === listing.data.id));
+  assert.ok(freelancerDashboard.data.recommendedWork.some((item) => item.id === recommendedListing.data.id));
   assert.ok(freelancerDashboard.data.profileCompletion.percentage > 0);
   const currentFreelancer = (await request(owner.jar, "/api/profile/settings")).data.account.freelancerProfile;
   await request(owner.jar, "/api/profile/settings", { method: "PATCH", body: { section: "freelancer", data: { version: currentFreelancer.version, headline: currentFreelancer.headline, bio: currentFreelancer.bio, hourlyRateMinor: currentFreelancer.hourlyRateMinor, currency: currentFreelancer.currency, availability: currentFreelancer.availability, visibility: "HIDDEN", bannerUrl: currentFreelancer.bannerUrl, avatarUrl: currentFreelancer.avatarUrl, languages: currentFreelancer.languages, industries: currentFreelancer.industries, services: currentFreelancer.services, fixedPriceAvailable: currentFreelancer.fixedPriceAvailable, yearsExperience: currentFreelancer.yearsExperience, resumeUrl: currentFreelancer.resumeUrl, videoUrl: currentFreelancer.videoUrl, githubUrl: currentFreelancer.githubUrl, linkedinUrl: currentFreelancer.linkedinUrl } } });

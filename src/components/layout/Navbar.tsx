@@ -6,18 +6,43 @@ import { isAppError } from "@/lib/errors/app-error";
 import Container from "./Container";
 import NavbarClient from "./NavbarClient";
 
-const navItems = [
+type NavItem = { key: string; href: string; authenticated?: boolean; permission?: string };
+
+const publicNavItems: NavItem[] = [
+  { key: "pricing", href: "/pricing" },
+];
+
+const commonNavItems: NavItem[] = [
   { key: "dashboard", href: "/dashboard", authenticated: true },
-  { key: "aiWorkspace", href: "/ai-platform", permission: "ai.use" },
-  { key: "marketplace", href: "/marketplace", permission: "marketplace.listing.read" },
-  { key: "workspace", href: "/workspace", permission: "project.read" },
-  { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },
-  { key: "chat", href: "/communications/chat", permission: "chat.read" },
   { key: "notifications", href: "/notifications", authenticated: true },
+  { key: "aiWorkspace", href: "/ai-platform", permission: "ai.use" },
   { key: "identity", href: "/identity", permission: "identity.read" },
   { key: "observability", href: "/observability", permission: "observability.read" },
-  { key: "pricing", href: "/pricing" },
   { key: "enterprise", href: "/enterprise", permission: "organization.read" },
+];
+
+const clientNavItems: NavItem[] = [
+  { key: "dashboard", href: "/dashboard/client", authenticated: true },
+  { key: "postProject", href: "/marketplace", permission: "marketplace.listing.manage" },
+  { key: "proposals", href: "/marketplace", permission: "marketplace.proposal.review" },
+  { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },
+  { key: "payments", href: "/payments", permission: "finance.read" },
+  { key: "workspace", href: "/workspace", permission: "project.read" },
+  { key: "chat", href: "/communications/chat", permission: "chat.read" },
+  { key: "analytics", href: "/analytics", authenticated: true },
+];
+
+const freelancerNavItems: NavItem[] = [
+  { key: "dashboard", href: "/dashboard/freelancer", authenticated: true },
+  { key: "findWork", href: "/marketplace", permission: "marketplace.listing.read" },
+  { key: "invitations", href: "/marketplace?view=invitations", permission: "marketplace.listing.read" },
+  { key: "proposals", href: "/marketplace", permission: "marketplace.proposal.submit" },
+  { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },
+  { key: "deliveries", href: "/workspace", permission: "project.read" },
+  { key: "earnings", href: "/payments", permission: "finance.read" },
+  { key: "chat", href: "/communications/chat", permission: "chat.read" },
+  { key: "portfolio", href: "/settings/profiles#portfolio", authenticated: true },
+  { key: "analytics", href: "/analytics", authenticated: true },
 ];
 
 export default async function Navbar({
@@ -41,6 +66,7 @@ export default async function Navbar({
   let userId: string | null = null;
   let personas = suppliedPersonas ?? [];
   let activePersonaId = suppliedActivePersonaId ?? null;
+  let activePersonaType = personas.find((persona) => persona.id === activePersonaId)?.type ?? null;
 
   if (isAuthenticated === undefined) {
     try {
@@ -50,6 +76,7 @@ export default async function Navbar({
       permissions = authorization.permissions;
       userId = context.userId;
       activePersonaId = context.activePersonaId ?? null;
+      activePersonaType = context.activePersonaType ?? null;
     } catch (error) {
       if (isAppError(error) && [401, 403].includes(error.statusCode)) {
         isAuthenticated = false;
@@ -81,8 +108,16 @@ export default async function Navbar({
     ]);
   }
 
+  activePersonaType ??= personas.find((persona) => persona.id === activePersonaId)?.type ?? null;
+
   const can = (permission?: string) =>
     !permission || permissions.includes("*") || permissions.includes(permission);
+  const personaItems = activePersonaType === "FREELANCER"
+    ? freelancerNavItems
+    : activePersonaType === "CLIENT" || activePersonaType === "ORGANIZATION"
+      ? clientNavItems
+      : commonNavItems;
+  const navItems = isAuthenticated ? [...personaItems, ...commonNavItems.filter((item) => item.key !== "dashboard")] : publicNavItems;
   const visibleItems = navItems.filter(
     (item) =>
       (!item.authenticated || isAuthenticated) &&

@@ -1,5 +1,9 @@
 # Database — Sprint 29 Chat Domain
 
+## Dual-Profile Phase C
+
+Apply `20260802100000_dual_profile_marketplace_phase_c` after Phase B. It adds separate `ProfileFollow` and `MarketplaceInvitation` tables, listing/proposal acting-persona evidence, nullable legacy-compatible contract/acceptance persona and profile references, and directional review subject/dimension fields. XOR checks enforce one target, review dimensions are constrained from one to five, and bounded access indexes support invitation, contract-side and reputation reads. There is no fake backfill and no destructive statement. New applicable contracts enforce persona evidence in services; legacy contracts use compatibility derivation only when both stored persona types are absent.
+
 ## Dual-Profile Phase B
 
 Apply `20260801150000_dual_profile_marketplace_phase_b` after Phase A. It adds public presentation and visibility fields to canonical profiles, `ProfileVisibility`, `ProfileContentType`, unique search-ready usernames, education, certification, social links and saved providers. Portfolio and experience reuse existing models with version, visibility and soft deletion. Five legacy indexes are replaced with visibility-aware equivalents; no table, column or type is dropped.

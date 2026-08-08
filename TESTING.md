@@ -1,5 +1,9 @@
 # Sprint 29 Verification
 
+## Dual-Profile Phase C verification
+
+Run `npm test`, `npm run test:phase-c:runtime`, `npm run test:phase-a:runtime` and `npm run test:phase-b:runtime`. Phase C static tests cover persona marketplace controls, separate actions, contracts, reviews/reputation, live search, AI governance and conflict recovery. The Phase C runtime replays all 21 migrations on a fresh PostgreSQL-compatible database and tests its constraints; the enhanced Phase B application runtime exercises immediate project search, public provider search, invite/proposal/award/acceptance and directional reputation flows on the Phase C schema. `npm run test:phase4:runtime` preserves indexed-search pagination/highlights and cross-tenant behavior. Native PostgreSQL CI must additionally run `npx prisma migrate deploy`.
+
 ## Dual-Profile Phase B verification
 
 Run `npm test` for Phase B privacy, CRUD, completion, dashboard, ownership, authorization, localization and responsive UI contracts. Run `npm run test:phase-b:runtime` for a new 20-migration database, exact seed, live two-account tenant isolation, fresh three-persona onboarding, public/hidden profiles, all content families, conflicts, dashboards and organization publication.

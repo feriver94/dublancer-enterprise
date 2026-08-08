@@ -353,6 +353,24 @@ try {
 
   const owner = await actor("owner");
   const outsider = await actor("outsider");
+  const outsiderFreelancerPersona = await prisma.accountPersona.create({
+    data: {
+      userId: outsider.userId,
+      organizationId: outsider.organizationId,
+      type: "FREELANCER",
+      status: "ACTIVE",
+      label: "Phase 10 governed provider",
+      activatedAt: new Date(),
+      lastUsedAt: new Date(),
+    },
+  });
+  await prisma.freelancerProfile.create({
+    data: {
+      userId: outsider.userId,
+      personaId: outsiderFreelancerPersona.id,
+      headline: "Phase 10 governed provider",
+    },
+  });
   const viewerRole = await prisma.role.findFirstOrThrow({
     where: { organizationId: owner.organizationId, name: "Viewer" },
   });
@@ -498,6 +516,7 @@ try {
       expected: [201],
       body: {
         projectId: project.id,
+        providerUserId: outsider.userId,
         title: "Sprint lifecycle contract",
         valueMinor: 125000,
         currency: "AED",
@@ -532,6 +551,7 @@ try {
       expected: [201],
       body: {
         projectId: project.id,
+        providerUserId: outsider.userId,
         title: "Sprint searchable contract",
         valueMinor: 250000,
         currency: "AED",
@@ -624,6 +644,7 @@ try {
   assert.equal(federationRequests[0].authorization, `Bearer ${federationToken}`);
   assert.equal(federationRequests[0].body.organizationId, owner.organizationId);
 
+  invalidations.length = 0;
   const unauthenticatedInvalidation = await fetch(
     `${baseUrl}/api/internal/cache/invalidate`,
     {

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     await requirePersonaPermission(
       context,
       listingId ? "marketplace.proposal.review" : "marketplace.proposal.manage",
-      listingId ? ["CLIENT", "ORGANIZATION"] : ["FREELANCER"],
+      listingId ? ["CLIENT", "ORGANIZATION"] : ["FREELANCER", "ORGANIZATION"],
     );
     return apiSuccess(await service.listProposals(context, listingId));
   } catch (error) { return apiError(error); }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireCsrfToken(request);
     const context = await getAuthenticatedContext();
-    await requirePersonaPermission(context, "marketplace.proposal.manage", ["FREELANCER"]);
+    await requirePersonaPermission(context, "marketplace.proposal.manage", ["FREELANCER", "ORGANIZATION"]);
     return apiSuccess(await service.submitProposal(context, createProposalSchema.parse(await request.json())), 201);
   } catch (error) { return apiError(error); }
 }

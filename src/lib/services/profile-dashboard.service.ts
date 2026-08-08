@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors/app-error";
 import { requireActivePersona } from "@/lib/authorization/persona-policy";
 import type { TenantContext } from "@/lib/tenancy/context";
 import { ProfileCompletionService } from "@/lib/profile/completion";
+import { ReputationService } from "@/lib/services/reputation.service";
 
 async function unreadMessages(userId: string, organizationId: string) {
   const memberships = await prisma.chatChannelMember.findMany({
@@ -17,14 +18,17 @@ export class ProfileDashboardService {
     requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
     const organizationId = context.organizationId;
     const now = new Date();
+    const clientContractScope = context.activePersonaType === "CLIENT"
+      ? { OR: [{ clientPersonaId: context.activePersonaId ?? "__missing__" }, { clientPersonaType: null as null, organizationId }] }
+      : { OR: [{ clientPersonaType: "ORGANIZATION" as const, organizationId }, { clientPersonaType: null as null, organizationId }] };
     const [listingGroups, proposalGroups, invitationGroups, contractGroups, pendingPayments, upcomingMilestones, unread, savedFreelancers, savedAgencies, recentListings] = await Promise.all([
       prisma.marketplaceListing.groupBy({ by: ["status"], where: { organizationId }, _count: true }),
       prisma.proposal.groupBy({ by: ["status"], where: { listing: { organizationId } }, _count: true }),
-      prisma.vendorOnboarding.groupBy({ by: ["status"], where: { organizationId }, _count: true }),
-      prisma.contract.groupBy({ by: ["status"], where: { organizationId }, _count: true, _sum: { valueMinor: true } }),
+      prisma.marketplaceInvitation.groupBy({ by: ["status"], where: { clientOrganizationId: organizationId }, _count: true }),
+      prisma.contract.groupBy({ by: ["status"], where: clientContractScope, _count: true, _sum: { valueMinor: true } }),
       prisma.financialTransaction.groupBy({ by: ["status", "currency"], where: { organizationId }, _count: true, _sum: { amountMinor: true } }),
       prisma.contractMilestone.findMany({
-        where: { contract: { organizationId }, dueAt: { gte: now }, status: { notIn: ["RELEASED", "CANCELLED"] } },
+        where: { contract: clientContractScope, dueAt: { gte: now }, status: { notIn: ["RELEASED", "CANCELLED"] } },
         select: { id: true, title: true, amountMinor: true, currency: true, dueAt: true, status: true, contract: { select: { id: true, title: true } } },
         orderBy: { dueAt: "asc" },
         take: 10,
@@ -83,8 +87,11 @@ export class ProfileDashboardService {
     const profile = await prisma.freelancerProfile.findFirst({ where: { userId: context.userId, deletedAt: null }, select: { id: true } });
     if (!profile) throw new AppError("CONFLICT", "Complete the freelancer profile first.", 409);
     const now = new Date();
-    const contractScope = { OR: [{ providerUserId: context.userId }, { providerOrganizationId: context.organizationId }] };
-    const [recommendedWork, proposalGroups, invitations, contractGroups, milestones, tasks, earnings, pendingWithdrawals, unread, reviews, completion, portfolioGroups, skills, calendarMilestones] = await Promise.all([
+    const contractScope = { OR: [
+      { providerPersonaId: context.activePersonaId ?? "__missing__" },
+      { providerPersonaType: null as null, providerUserId: context.userId },
+    ] };
+    const [recommendedWork, proposalGroups, invitations, contractGroups, milestones, tasks, earnings, pendingWithdrawals, unread, reputation, completion, portfolioGroups, skills, calendarMilestones] = await Promise.all([
       prisma.marketplaceListing.findMany({
         where: { status: "PUBLISHED", visibility: "PUBLIC", proposals: { none: { freelancerProfileId: profile.id } } },
         select: { id: true, title: true, engagementType: true, budgetMinMinor: true, budgetMaxMinor: true, currency: true, remoteAllowed: true, publishedAt: true, skills: { select: { skill: { select: { nameEn: true, slug: true } } } } },
@@ -92,14 +99,14 @@ export class ProfileDashboardService {
         take: 8,
       }),
       prisma.proposal.groupBy({ by: ["status"], where: { freelancerProfileId: profile.id }, _count: true }),
-      prisma.vendorOnboarding.findMany({ where: { candidateUserId: context.userId, status: "INVITED" }, select: { id: true, organization: { select: { name: true, slug: true } }, createdAt: true }, orderBy: { createdAt: "desc" }, take: 10 }),
+      prisma.marketplaceInvitation.findMany({ where: { freelancerProfileId: profile.id, status: "PENDING" }, select: { id: true, status: true, message: true, expiresAt: true, version: true, createdAt: true, listing: { select: { id: true, title: true, organization: { select: { name: true, slug: true } } } } }, orderBy: { createdAt: "desc" }, take: 10 }),
       prisma.contract.groupBy({ by: ["status"], where: contractScope, _count: true, _sum: { valueMinor: true } }),
       prisma.contractMilestone.findMany({ where: { contract: contractScope, status: { notIn: ["RELEASED", "CANCELLED"] } }, select: { id: true, title: true, amountMinor: true, currency: true, status: true, dueAt: true, contract: { select: { id: true, title: true } } }, orderBy: { dueAt: "asc" }, take: 12 }),
       prisma.projectTask.findMany({ where: { assigneeId: context.userId, status: { notIn: ["DONE", "CANCELLED"] } }, select: { id: true, title: true, status: true, priority: true, dueAt: true, project: { select: { id: true, title: true } } }, orderBy: { dueAt: "asc" }, take: 12 }),
       prisma.financialTransaction.aggregate({ where: { status: "SUCCEEDED", type: "ESCROW_RELEASE", contract: contractScope }, _sum: { amountMinor: true }, _count: true }),
       prisma.financialTransaction.aggregate({ where: { status: { in: ["PENDING", "PROCESSING"] }, type: "PAYOUT", contract: contractScope }, _sum: { amountMinor: true }, _count: true }),
       unreadMessages(context.userId, context.organizationId),
-      prisma.review.aggregate({ where: { revieweeUserId: context.userId, status: "PUBLISHED" }, _avg: { rating: true }, _count: true }),
+      new ReputationService().provider(profile.id),
       new ProfileCompletionService().forUser(context.userId),
       prisma.portfolioItem.groupBy({ by: ["contentType", "visibility"], where: { freelancerProfileId: profile.id, deletedAt: null }, _count: true }),
       prisma.freelancerSkill.findMany({ where: { freelancerProfileId: profile.id }, select: { verifiedAt: true, skill: { select: { nameEn: true, slug: true } } }, orderBy: { yearsExperience: "desc" } }),
@@ -118,7 +125,7 @@ export class ProfileDashboardService {
       pendingWithdrawals: { amountMinor: (pendingWithdrawals._sum.amountMinor ?? BigInt(0)).toString(), count: pendingWithdrawals._count },
       messages: { unread },
       calendar: { milestones: calendarMilestones, tasks: tasks.filter((task) => task.dueAt && task.dueAt >= now) },
-      reviewsSummary: { average: reviews._avg.rating, count: reviews._count },
+      reviewsSummary: reputation,
       profileCompletion: completion.freelancer,
       portfolioPerformance: portfolioGroups.map((group) => ({ contentType: group.contentType, visibility: group.visibility, count: group._count })),
       skillVerification: { total: skills.length, verified: skills.filter((skill) => Boolean(skill.verifiedAt)).length, skills },

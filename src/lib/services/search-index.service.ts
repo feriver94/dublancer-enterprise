@@ -11,6 +11,7 @@ import { federatedSearch } from "@/lib/services/federated-search.service";
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const ENTITY_TYPES = ["PROJECT", "TASK", "USER", "FILE", "CONTRACT", "ORGANIZATION", "LISTING"] as const;
 type SearchEntityType = (typeof ENTITY_TYPES)[number];
+const LIVE_ENTITY_TYPES = [...ENTITY_TYPES, "CLIENT_PROFILE", "FREELANCER_PROFILE", "PUBLIC_ORGANIZATION"] as const;
 
 type SearchRow = {
   id: string;
@@ -230,6 +231,65 @@ export class SearchIndexService {
     }
   }
 
+  async synchronizeEntity(organizationId: string, entityType: SearchEntityType, entityId: string, action: "UPSERT" | "DELETE" = "UPSERT") {
+    const result = action === "DELETE" ? await this.deleteEntity(organizationId, entityType, entityId) : await this.upsertEntity(organizationId, entityType, entityId);
+    await distributedCache.invalidateTenant(organizationId);
+    return result;
+  }
+
+  private async liveReadThrough(input: {
+    organizationId: string; userId: string; q: string; entityType?: string; take: number;
+    permissions: string[]; projectIds: string[]; fileIds: string[]; isPlatformAdmin: boolean;
+  }): Promise<SearchRow[]> {
+    const q = input.q.trim();
+    const wants = (type: (typeof LIVE_ENTITY_TYPES)[number]) => !input.entityType || input.entityType === "all" || input.entityType.toUpperCase() === type;
+    const can = (permission: string) => input.isPlatformAdmin || input.permissions.includes("*") || input.permissions.includes(permission);
+    const now = new Date();
+    const rank = (title: string, body: string) => {
+      const needle = q.toLocaleLowerCase();
+      const heading = title.toLocaleLowerCase();
+      if (heading === needle) return 1;
+      if (heading.startsWith(needle)) return 0.9;
+      if (heading.includes(needle)) return 0.75;
+      return body.toLocaleLowerCase().includes(needle) ? 0.5 : 0;
+    };
+    const highlight = (title: string, body: string) => {
+      const source = body.toLocaleLowerCase().includes(q.toLocaleLowerCase()) ? body : title;
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return source.replace(new RegExp(escaped, "i"), (match) => `[[[${match}]]]`);
+    };
+    const row = (type: string, entityId: string, title: string, body: string, updatedAt: Date, metadata: Record<string, unknown>, projectId: string | null = null, fileNodeId: string | null = null): SearchRow => ({
+      id: `live-${type.toLocaleLowerCase()}-${entityId}`, entityType: type, entityId, title, body, locale: "en-AE", projectId, fileNodeId, metadata, indexedAt: updatedAt ?? now, rank: rank(title, body), highlight: highlight(title, body),
+    });
+
+    const [projects, tasks, users, files, contracts, organizations, listings, clients, freelancers, publicOrganizations] = await Promise.all([
+      wants("PROJECT") && can("project.read") ? prisma.project.findMany({ where: { organizationId: input.organizationId, id: { in: input.projectIds }, status: { not: "CANCELLED" }, OR: [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { slug: { contains: q, mode: "insensitive" } }] }, select: { id: true, title: true, description: true, slug: true, status: true, updatedAt: true }, take: input.take }) : [],
+      wants("TASK") && can("project.read") ? prisma.projectTask.findMany({ where: { projectId: { in: input.projectIds }, status: { not: "CANCELLED" }, OR: [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }] }, select: { id: true, title: true, description: true, status: true, priority: true, projectId: true, updatedAt: true }, take: input.take }) : [],
+      wants("USER") && can("organization.members.read") ? prisma.membership.findMany({ where: { organizationId: input.organizationId, status: "ACTIVE", user: { OR: [{ displayName: { contains: q, mode: "insensitive" } }, { username: { contains: q, mode: "insensitive" } }] } }, select: { user: { select: { id: true, displayName: true, username: true, updatedAt: true } }, role: { select: { name: true } }, updatedAt: true }, take: input.take }) : [],
+      wants("FILE") && can("files.read") ? prisma.fileNode.findMany({ where: { organizationId: input.organizationId, id: { in: input.fileIds }, type: "FILE", deletedAt: null, name: { contains: q, mode: "insensitive" }, versions: { some: { scanStatus: "CLEAN" } } }, select: { id: true, name: true, projectId: true, updatedAt: true, versions: { where: { scanStatus: "CLEAN" }, select: { mimeType: true }, orderBy: { version: "desc" }, take: 1 } }, take: input.take }) : [],
+      wants("CONTRACT") && can("marketplace.contract.manage") ? prisma.contract.findMany({ where: { OR: [{ organizationId: input.organizationId }, { providerOrganizationId: input.organizationId }, { providerUserId: input.userId }], title: { contains: q, mode: "insensitive" } }, select: { id: true, title: true, status: true, currency: true, updatedAt: true }, take: input.take }) : [],
+      wants("ORGANIZATION") && can("organization.read") ? prisma.organization.findMany({ where: { id: input.organizationId, status: { not: "ARCHIVED" }, OR: [{ name: { contains: q, mode: "insensitive" } }, { slug: { contains: q, mode: "insensitive" } }] }, select: { id: true, name: true, slug: true, status: true, updatedAt: true }, take: input.take }) : [],
+      wants("LISTING") && can("marketplace.listing.read") ? prisma.marketplaceListing.findMany({ where: { status: { notIn: ["CANCELLED", "CLOSED"] }, OR: [{ organizationId: input.organizationId }, { status: "PUBLISHED", visibility: "PUBLIC" }], AND: [{ OR: [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }] }] }, select: { id: true, title: true, description: true, status: true, updatedAt: true }, take: input.take }) : [],
+      wants("CLIENT_PROFILE") ? prisma.clientProfile.findMany({ where: { deletedAt: null, visibility: { in: ["PUBLIC", "VERIFIED"] }, persona: { status: "ACTIVE" }, OR: [{ displayName: { contains: q, mode: "insensitive" } }, { headline: { contains: q, mode: "insensitive" } }, { about: { contains: q, mode: "insensitive" } }] }, select: { id: true, displayName: true, headline: true, about: true, updatedAt: true, user: { select: { username: true } } }, take: input.take }) : [],
+      wants("FREELANCER_PROFILE") ? prisma.freelancerProfile.findMany({ where: { deletedAt: null, isPublic: true, visibility: { in: ["PUBLIC", "VERIFIED"] }, persona: { status: "ACTIVE" }, OR: [{ headline: { contains: q, mode: "insensitive" } }, { bio: { contains: q, mode: "insensitive" } }, { searchText: { contains: q, mode: "insensitive" } }] }, select: { id: true, headline: true, bio: true, services: true, updatedAt: true, user: { select: { username: true } } }, take: input.take }) : [],
+      wants("PUBLIC_ORGANIZATION") ? prisma.organization.findMany({ where: { status: "ACTIVE", companyProfile: { deletedAt: null, visibility: { in: ["PUBLIC", "VERIFIED"] }, OR: [{ legalName: { contains: q, mode: "insensitive" } }, { tradingName: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }] } }, select: { id: true, name: true, slug: true, updatedAt: true, companyProfile: { select: { legalName: true, tradingName: true, description: true } } }, take: input.take }) : [],
+    ]);
+
+    const live = [
+      ...projects.map((item) => row("PROJECT", item.id, item.title, sourceBody([item.description, item.slug, item.status]), item.updatedAt, { status: item.status, href: `/workspace/project/${item.id}` }, item.id)),
+      ...tasks.map((item) => row("TASK", item.id, item.title, sourceBody([item.description, item.status, item.priority]), item.updatedAt, { status: item.status, href: `/workspace/project/${item.projectId}?taskId=${item.id}` }, item.projectId)),
+      ...users.map((item) => row("USER", item.user.id, item.user.displayName || item.user.username || "Member", sourceBody([item.user.username, item.role?.name]), item.updatedAt > item.user.updatedAt ? item.updatedAt : item.user.updatedAt, { role: item.role?.name ?? null, href: `/organization/members?userId=${item.user.id}` })),
+      ...files.map((item) => row("FILE", item.id, item.name, sourceBody([item.versions[0]?.mimeType]), item.updatedAt, { href: `/files?fileId=${item.id}` }, item.projectId, item.id)),
+      ...contracts.map((item) => row("CONTRACT", item.id, item.title, sourceBody([item.status, item.currency]), item.updatedAt, { status: item.status, href: `/contracts/${item.id}` })),
+      ...organizations.map((item) => row("ORGANIZATION", item.id, item.name, sourceBody([item.slug, item.status]), item.updatedAt, { status: item.status, href: "/enterprise" })),
+      ...listings.map((item) => row("LISTING", item.id, item.title, sourceBody([item.description, item.status]), item.updatedAt, { status: item.status, href: `/marketplace/project/${item.id}` })),
+      ...clients.map((item) => row("CLIENT_PROFILE", item.id, item.displayName, sourceBody([item.headline, item.about]), item.updatedAt, { href: `/u/${item.user.username}/client`, public: true })),
+      ...freelancers.map((item) => row("FREELANCER_PROFILE", item.id, item.headline, sourceBody([item.bio, ...item.services]), item.updatedAt, { href: `/u/${item.user.username}/freelancer`, public: true })),
+      ...publicOrganizations.map((item) => row("PUBLIC_ORGANIZATION", item.id, item.companyProfile?.tradingName ?? item.name, sourceBody([item.companyProfile?.legalName, item.companyProfile?.description]), item.updatedAt, { href: `/org/${item.slug}`, public: true })),
+    ];
+    return live.filter((item) => item.rank > 0).sort((left, right) => right.rank - left.rank || right.indexedAt.getTime() - left.indexedAt.getTime()).slice(0, input.take);
+  }
+
   async enqueueReindex(context: TenantContext, idempotencyKey: string) {
     await requirePermission(context, "platform.operations.read");
     const job = await enqueuePhase4Job({ organizationId: context.organizationId, type: PHASE4_JOB_TYPES.SEARCH_REINDEX, payload: { organizationId: context.organizationId }, deduplicationKey: `search:reindex:${context.organizationId}:${idempotencyKey}` });
@@ -351,17 +411,39 @@ export class SearchIndexService {
         };
       },
     );
+    const live = input.cursor ? [] : await this.liveReadThrough({
+      organizationId: context.organizationId,
+      userId: context.userId,
+      q: input.q,
+      entityType: input.entityType,
+      take: input.take,
+      permissions,
+      projectIds,
+      fileIds,
+      isPlatformAdmin: authorization.isPlatformAdmin,
+    });
+    const liveTypes = new Set(LIVE_ENTITY_TYPES);
+    const supplemental = input.cursor
+      ? cached.value.items
+      : cached.value.items.filter((item) =>
+          item.id.startsWith("federated-") ||
+          !liveTypes.has(item.entityType as (typeof LIVE_ENTITY_TYPES)[number]),
+        );
+    const unique = new Map<string, SearchRow>();
+    for (const item of [...live, ...supplemental]) unique.set(`${item.entityType}:${item.entityId}`, item);
+    const items = [...unique.values()].sort((left, right) => right.rank - left.rank || right.indexedAt.getTime() - left.indexedAt.getTime()).slice(0, input.take);
+    const result = { items, nextCursor: cached.value.nextCursor };
     await prisma.searchQueryLog.create({
       data: {
         organizationId: context.organizationId,
         userId: context.userId,
         scope: input.entityType ?? "all",
         queryHash: createHash("sha256").update(input.q.toLocaleLowerCase()).digest("hex"),
-        resultCount: cached.value.items.length,
+        resultCount: result.items.length,
         durationMs: Date.now() - started,
-        filters: json({ entityType: input.entityType ?? "all", projectId: input.projectId ?? null, locale: input.locale ?? null, cache: cached.cache }),
+        filters: json({ entityType: input.entityType ?? "all", projectId: input.projectId ?? null, locale: input.locale ?? null, cache: cached.cache, consistency: "AUTHORITATIVE_LIVE_READ_THROUGH" }),
       },
     });
-    return cached.value;
+    return result;
   }
 }

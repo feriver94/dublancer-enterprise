@@ -23,6 +23,8 @@ See `PHASE_A_DUAL_PROFILE_ARCHITECTURE.md` for the dual-profile account, session
 
 See `DUAL_PROFILE_PHASE_B_REPORT.md` for public serializers, dashboard read models, content CRUD, completion, visibility, migration and verification. Phase B routes include `/u/[username]/client`, `/u/[username]/freelancer`, `/org/[slug]`, `/dashboard/client`, `/dashboard/freelancer` and `/settings/profiles`.
 
+See `DUAL_PROFILE_PHASE_C_REPORT.md` for persona-aware marketplace actions, contract-side evidence, directional reviews, deterministic reputation, provider comparison, authoritative search read-through, stale-conflict recovery and governed AI profile assistance. Phase C adds `/marketplace/compare`, `/api/profile-actions`, marketplace invitations/comparison APIs and `/api/profile/ai-assistance`.
+
 ## Windows installation
 
 Requirements: Node.js 22+, Docker Desktop, PostgreSQL 15+ and Redis 7+.

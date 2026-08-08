@@ -193,12 +193,16 @@ model User {
   personaEvents              PersonaEvent[]             @relation("PersonaEventActor")
   profileSocialLinks         ProfileSocialLink[]
   savedProviders             SavedProvider[]
+  profileFollows             ProfileFollow[]             @relation("ProfileFollowUser")
+  marketplaceInvitationsSent MarketplaceInvitation[]      @relation("MarketplaceInvitationCreator")
+  marketplaceInvitationsAnswered MarketplaceInvitation[]  @relation("MarketplaceInvitationResponder")
   createdListings            MarketplaceListing[]      @relation("ListingCreator")
   savedListings              SavedListing[]
   submittedProposals         Proposal[]                @relation("ProposalSubmitter")
   decidedProposals           Proposal[]                @relation("ProposalDecider")
   proposalRevisions          ProposalRevision[]        @relation("ProposalRevisionCreator")
   createdContracts           Contract[]                @relation("ContractCreator")
+  clientAccountContracts     Contract[]                @relation("ContractClientAccount")
   providerContracts          Contract[]                @relation("ContractProviderUser")
   contractAcceptances        ContractAcceptance[]
   proposedAmendments         ContractAmendment[]       @relation("AmendmentProposer")
@@ -282,6 +286,10 @@ model Organization {
   personaEvents            PersonaEvent[]
   savedProviderScopes      SavedProvider[]               @relation("SavedProviderScope")
   savedAsProvider          SavedProvider[]               @relation("SavedProviderOrganization")
+  profileFollowScopes      ProfileFollow[]               @relation("ProfileFollowScope")
+  profileFollowers         ProfileFollow[]               @relation("ProfileFollowOrganizationTarget")
+  marketplaceInvitations   MarketplaceInvitation[]       @relation("MarketplaceInvitationClient")
+  marketplaceProviderInvitations MarketplaceInvitation[] @relation("MarketplaceInvitationProviderOrganization")
   marketplaceListings      MarketplaceListing[]
   talentPools              TalentPool[]
   vendorOnboardings        VendorOnboarding[]            @relation("VendorClientOrganization")
@@ -291,6 +299,7 @@ model Organization {
   contractAcceptances      ContractAcceptance[]
   submittedProposals       Proposal[]                    @relation("ProposalProviderOrganization")
   reviewSubjects           Review[]                      @relation("ReviewSubjectOrganization")
+  reviewContexts           Review[]                      @relation("ReviewContextOrganization")
   fileNodes                FileNode[]
   fileUploadIntents        FileUploadIntent[]
   aiConfig                 AiTenantConfig?
@@ -411,6 +420,7 @@ model Membership {
   managedTeams       Team[]             @relation("TeamManager")
   teamMemberships    TeamMembership[]
   accessReviewItems  AccessReviewItem[]
+  contractAcceptances ContractAcceptance[]
   crmAccountsOwned   CrmAccount[]         @relation("CrmAccountOwner")
   crmLeadsAssigned   CrmLead[]            @relation("CrmLeadAssignee")
   crmContactsOwned   CrmContact[]         @relation("CrmContactOwner")
@@ -643,6 +653,13 @@ model AccountPersona {
   freelancerProfile FreelancerProfile?
   sessions          AuthSession[]
   events            PersonaEvent[]
+  createdListings   MarketplaceListing[] @relation("ListingActingPersona")
+  submittedProposals Proposal[]          @relation("ProposalActingPersona")
+  clientContracts   Contract[]           @relation("ContractClientPersona")
+  providerContracts Contract[]           @relation("ContractProviderPersona")
+  contractAcceptances ContractAcceptance[]
+  reviewsWritten    Review[]             @relation("ReviewReviewerPersona")
+  reviewSubjects    Review[]             @relation("ReviewSubjectPersona")
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
@@ -677,6 +694,9 @@ model ClientProfile {
   locale         String         @default("en-AE")
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   persona        AccountPersona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  contracts      Contract[]     @relation("ContractClientProfile")
+  reviews        Review[]       @relation("ReviewSubjectClientProfile")
+  followers      ProfileFollow[] @relation("FollowedClientProfile")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -1070,6 +1090,14 @@ enum ProposalStatus {
   ACCEPTED
   REJECTED
   WITHDRAWN
+}
+
+enum MarketplaceInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
 }
 
 enum ContractStatus {
@@ -1835,6 +1863,10 @@ model FreelancerProfile {
   educations        Education[]
   certifications    Certification[]
   savedBy           SavedProvider[]
+  followers         ProfileFollow[]
+  invitations       MarketplaceInvitation[]
+  contracts         Contract[]            @relation("ContractProviderProfile")
+  reviews            Review[]              @relation("ReviewSubjectFreelancerProfile")
   proposals         Proposal[]
   talentPoolMembers TalentPoolMember[]
   talentMatches     TalentMatch[]
@@ -2022,6 +2054,27 @@ model SavedProvider {
   @@index([organizationId, providerOrganizationId, createdAt])
 }
 
+model ProfileFollow {
+  id                     String             @id @default(cuid())
+  userId                 String
+  organizationId         String
+  targetKey              String
+  clientProfileId        String?
+  freelancerProfileId    String?
+  targetOrganizationId   String?
+  user                   User               @relation("ProfileFollowUser", fields: [userId], references: [id], onDelete: Cascade)
+  organization           Organization       @relation("ProfileFollowScope", fields: [organizationId], references: [id], onDelete: Cascade)
+  clientProfile          ClientProfile?     @relation("FollowedClientProfile", fields: [clientProfileId], references: [id], onDelete: Cascade)
+  freelancerProfile      FreelancerProfile? @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
+  targetOrganization     Organization?       @relation("ProfileFollowOrganizationTarget", fields: [targetOrganizationId], references: [id], onDelete: Cascade)
+  createdAt              DateTime            @default(now())
+
+  @@unique([userId, organizationId, targetKey])
+  @@index([clientProfileId, createdAt])
+  @@index([freelancerProfileId, createdAt])
+  @@index([targetOrganizationId, createdAt])
+}
+
 model VerifiedCredential {
   id                    String           @id @default(cuid())
   subjectUserId         String?
@@ -2047,6 +2100,7 @@ model MarketplaceListing {
   id                  String                   @id @default(cuid())
   organizationId      String
   postedById          String
+  actingPersonaId     String?
   workspaceProjectId  String?                  @unique
   title               String
   description         String
@@ -2067,16 +2121,19 @@ model MarketplaceListing {
   version             Int                      @default(1)
   organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   postedBy            User                     @relation("ListingCreator", fields: [postedById], references: [id], onDelete: Restrict)
+  actingPersona       AccountPersona?           @relation("ListingActingPersona", fields: [actingPersonaId], references: [id], onDelete: SetNull)
   workspaceProject    Project?                 @relation(fields: [workspaceProjectId], references: [id], onDelete: SetNull)
   skills              ListingSkill[]
   savedBy             SavedListing[]
   proposals           Proposal[]
   contracts           Contract[]
+  invitations         MarketplaceInvitation[]
   talentMatches       TalentMatch[]
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
 
   @@index([organizationId, status, createdAt])
+  @@index([actingPersonaId, status, updatedAt])
   @@index([status, visibility, publishedAt])
   @@index([currency, budgetMinMinor, budgetMaxMinor])
   @@index([applicationDeadline])
@@ -2109,6 +2166,7 @@ model Proposal {
   listingId              String
   freelancerProfileId    String
   submittedById          String
+  providerPersonaId      String?
   providerOrganizationId String?
   status                 ProposalStatus     @default(DRAFT)
   coverLetter            String
@@ -2124,6 +2182,7 @@ model Proposal {
   listing                MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   freelancerProfile      FreelancerProfile  @relation(fields: [freelancerProfileId], references: [id], onDelete: Restrict)
   submittedBy            User               @relation("ProposalSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  providerPersona        AccountPersona?     @relation("ProposalActingPersona", fields: [providerPersonaId], references: [id], onDelete: SetNull)
   providerOrganization   Organization?      @relation("ProposalProviderOrganization", fields: [providerOrganizationId], references: [id], onDelete: SetNull)
   decidedBy              User?              @relation("ProposalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
   revisions              ProposalRevision[]
@@ -2135,6 +2194,7 @@ model Proposal {
   @@index([listingId, status, updatedAt])
   @@index([freelancerProfileId, status, updatedAt])
   @@index([providerOrganizationId, status, updatedAt])
+  @@index([providerPersonaId, status, updatedAt])
   @@index([decidedById, decidedAt])
 }
 
@@ -2203,6 +2263,35 @@ model VendorOnboarding {
   @@index([candidateUserId, status])
 }
 
+model MarketplaceInvitation {
+  id                     String                       @id @default(cuid())
+  listingId              String
+  clientOrganizationId   String
+  invitedById            String
+  targetKey              String
+  freelancerProfileId    String?
+  providerOrganizationId String?
+  status                 MarketplaceInvitationStatus @default(PENDING)
+  message                String?
+  respondedById          String?
+  respondedAt            DateTime?
+  expiresAt              DateTime?
+  version                Int                          @default(1)
+  listing                MarketplaceListing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  clientOrganization     Organization                 @relation("MarketplaceInvitationClient", fields: [clientOrganizationId], references: [id], onDelete: Cascade)
+  invitedBy              User                         @relation("MarketplaceInvitationCreator", fields: [invitedById], references: [id], onDelete: Restrict)
+  freelancerProfile      FreelancerProfile?           @relation(fields: [freelancerProfileId], references: [id], onDelete: Cascade)
+  providerOrganization   Organization?                @relation("MarketplaceInvitationProviderOrganization", fields: [providerOrganizationId], references: [id], onDelete: Cascade)
+  respondedBy            User?                        @relation("MarketplaceInvitationResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+
+  @@unique([listingId, targetKey])
+  @@index([clientOrganizationId, status, createdAt])
+  @@index([freelancerProfileId, status, createdAt])
+  @@index([providerOrganizationId, status, createdAt])
+}
+
 model Contract {
   id                     String                 @id @default(cuid())
   organizationId         String
@@ -2212,6 +2301,13 @@ model Contract {
   proposalId             String?                @unique
   projectId              String?
   createdById            String
+  clientAccountId        String?
+  clientProfileId        String?
+  providerProfileId      String?
+  clientPersonaId        String?
+  providerPersonaId      String?
+  clientPersonaType      AccountPersonaType?
+  providerPersonaType    AccountPersonaType?
   title                  String
   status                 ContractStatus         @default(DRAFT)
   valueMinor             BigInt
@@ -2234,6 +2330,11 @@ model Contract {
   proposal               Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   project                Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy              User                   @relation("ContractCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  clientAccount          User?                  @relation("ContractClientAccount", fields: [clientAccountId], references: [id], onDelete: Restrict)
+  clientProfile          ClientProfile?         @relation("ContractClientProfile", fields: [clientProfileId], references: [id], onDelete: SetNull)
+  providerProfile        FreelancerProfile?     @relation("ContractProviderProfile", fields: [providerProfileId], references: [id], onDelete: SetNull)
+  clientPersona          AccountPersona?        @relation("ContractClientPersona", fields: [clientPersonaId], references: [id], onDelete: SetNull)
+  providerPersona        AccountPersona?        @relation("ContractProviderPersona", fields: [providerPersonaId], references: [id], onDelete: SetNull)
   completedBy            User?                  @relation("ContractCompleter", fields: [completedById], references: [id], onDelete: SetNull)
   amendments             ContractAmendment[]
   milestones             ContractMilestone[]
@@ -2249,6 +2350,10 @@ model Contract {
   @@index([providerOrganizationId, status])
   @@index([providerUserId, status])
   @@index([projectId, status])
+  @@index([clientPersonaId, status])
+  @@index([providerPersonaId, status])
+  @@index([clientProfileId, status])
+  @@index([providerProfileId, status])
 }
 
 model ContractAcceptance {
@@ -2257,6 +2362,9 @@ model ContractAcceptance {
   party          ContractAcceptanceParty
   acceptedById   String
   organizationId String?
+  personaId      String?
+  personaType    AccountPersonaType?
+  membershipId   String?
   termsHash      String
   method         ContractAcceptanceMethod @default(CLICKWRAP)
   ipAddress      String?
@@ -2265,10 +2373,13 @@ model ContractAcceptance {
   contract       Contract                 @relation(fields: [contractId], references: [id], onDelete: Cascade)
   acceptedBy     User                     @relation(fields: [acceptedById], references: [id], onDelete: Restrict)
   organization   Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  persona        AccountPersona?          @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  membership     Membership?              @relation(fields: [membershipId], references: [id], onDelete: SetNull)
 
   @@unique([contractId, party])
   @@index([acceptedById, acceptedAt])
   @@index([organizationId, acceptedAt])
+  @@index([personaId, acceptedAt])
 }
 
 model ContractAmendment {
@@ -2372,14 +2483,33 @@ model Review {
   revieweeOrganizationId String?
   rating                 Int
   reviewerParty          ContractAcceptanceParty
+  reviewerPersonaId      String?
+  subjectPersonaId       String?
+  subjectClientProfileId String?
+  subjectFreelancerProfileId String?
+  contextOrganizationId  String?
+  directionKey           String?                 @unique
   title                  String?
   body                   String?
+  quality                Int?
+  communication          Int?
+  delivery               Int?
+  expertise              Int?
+  professionalism        Int?
+  hiringClarity          Int?
+  paymentReliability     Int?
+  professionalConduct    Int?
   status                 ReviewStatus            @default(PENDING)
   submittedAt            DateTime?
   publishedAt            DateTime?
   version                Int                     @default(1)
   contract               Contract                @relation(fields: [contractId], references: [id], onDelete: Cascade)
   reviewer               User                    @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Restrict)
+  reviewerPersona        AccountPersona?         @relation("ReviewReviewerPersona", fields: [reviewerPersonaId], references: [id], onDelete: SetNull)
+  subjectPersona         AccountPersona?         @relation("ReviewSubjectPersona", fields: [subjectPersonaId], references: [id], onDelete: SetNull)
+  subjectClientProfile   ClientProfile?          @relation("ReviewSubjectClientProfile", fields: [subjectClientProfileId], references: [id], onDelete: SetNull)
+  subjectFreelancerProfile FreelancerProfile?    @relation("ReviewSubjectFreelancerProfile", fields: [subjectFreelancerProfileId], references: [id], onDelete: SetNull)
+  contextOrganization    Organization?           @relation("ReviewContextOrganization", fields: [contextOrganizationId], references: [id], onDelete: SetNull)
   revieweeUser           User?                   @relation("ReviewSubjectUser", fields: [revieweeUserId], references: [id], onDelete: SetNull)
   revieweeOrganization   Organization?           @relation("ReviewSubjectOrganization", fields: [revieweeOrganizationId], references: [id], onDelete: SetNull)
   createdAt              DateTime                @default(now())
@@ -2388,6 +2518,9 @@ model Review {
   @@unique([contractId, reviewerId])
   @@index([revieweeUserId, status, publishedAt])
   @@index([revieweeOrganizationId, status, publishedAt])
+  @@index([subjectClientProfileId, status, publishedAt])
+  @@index([subjectFreelancerProfileId, status, publishedAt])
+  @@index([contextOrganizationId, reviewerParty, status])
 }
 
 model Dispute {

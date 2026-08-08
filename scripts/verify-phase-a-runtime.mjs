@@ -130,7 +130,7 @@ try {
   await pglite.waitReady;
   const migrations = (await readdir(path.join(root, "prisma/migrations"), { withFileTypes: true }))
     .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-  assert.equal(migrations.at(-1), "20260801090000_dual_profile_marketplace_phase_a");
+  assert.equal(migrations.at(-1), "20260802100000_dual_profile_marketplace_phase_c");
   for (const migration of migrations) {
     await pglite.exec(await readFile(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8"));
     process.stdout.write(`Applied migration ${migration}\n`);

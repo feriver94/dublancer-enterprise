@@ -107,6 +107,15 @@
     "searchPlaceholder": "Search projects, tasks, users, files, contracts and organizations",
     "searchHint": "Type at least two characters to search this organization.",
     "noSearchResults": "No matching records were found.",
+    "postProject": "Post project",
+    "findWork": "Find work",
+    "proposals": "Proposals",
+    "invitations": "Invitations",
+    "payments": "Payments",
+    "deliveries": "Deliveries",
+    "earnings": "Earnings",
+    "portfolio": "Portfolio",
+    "analytics": "Analytics",
     "login": "Login",
     "startFree": "Start free"
   },
@@ -422,6 +431,9 @@
     "listings": "Listings",
     "contracts": "Contracts",
     "files": "Files",
+    "clientProfiles": "Public clients",
+    "freelancerProfiles": "Public providers",
+    "publicOrganizations": "Public organizations",
     "searching": "Searching…",
     "search": "Search",
     "hint": "Enter at least two characters to search the active organization.",
@@ -436,7 +448,10 @@
       "organization": "Organization",
       "listing": "Listing",
       "contract": "Contract",
-      "file": "File"
+      "file": "File",
+      "client_profile": "Client profile",
+      "freelancer_profile": "Provider profile",
+      "public_organization": "Public organization"
     }
   },
   "Notifications": {
@@ -1400,6 +1415,16 @@
     "loading": "Loading live data…", "retry": "Retry", "empty": "No records yet", "clientDashboard": "Client dashboard", "hiringCommandCenter": "Hiring command centre", "refresh": "Refresh", "proposals": "Proposals", "drafts": "Drafts", "proposalPipeline": "Proposal pipeline", "invitations": "Invitations", "activeContracts": "Active contracts", "payments": "Payments", "upcomingMilestones": "Upcoming milestones", "hiringAnalytics": "Hiring analytics", "quickActions": "Quick actions", "freelancerDashboard": "Freelancer dashboard", "workCommandCenter": "Work command centre", "recommendedWork": "Recommended work", "milestones": "Milestones", "tasks": "Tasks", "calendar": "Calendar", "portfolioPerformance": "Portfolio performance",
     "profileSettings": "Profile settings", "manageIdentity": "Manage every public identity", "personal": "Personal account", "client": "Client profile", "freelancer": "Freelancer profile", "organization": "Organization identity", "content": "Profile content", "saved": "Changes saved", "failed": "The change could not be completed", "username": "Username", "displayName": "Display name", "preferredName": "Preferred name", "timezone": "Timezone", "language": "Language", "save": "Save changes", "headline": "Headline", "banner": "Banner URL", "avatar": "Avatar or logo URL", "languagesCsv": "Languages (comma separated)", "hiringPreferencesJson": "Hiring preferences (JSON)", "showVerifiedSpend": "Show verified spend", "hourlyRateMinor": "Hourly rate in minor units", "currency": "Currency", "industriesCsv": "Industries (comma separated)", "servicesCsv": "Services (comma separated)", "tradingName": "Trading name", "logo": "Logo URL", "technologiesCsv": "Technologies (comma separated)", "locationsJson": "Locations (JSON)", "portfolioJson": "Organization portfolio (JSON)",
     "contentType": "Content type", "newItem": "New item", "edit": "Edit", "archive": "Archive", "title": "Title", "description": "Description", "projectUrl": "Project URL", "mediaUrl": "Media URL", "completedAt": "Completed date", "sortOrder": "Sort order", "company": "Company", "startedAt": "Start date", "endedAt": "End date", "institution": "Institution", "degree": "Degree", "fieldOfStudy": "Field of study", "certification": "Certification", "issuer": "Issuer", "credentialId": "Credential ID", "credentialUrl": "Credential URL", "issuedAt": "Issue date", "expiresAt": "Expiry date", "platform": "Platform", "url": "URL", "update": "Update", "create": "Create"
+  },
+  "PhaseC": {
+    "eyebrow": "Persona-aware marketplace", "providerComparison": "Compare providers", "comparisonExplanation": "Public, verified facts are shown side by side without an invented best-provider score.",
+    "compareNeedTwo": "Choose at least two eligible providers to compare.", "findProviders": "Find providers", "loading": "Loading live provider data…", "unavailable": "This action is currently unavailable.", "retry": "Retry",
+    "availability": "Availability", "hourlyRate": "Public hourly rate", "experience": "Years of experience", "skills": "Skills", "services": "Services", "languages": "Languages", "portfolio": "Public portfolio items", "reputation": "Reputation", "completionRate": "Completion rate", "onTime": "On-time delivery", "dimension": "Dimension", "notEnoughData": "Not enough data", "notPublished": "Not published",
+    "save": "Save", "unsave": "Unsave", "unfollow": "Unfollow", "compare": "Compare", "selectProject": "Select a project", "invited": "Invitation sent",
+    "actingClient": "You are acting as the client", "actingProvider": "You are acting as the provider", "newerData": "Newer data exists. Reload the latest record before deliberately retrying; your entered text remains in this form.",
+    "overall": "Overall", "quality": "Quality", "communication": "Communication", "delivery": "Delivery", "expertise": "Expertise", "professionalism": "Professionalism", "hiringClarity": "Hiring clarity", "paymentReliability": "Payment reliability", "professionalConduct": "Professional conduct",
+    "aiAssistant": "Governed AI profile assistance", "aiGenerated": "AI-generated suggestion — review before applying", "requestSuggestion": "Request suggestion", "providerUnavailable": "AI is optional and unavailable under the current tenant policy. Core profile editing remains available.", "humanApproval": "A human approval may be required by organization policy.", "neverAutoPublish": "Suggestions are never saved or published automatically.",
+    "invitations": "Project invitations", "noInvitations": "No project invitations yet.", "accept": "Accept", "decline": "Decline", "actionFailed": "The action could not be completed.", "switchPersona": "Switch to your {persona} persona to use this workflow.", "managePersonas": "Manage personas", "assistanceType": "Assistance type", "optionalContext": "Optional context for the suggestion", "runStatus": "Run status: {status}", "openAiWorkspace": "Open governed AI workspace"
   },
   "Errors": {
     "BAD_REQUEST": "The request could not be understood.",

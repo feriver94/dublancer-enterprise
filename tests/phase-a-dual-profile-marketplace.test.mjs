@@ -79,7 +79,7 @@ test("Phase A marketplace authorization composes persona capability and existing
   assert.match(policy, /requirePermission/);
   assert.match(policy, /PERSONA_REQUIRED/);
   assert.match(listings, /\["CLIENT", "ORGANIZATION"\]/);
-  assert.match(proposals, /\["FREELANCER"\]/);
+  assert.match(proposals, /\["FREELANCER", "ORGANIZATION"\]/);
   assert.match(profile, /personas\.activate/);
   assert.match(profile, /personas\.switchPersona/);
 });

@@ -28,9 +28,15 @@ export class Phase6ContractService {
     return contract;
   }
 
-  private party(context: TenantContext, contract: { organizationId: string; providerOrganizationId: string | null; providerUserId: string | null }): ContractParty {
-    if (contract.organizationId === context.organizationId) return "CLIENT";
-    if (contract.providerOrganizationId === context.organizationId || contract.providerUserId === context.userId) return "PROVIDER";
+  private party(context: TenantContext, contract: {
+    organizationId: string; providerOrganizationId: string | null; providerUserId: string | null; clientAccountId: string | null;
+    clientPersonaId: string | null; providerPersonaId: string | null; clientPersonaType: import("@prisma/client").AccountPersonaType | null; providerPersonaType: import("@prisma/client").AccountPersonaType | null;
+  }): ContractParty {
+    if (contract.clientAccountId && contract.providerUserId && contract.clientAccountId === contract.providerUserId) throw new AppError("CONFLICT", "A normal external marketplace contract cannot have the same account on both sides.", 409);
+    const legacy = !contract.clientPersonaType && !contract.providerPersonaType;
+    if (contract.organizationId === context.organizationId && (legacy || (contract.clientPersonaType === "CLIENT" ? context.activePersonaType === "CLIENT" && context.userId === contract.clientAccountId && (!contract.clientPersonaId || context.activePersonaId === contract.clientPersonaId) : contract.clientPersonaType === "ORGANIZATION" && context.activePersonaType === "ORGANIZATION"))) return "CLIENT";
+    if ((contract.providerOrganizationId === context.organizationId || contract.providerUserId === context.userId) && (legacy || (contract.providerPersonaType === "FREELANCER" ? context.activePersonaType === "FREELANCER" && context.userId === contract.providerUserId && (!contract.providerPersonaId || context.activePersonaId === contract.providerPersonaId) : contract.providerPersonaType === "ORGANIZATION" && context.activePersonaType === "ORGANIZATION" && contract.providerOrganizationId === context.organizationId))) return "PROVIDER";
+    if (!legacy && (contract.organizationId === context.organizationId || contract.providerOrganizationId === context.organizationId || contract.providerUserId === context.userId)) throw new AppError("FORBIDDEN", "Switch to the marketplace persona recorded for this contract side.", 403, { code: "CONTRACT_PERSONA_MISMATCH" });
     throw new AppError("FORBIDDEN", "The active tenant is not a contract party.", 403);
   }
 
@@ -208,20 +214,47 @@ export class Phase6ContractService {
     return contract.reviews.filter((review) => review.status === "PUBLISHED" || review.reviewerParty === party);
   }
 
-  async createReview(context: TenantContext, contractId: string, input: { rating: number; title?: string; body?: string }) {
+  async createReview(context: TenantContext, contractId: string, input: {
+    overall: number; communication: number; title?: string; body: string;
+    quality?: number; delivery?: number; expertise?: number; professionalism?: number;
+    hiringClarity?: number; paymentReliability?: number; professionalConduct?: number;
+  }) {
     const contract = await this.contract(context, contractId);
     const party = this.party(context, contract);
     if (contract.status !== "COMPLETED") throw new AppError("CONFLICT", "Reviews are available after final contract completion.", 409);
     if (contract.reviews.some((review) => review.reviewerParty === party)) throw new AppError("CONFLICT", "This contract party already submitted a review.", 409);
+    if (!context.activePersonaId || !context.activePersonaType) throw new AppError("FORBIDDEN", "An active marketplace persona is required to review.", 403);
+    if (contract.clientAccountId && contract.providerUserId && contract.clientAccountId === contract.providerUserId) throw new AppError("CONFLICT", "Self-review is not permitted.", 409);
+    if (party === "CLIENT" && [input.quality, input.delivery, input.expertise, input.professionalism].some((value) => value == null)) throw new AppError("VALIDATION_ERROR", "Every provider reputation dimension is required.", 422);
+    if (party === "PROVIDER" && [input.hiringClarity, input.paymentReliability, input.professionalConduct].some((value) => value == null)) throw new AppError("VALIDATION_ERROR", "Every client reputation dimension is required.", 422);
     const revieweeOrganizationId = party === "PROVIDER" ? contract.organizationId : contract.providerOrganizationId;
     const revieweeUserId = party === "CLIENT" && !contract.providerOrganizationId ? contract.providerUserId : null;
-    return prisma.$transaction(async (tx) => {
-      const now = new Date();
-      const review = await tx.review.create({ data: { contractId, reviewerId: context.userId, reviewerParty: party, revieweeOrganizationId, revieweeUserId, rating: input.rating, title: input.title, body: input.body, status: "PUBLISHED", submittedAt: now, publishedAt: now } });
-      await this.audit(tx, context, "contract.review.published", "Review", review.id, { contractId, party, rating: input.rating });
-      await this.event(tx, contract, context.userId, "contract.review.published", "Review", review.id, { party, rating: input.rating });
-      return review;
-    }, { isolationLevel: "Serializable", maxWait: 5_000, timeout: 15_000 });
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const review = await tx.review.create({ data: {
+          contractId, reviewerId: context.userId, reviewerParty: party, reviewerPersonaId: context.activePersonaId,
+          subjectPersonaId: party === "CLIENT" ? contract.providerPersonaId : contract.clientPersonaId,
+          subjectClientProfileId: party === "PROVIDER" ? contract.clientProfileId : null,
+          subjectFreelancerProfileId: party === "CLIENT" ? contract.providerProfileId : null,
+          contextOrganizationId: context.organizationId, directionKey: `${contractId}:${party}`,
+          revieweeOrganizationId, revieweeUserId, rating: input.overall, title: input.title, body: input.body,
+          quality: party === "CLIENT" ? input.quality : null, communication: input.communication,
+          delivery: party === "CLIENT" ? input.delivery : null, expertise: party === "CLIENT" ? input.expertise : null,
+          professionalism: party === "CLIENT" ? input.professionalism : null,
+          hiringClarity: party === "PROVIDER" ? input.hiringClarity : null,
+          paymentReliability: party === "PROVIDER" ? input.paymentReliability : null,
+          professionalConduct: party === "PROVIDER" ? input.professionalConduct : null,
+          status: "PUBLISHED", submittedAt: now, publishedAt: now,
+        } });
+        await this.audit(tx, context, "contract.review.published", "Review", review.id, { contractId, party, overall: input.overall, dimensions: party === "CLIENT" ? ["quality", "communication", "delivery", "expertise", "professionalism"] : ["hiringClarity", "communication", "paymentReliability", "professionalConduct"] });
+        await this.event(tx, contract, context.userId, "contract.review.published", "Review", review.id, { party, overall: input.overall });
+        return review;
+      }, { isolationLevel: "Serializable", maxWait: 5_000, timeout: 15_000 });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) throw new AppError("CONFLICT", "This contract side already has an immutable review.", 409);
+      throw error;
+    }
   }
 
   private audit(tx: Prisma.TransactionClient, context: TenantContext, action: string, resourceType: string, resourceId: string, metadata: unknown) {

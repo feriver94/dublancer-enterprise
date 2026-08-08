@@ -107,6 +107,15 @@
     "searchPlaceholder": "ابحث في المشاريع والمهام والمستخدمين والملفات والعقود والمؤسسات",
     "searchHint": "اكتب حرفين على الأقل للبحث داخل هذه المؤسسة.",
     "noSearchResults": "لم يتم العثور على سجلات مطابقة.",
+    "postProject": "نشر مشروع",
+    "findWork": "البحث عن عمل",
+    "proposals": "العروض",
+    "invitations": "الدعوات",
+    "payments": "المدفوعات",
+    "deliveries": "التسليمات",
+    "earnings": "الأرباح",
+    "portfolio": "معرض الأعمال",
+    "analytics": "التحليلات",
     "login": "تسجيل الدخول",
     "startFree": "ابدأ مجاناً"
   },
@@ -422,6 +431,9 @@
     "listings": "الفرص",
     "contracts": "العقود",
     "files": "الملفات",
+    "clientProfiles": "العملاء العامون",
+    "freelancerProfiles": "مقدمو الخدمات العامون",
+    "publicOrganizations": "المؤسسات العامة",
     "searching": "جارٍ البحث…",
     "search": "بحث",
     "hint": "أدخل حرفين على الأقل للبحث في المؤسسة النشطة.",
@@ -436,7 +448,10 @@
       "organization": "مؤسسة",
       "listing": "فرصة",
       "contract": "عقد",
-      "file": "ملف"
+      "file": "ملف",
+      "client_profile": "ملف عميل",
+      "freelancer_profile": "ملف مقدم خدمة",
+      "public_organization": "مؤسسة عامة"
     }
   },
   "Notifications": {
@@ -1400,6 +1415,16 @@
     "loading": "جارٍ تحميل البيانات الحية…", "retry": "إعادة المحاولة", "empty": "لا توجد سجلات بعد", "clientDashboard": "لوحة العميل", "hiringCommandCenter": "مركز قيادة التوظيف", "refresh": "تحديث", "proposals": "العروض", "drafts": "المسودات", "proposalPipeline": "مسار العروض", "invitations": "الدعوات", "activeContracts": "العقود النشطة", "payments": "المدفوعات", "upcomingMilestones": "المراحل القادمة", "hiringAnalytics": "تحليلات التوظيف", "quickActions": "إجراءات سريعة", "freelancerDashboard": "لوحة المستقل", "workCommandCenter": "مركز قيادة العمل", "recommendedWork": "العمل المقترح", "milestones": "المراحل", "tasks": "المهام", "calendar": "التقويم", "portfolioPerformance": "أداء معرض الأعمال",
     "profileSettings": "إعدادات الملف", "manageIdentity": "إدارة جميع الهويات العامة", "personal": "الحساب الشخصي", "client": "ملف العميل", "freelancer": "ملف المستقل", "organization": "هوية المؤسسة", "content": "محتوى الملف", "saved": "تم حفظ التغييرات", "failed": "تعذر إكمال التغيير", "username": "اسم المستخدم", "displayName": "اسم العرض", "preferredName": "الاسم المفضل", "timezone": "المنطقة الزمنية", "language": "اللغة", "save": "حفظ التغييرات", "headline": "العنوان المهني", "banner": "رابط الغلاف", "avatar": "رابط الصورة أو الشعار", "languagesCsv": "اللغات (مفصولة بفواصل)", "hiringPreferencesJson": "تفضيلات التوظيف (JSON)", "showVerifiedSpend": "إظهار الإنفاق الموثق", "hourlyRateMinor": "الأجر بالوحدات الصغرى", "currency": "العملة", "industriesCsv": "القطاعات (مفصولة بفواصل)", "servicesCsv": "الخدمات (مفصولة بفواصل)", "tradingName": "الاسم التجاري", "logo": "رابط الشعار", "technologiesCsv": "التقنيات (مفصولة بفواصل)", "locationsJson": "المواقع (JSON)", "portfolioJson": "معرض المؤسسة (JSON)",
     "contentType": "نوع المحتوى", "newItem": "عنصر جديد", "edit": "تعديل", "archive": "أرشفة", "title": "العنوان", "description": "الوصف", "projectUrl": "رابط المشروع", "mediaUrl": "رابط الوسائط", "completedAt": "تاريخ الإنجاز", "sortOrder": "ترتيب العرض", "company": "الشركة", "startedAt": "تاريخ البداية", "endedAt": "تاريخ النهاية", "institution": "المؤسسة التعليمية", "degree": "الدرجة", "fieldOfStudy": "مجال الدراسة", "certification": "الشهادة", "issuer": "الجهة المصدرة", "credentialId": "معرف الاعتماد", "credentialUrl": "رابط الاعتماد", "issuedAt": "تاريخ الإصدار", "expiresAt": "تاريخ الانتهاء", "platform": "المنصة", "url": "الرابط", "update": "تحديث", "create": "إنشاء"
+  },
+  "PhaseC": {
+    "eyebrow": "سوق يعتمد على الصفة", "providerComparison": "مقارنة مقدمي الخدمات", "comparisonExplanation": "تُعرض الحقائق العامة والموثقة جنباً إلى جنب دون إنشاء درجة وهمية لأفضل مقدم.",
+    "compareNeedTwo": "اختر مقدمَي خدمة مؤهلين على الأقل للمقارنة.", "findProviders": "البحث عن مقدمي الخدمات", "loading": "جارٍ تحميل بيانات مقدمي الخدمات الحية…", "unavailable": "هذا الإجراء غير متاح حالياً.", "retry": "إعادة المحاولة",
+    "availability": "التوفر", "hourlyRate": "الأجر العام بالساعة", "experience": "سنوات الخبرة", "skills": "المهارات", "services": "الخدمات", "languages": "اللغات", "portfolio": "عناصر معرض الأعمال العامة", "reputation": "السمعة", "completionRate": "معدل الإنجاز", "onTime": "التسليم في الموعد", "dimension": "البعد", "notEnoughData": "لا توجد بيانات كافية", "notPublished": "غير منشور",
+    "save": "حفظ", "unsave": "إلغاء الحفظ", "unfollow": "إلغاء المتابعة", "compare": "مقارنة", "selectProject": "اختر مشروعاً", "invited": "تم إرسال الدعوة",
+    "actingClient": "أنت تتصرف بصفة العميل", "actingProvider": "أنت تتصرف بصفة مقدم الخدمة", "newerData": "توجد بيانات أحدث. أعد تحميل السجل قبل إعادة المحاولة عمداً؛ سيبقى النص الذي أدخلته في النموذج.",
+    "overall": "الإجمالي", "quality": "الجودة", "communication": "التواصل", "delivery": "التسليم", "expertise": "الخبرة", "professionalism": "الاحترافية", "hiringClarity": "وضوح التوظيف", "paymentReliability": "موثوقية الدفع", "professionalConduct": "السلوك المهني",
+    "aiAssistant": "مساعدة ملف شخصي بالذكاء الاصطناعي الخاضع للحوكمة", "aiGenerated": "اقتراح مولّد بالذكاء الاصطناعي — راجعه قبل التطبيق", "requestSuggestion": "طلب اقتراح", "providerUnavailable": "الذكاء الاصطناعي اختياري وغير متاح وفق سياسة المؤسسة الحالية. يظل تعديل الملف الأساسي متاحاً.", "humanApproval": "قد تتطلب سياسة المؤسسة موافقة بشرية.", "neverAutoPublish": "لا تُحفظ الاقتراحات أو تُنشر تلقائياً أبداً.",
+    "invitations": "دعوات المشاريع", "noInvitations": "لا توجد دعوات مشاريع بعد.", "accept": "قبول", "decline": "رفض", "actionFailed": "تعذّر إكمال الإجراء.", "switchPersona": "انتقل إلى صفة {persona} لاستخدام سير العمل هذا.", "managePersonas": "إدارة الصفات", "assistanceType": "نوع المساعدة", "optionalContext": "سياق اختياري للاقتراح", "runStatus": "حالة التشغيل: {status}", "openAiWorkspace": "فتح مساحة الذكاء الاصطناعي الخاضعة للحوكمة"
   },
   "Errors": {
     "BAD_REQUEST": "تعذر فهم الطلب.",

@@ -30,6 +30,7 @@ let csrfPromise: Promise<string> | null = null;
 function errorMessage(code: string | undefined, fallback: string | undefined) {
   const messages = document.documentElement.lang === "ar-AE" ? arMessages.Errors : enMessages.Errors;
   const key = (code ?? "REQUEST_FAILED") as keyof typeof messages;
+  if (code === "CONFLICT" && fallback) return fallback;
   return messages[key] ?? fallback ?? messages.REQUEST_FAILED;
 }
 
