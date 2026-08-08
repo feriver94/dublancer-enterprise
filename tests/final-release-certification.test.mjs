@@ -104,6 +104,7 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   const comparison = await read("src/components/pricing/FeatureComparison.tsx");
   const cta = await read("src/components/sections/CTA.tsx");
   const marketplace = await read("src/components/marketplace/MarketplaceClient.tsx");
+  const browserJourney = await read("tests/browser/authenticated-release.spec.ts");
   assert.match(config, /PLAYWRIGHT_IGNORE_HTTPS_ERRORS/);
   assert.match(config, /ignoreHTTPSErrors/);
   assert.match(navbar, /bg-\[#007A36\][^\n]*hover:bg-\[#00612B\][^\n]*labels\.startFree/);
@@ -114,7 +115,11 @@ test("real-browser product fixes preserve secure auth, accessible actions, and m
   assert.match(comparison, /maxWidth: "100%", overflowX: "auto"/);
   assert.match(comparison, /minWidth: 560/);
   assert.match(comparison, /color: "#00612B"/);
+  assert.match(comparison, /role="region"/);
+  assert.match(comparison, /aria-label="Pricing feature comparison"/);
+  assert.match(comparison, /tabIndex=\{0\}/);
   assert.match(cta, /Powered by SoasTech<\/p>/);
   assert.match(cta, /color: brand\.colors\.white/);
   assert.match(marketplace, /if \(listing\.loading && !listing\.data\)/);
+  assert.match(browserJourney, /body: \{ overall: 5[^\n]*Premature review denied\./);
 });

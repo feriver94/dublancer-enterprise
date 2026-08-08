@@ -342,12 +342,12 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await acceptContract(page, completedContractId);
       await acceptContract(providerPage, completedContractId);
 
-      const invalid = await api(page, `/api/contracts/${completedContractId}/reviews`, {
+      const premature = await api(page, `/api/contracts/${completedContractId}/reviews`, {
         method: "POST",
         expected: [409],
-        body: { overall: 6, quality: 5, communication: 5, delivery: 5, expertise: 5, professionalism: 5, body: "Invalid and premature." },
+        body: { overall: 5, quality: 5, communication: 5, delivery: 5, expertise: 5, professionalism: 5, body: "Premature review denied." },
       });
-      expect(invalid.status).toBe(409);
+      expect(premature.status).toBe(409);
 
       await page.goto(`/contracts/${completedContractId}`);
       const completion = page.locator("form.enterprise-form").filter({ has: page.locator('textarea[name="note"]') }).filter({ hasText: "Confirm milestone closeout" });
