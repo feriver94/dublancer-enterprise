@@ -99,7 +99,7 @@ jobs:
           docker exec dublancer-release-postgres psql --version
           docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli INFO server | grep '^redis_version:'
       - name: Locked dependency installation
-        run: npm ci
+        run: npm ci --include=dev
       - name: Validate production controls without printing values
         run: |
           npm run verify:environment -- --profile production

@@ -103,7 +103,7 @@ jobs:
             sleep 1
           done
           docker exec --env REDISCLI_AUTH="$REDIS_PASSWORD" dublancer-release-redis redis-cli PING | grep -qx PONG
-      - run: npm ci
+      - run: npm ci --include=dev
       - name: Apply native migrations and authoritative seed
         run: |
           npx prisma validate

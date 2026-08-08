@@ -14,6 +14,7 @@ test("real-browser CI provisions native dependencies and executes all four Playw
   assert.match(workflow, /postgres:18-alpine/);
   assert.match(workflow, /redis:8\.2-alpine/);
   assert.match(workflow, /openssl rand -hex 48/);
+  assert.match(workflow, /npm ci --include=dev/);
   assert.match(workflow, /npx prisma migrate deploy/);
   assert.match(workflow, /npm run seed/);
   assert.match(workflow, /npm run start/);
@@ -44,6 +45,7 @@ test("final certification CI covers production controls, real outages, backup an
     "npm run verify:release",
   ]) assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(workflow, /verify:environment -- --profile production/);
+  assert.match(workflow, /npm ci --include=dev/);
   assert.match(workflow, /docker stop --time 15 dublancer-release-postgres/);
   assert.match(workflow, /docker stop --time 15 dublancer-release-redis/);
   assert.match(workflow, /pg_dump[\s\S]*--format custom/);
@@ -74,6 +76,7 @@ test("native state, Redis, health and restored-auth verifiers avoid secret outpu
   assert.match(native, /_prisma_migrations/);
   assert.match(native, /Representative project record is missing|representativeIds/);
   assert.match(redis, /publish\(channel/);
+  assert.match(redis, /set\(keys\.rateLimit, "0", "EX", 60\)/);
   assert.match(redis, /rate-limit counters/);
   assert.match(health, /postgresql:\/\//);
   assert.match(health, /\["DATABASE_URL", "REDIS_URL"\]/);

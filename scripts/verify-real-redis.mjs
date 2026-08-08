@@ -30,11 +30,13 @@ const channel = `${prefix}:pubsub`;
 
 try {
   assert.equal(await publisher.ping(), "PONG");
-  for (const [capability, key] of Object.entries(keys)) {
+  for (const [capability, key] of Object.entries(keys).filter(([name]) => name !== "rateLimit")) {
     await publisher.set(key, capability, "EX", 60);
     assert.equal(await publisher.get(key), capability);
   }
+  await publisher.set(keys.rateLimit, "0", "EX", 60);
   assert.equal(await publisher.incr(keys.rateLimit), 1);
+  assert.ok(await publisher.ttl(keys.rateLimit) > 0);
   assert.ok(await publisher.ttl(keys.cache) > 0);
 
   const delivered = new Promise((resolve, reject) => {
