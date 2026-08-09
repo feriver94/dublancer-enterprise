@@ -2,7 +2,7 @@
 
 ## 1. Executive verdict
 
-**FINAL CERTIFICATION: PASS. RELEASE CANDIDATE APPROVED FOR CONTROLLED PUBLICATION.**
+**PRODUCTION RELEASE CERTIFIED**
 
 The authoritative release candidate passed every mandatory, non-waived gate on native PostgreSQL 18, real Redis 8, a production standalone Next.js build, Chromium, Firefox, WebKit, and mobile Chromium. The certified code tree has no blocked checks, no skipped mandatory validation, no open release-blocking defect, and no schema change introduced by the certification fixes.
 
