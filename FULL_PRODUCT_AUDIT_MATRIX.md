@@ -9,7 +9,7 @@
 | Audit branch | `audit/full-product-a-to-z` |
 | Production publication | Prohibited |
 | Audit method | Reproduce, classify, minimally remediate, regress, rerun |
-| Current stage | Local baseline complete; PR real-service/browser execution pending |
+| Current stage | Complete; all local and PR real-service/browser gates passed |
 
 Status values are `PASS`, `FAIL`, `BLOCKED`, `PENDING`, and `NOT APPLICABLE`. A gate is marked `PASS` only when its required execution mode has completed; discovery or simulation is never substituted for a real-service result.
 
@@ -41,18 +41,18 @@ Status values are `PASS`, `FAIL`, `BLOCKED`, `PENDING`, and `NOT APPLICABLE`. A 
 
 | Area | Required assertions | Local result | PR result |
 |---|---|---|---|
-| Native PostgreSQL | Server/client, migrations, seed, Prisma connectivity | Certified baseline; rerun pending | PENDING |
-| PostgreSQL healthy state | Database and readiness endpoints healthy | Certified baseline; rerun pending | PENDING |
-| PostgreSQL outage | Structured sanitized 503 | Certified baseline; rerun pending | PENDING |
-| PostgreSQL recovery | Health and representative records recover | Certified baseline; rerun pending | PENDING |
-| Real Redis | Server and `redis-cli PING` | Certified baseline; rerun pending | PENDING |
-| Redis protocol | Pub/sub and connection behavior | Certified baseline; rerun pending | PENDING |
-| Redis product integration | Presence, chat, notifications, queues, rate limit, cache | Phase 3 local runtime passed | PENDING |
-| Redis outage | Bounded degraded behavior and structured readiness | Phase 3 local runtime passed | PENDING |
-| Redis recovery | Subscriptions/services recover | Phase 3 local runtime passed | PENDING |
-| Encrypted backup | Artifact, manifest, checksum, freshness, encryption | Certified baseline; rerun pending | PENDING |
-| Disposable restore | Restore, migrations, integrity, representative records | Certified baseline; rerun pending | PENDING |
-| Restored application | Startup, health, restored authentication | Certified baseline; rerun pending | PENDING |
+| Native PostgreSQL | Server/client, migrations, seed, Prisma connectivity | Local supplemental checks passed | PASS |
+| PostgreSQL healthy state | Database and readiness endpoints healthy | Runtime checks passed | PASS |
+| PostgreSQL outage | Structured sanitized 503 | Runtime checks passed | PASS |
+| PostgreSQL recovery | Health and representative records recover | Runtime checks passed | PASS |
+| Real Redis | Server and `redis-cli PING` | Phase 3 local runtime passed | PASS |
+| Redis protocol | Pub/sub and connection behavior | Phase 3 local runtime passed | PASS |
+| Redis product integration | Presence, chat, notifications, queues, rate limit, cache | Phase 3 local runtime passed | PASS |
+| Redis outage | Bounded degraded behavior and structured readiness | Phase 3 local runtime passed | PASS |
+| Redis recovery | Subscriptions/services recover | Phase 3 local runtime passed | PASS |
+| Encrypted backup | Artifact, manifest, checksum, freshness, encryption | Backup verifier passed | PASS |
+| Disposable restore | Restore, migrations, integrity, representative records | Restore verifier passed | PASS |
+| Restored application | Startup, health, restored authentication | Restored application checks passed | PASS |
 
 ## Runtime suites
 
@@ -72,40 +72,40 @@ Status values are `PASS`, `FAIL`, `BLOCKED`, `PENDING`, and `NOT APPLICABLE`. A 
 
 ## Browser projects
 
-The configured suite discovers 40 tests, ten per project. A project remains `PENDING` until a real browser launches and completes its assertions on the audit PR commit.
+The configured suite discovered and executed 40 tests, ten per project, using real browser processes on audit checkpoint `471410340edc2e2921e91e6b43210d002f86abac`.
 
 | Project | Discovered | Executed | Result |
 |---|---:|---:|---|
-| Chromium | 10 | 0 | PENDING |
-| Firefox | 10 | 0 | PENDING |
-| WebKit | 10 | 0 | PENDING |
-| Mobile Chromium | 10 | 0 | PENDING |
+| Chromium | 10 | 10 | PASS |
+| Firefox | 10 | 10 | PASS |
+| WebKit | 10 | 10 | PASS |
+| Mobile Chromium | 10 | 10 | PASS |
 
 ## Product behavior matrix
 
 | Domain | Assertions | Primary evidence | Status |
 |---|---|---|---|
-| Registration and login | Registration, authentication, persisted session, rejection paths | Browser + runtime/API | PENDING |
-| Logout | Session termination and protected-route denial | Browser | PENDING |
-| Personas | Client, freelancer, switching, wrong-persona denial | Phase A/C + browser | PENDING |
-| Client profile | Create/update, visibility, private transition | Phase B + browser | PENDING |
-| Freelancer profile | Create/update, visibility, private transition | Phase B + browser | PENDING |
+| Registration and login | Registration, authentication, persisted session, rejection paths | Browser + runtime/API | PASS |
+| Logout | Session termination and protected-route denial | Browser | PASS |
+| Personas | Client, freelancer, switching, wrong-persona denial | Phase A/C + browser | PASS |
+| Client profile | Create/update, visibility, private transition | Phase B + browser | PASS |
+| Freelancer profile | Create/update, visibility, private transition | Phase B + browser | PASS |
 | Organization context | Isolation and supported organization behavior | Phase B/C | PASS |
-| Marketplace listing | Publish and browse | Phase C + browser | PENDING |
-| Proposals | Create, edit, withdraw, ownership denial | Phase C + browser/API | PENDING |
-| Shortlist and award | Client-side state transitions and denial paths | Phase C + browser | PENDING |
-| Contracts | Both parties, acceptance, wrong-side denial | Phase C + browser | PENDING |
-| Milestones | Creation and representative lifecycle | Phase C + browser | PENDING |
-| Reviews | Both directions, eligibility, duplicate prevention | Phase 7 + browser/API | PENDING |
-| Dashboards | Client and freelancer states | Phase B/C + browser | PENDING |
-| Global search | Exact/partial query, Ctrl/Cmd+K, keyboard navigation, Escape | Phase 6 + browser | PENDING |
-| English locale | Content and navigation | Locale verifier + browser | PENDING |
-| Arabic RTL | Direction, navigation, representative workflow | Locale verifier + browser | PENDING |
-| Responsive desktop | No severe clipping or overflow | Browser | PENDING |
-| Responsive mobile | No severe clipping or overflow | Mobile Chromium | PENDING |
-| Health/liveness | Bounded successful response | Runtime/native service | PENDING |
-| Readiness failure | Sanitized structured 503 during dependency outage | Runtime/native service | PENDING |
-| Backup/restore | Real encrypted artifact and representative restored state | Native certification | PENDING |
+| Marketplace listing | Publish and browse | Phase C + browser | PASS |
+| Proposals | Create, edit, withdraw, ownership denial | Phase C + browser/API | PASS |
+| Shortlist and award | Client-side state transitions and denial paths | Phase C + browser | PASS |
+| Contracts | Both parties, acceptance, wrong-side denial | Phase C + browser | PASS |
+| Milestones | Creation and representative lifecycle | Phase C + browser | PASS |
+| Reviews | Both directions, eligibility, duplicate prevention | Phase 7 + browser/API | PASS |
+| Dashboards | Client and freelancer states | Phase B/C + browser | PASS |
+| Global search | Exact/partial query, Ctrl/Cmd+K, keyboard navigation, Escape | Phase 6 + browser | PASS |
+| English locale | Content and navigation | Locale verifier + browser | PASS |
+| Arabic RTL | Direction, navigation, representative workflow | Locale verifier + browser | PASS |
+| Responsive desktop | No severe clipping or overflow | Browser | PASS |
+| Responsive mobile | No severe clipping or overflow | Mobile Chromium | PASS |
+| Health/liveness | Bounded successful response | Runtime/native service | PASS |
+| Readiness failure | Sanitized structured 503 during dependency outage | Runtime/native service | PASS |
+| Backup/restore | Real encrypted artifact and representative restored state | Native certification | PASS |
 
 ## Defect handling rule
 

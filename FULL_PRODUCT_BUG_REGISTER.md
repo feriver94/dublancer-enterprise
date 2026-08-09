@@ -11,7 +11,7 @@
 | Low | 0 | 0 | 0 |
 | **Total** | **0** | **0** | **0** |
 
-No product defect has been confirmed at this checkpoint.
+No product defect was confirmed during the completed audit.
 
 ## Finding admission criteria
 
@@ -40,6 +40,6 @@ None.
 
 None.
 
-## Pending external execution
+## External execution result
 
-Real PostgreSQL/Redis/backup and four-project Playwright execution will run on the audit pull request. A failure is not automatically a defect: it must first be reproduced and separated from runner or dependency-transit failure. Confirmed defects will be added above and remediated on the audit branch only.
+Real PostgreSQL/Redis/backup and four-project Playwright execution passed on audit checkpoint `471410340edc2e2921e91e6b43210d002f86abac`. Chromium, Firefox, WebKit, and Mobile Chromium each passed 10/10. No workflow failure required defect triage or remediation.
