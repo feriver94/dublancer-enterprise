@@ -35,3 +35,13 @@ test("persona browser assertions use the same cookie jar as the switching UI", (
   assert.match(browser, /fetch\("\/api\/personas", \{ credentials: "same-origin"/);
   assert.doesNotMatch(browser, /return \(await api<PersonaOverview>\(page, "\/api\/personas"\)\)\.data/);
 });
+
+test("persona switch binds the replacement access cookie to its exact response", () => {
+  const route = read("src/app/api/personas/switch/route.ts");
+  const cookies = read("src/lib/auth/cookies.ts");
+  assert.match(route, /const response = apiSuccess/);
+  assert.match(route, /setAccessCookieOnResponse\(response, result\.accessToken\)/);
+  assert.match(cookies, /response\.cookies\.set\(AUTH_CONFIG\.sessionCookieName/);
+  assert.match(cookies, /httpOnly: true/);
+  assert.match(cookies, /sameSite: "lax"/);
+});
