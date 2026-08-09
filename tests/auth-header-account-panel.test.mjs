@@ -24,5 +24,7 @@ test("account panel uses real secure account actions and accessible modal behavi
   assert.match(panel, /event\.key !== "Tab"/);
   assert.match(panel, /dublancer-theme/);
   assert.match(panel, /profile\.avatarUrl/);
+  assert.match(panel, /createPortal/);
+  assert.match(panel, /document\.body/);
   assert.doesNotMatch(panel, /Add funds|Withdraw funds|Upload photo/);
 });

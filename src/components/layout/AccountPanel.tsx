@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Persona = { id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; label: string; organizationName: string };
 type Profile = { displayName: string | null; email: string; username?: string | null; avatarUrl?: string | null };
@@ -19,12 +20,14 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
   onLogout: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState<Theme>("system");
   const active = personas.find((persona) => persona.id === activePersonaId);
   const name = profile.displayName?.trim() || labels.account;
   const fallback = (name || profile.email).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 
   useEffect(() => {
+    queueMicrotask(() => setMounted(true));
     const saved = window.localStorage.getItem("dublancer-theme");
     const value: Theme = saved === "light" || saved === "dark" ? saved : "system";
     queueMicrotask(() => setTheme(value));
@@ -50,7 +53,9 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
-  return <div className="fixed inset-0 z-[70] bg-slate-950/30" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+  if (!mounted) return null;
+
+  return createPortal(<div className="fixed inset-0 z-[70] bg-slate-950/30" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
     <div ref={panel} role="dialog" aria-modal="true" aria-label={labels.profile} onKeyDown={trap} className="absolute inset-x-0 bottom-0 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 text-slate-800 shadow-2xl sm:inset-x-auto sm:bottom-auto sm:end-4 sm:top-20 sm:w-[390px] sm:max-h-[calc(100vh-6rem)] sm:rounded-3xl">
       <section className="rounded-2xl bg-gradient-to-br from-[#0F4C5C] to-[#087A52] p-4 text-white">
         <div className="flex items-center gap-3">
@@ -80,5 +85,5 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
         <button type="button" disabled={loggingOut} onClick={onLogout} className="w-full rounded-xl px-3 py-2.5 text-start text-sm font-bold text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 disabled:opacity-60">{loggingOut ? labels.loggingOut : labels.logout}</button>
       </section>
     </div>
-  </div>;
+  </div>, document.body);
 }
