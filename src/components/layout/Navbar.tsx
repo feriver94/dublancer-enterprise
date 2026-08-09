@@ -54,7 +54,7 @@ export default async function Navbar({
 }: {
   authenticated?: boolean;
   permissions?: string[];
-  profile?: { displayName: string | null; email: string } | null;
+  profile?: { displayName: string | null; email: string; username?: string | null; avatarUrl?: string | null } | null;
   personas?: Array<{ id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; label: string; organizationName: string }>;
   activePersonaId?: string | null;
 }) {
@@ -99,7 +99,23 @@ export default async function Navbar({
 
   if (isAuthenticated && profile === undefined && userId) {
     [profile, personas] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId }, select: { displayName: true, email: true } }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          displayName: true,
+          email: true,
+          username: true,
+          clientProfile: { select: { avatarUrl: true } },
+          freelancerProfile: { select: { avatarUrl: true } },
+        },
+      }).then((user) => user ? ({
+        displayName: user.displayName,
+        email: user.email,
+        username: user.username,
+        avatarUrl: activePersonaType === "FREELANCER"
+          ? user.freelancerProfile?.avatarUrl
+          : user.clientProfile?.avatarUrl,
+      }) : null),
       prisma.accountPersona.findMany({
         where: { userId, status: "ACTIVE", organization: { status: "ACTIVE" } },
         select: { id: true, type: true, label: true, organization: { select: { name: true } } },
@@ -140,6 +156,8 @@ export default async function Navbar({
           menu: t("menu"), closeMenu: t("closeMenu"), more: t("more"), search: common("search"),
           searchPlaceholder: t("searchPlaceholder"), searchHint: t("searchHint"), noSearchResults: t("noSearchResults"),
           profile: t("profile"), account: t("account"), logout: t("logout"), loggingOut: t("loggingOut"), logoutFailed: t("logoutFailed"),
+          profileSettings: t("profileSettings"), analytics: t("analytics"), payments: t("payments"), appearance: t("appearance"),
+          light: t("light"), dark: t("dark"), system: t("system"), unavailable: t("unavailable"), accountTools: t("accountTools"),
           activePersona: t("activePersona"), switchPersona: t("switchPersona"), managePersonas: t("managePersonas"), switchingPersona: t("switchingPersona"),
           organization: t("organization"), openWorkspace: t("openWorkspace"), dashboard: t("dashboard"), login: t("login"), startFree: t("startFree"),
         }}

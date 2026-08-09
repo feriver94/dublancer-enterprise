@@ -3,11 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiMutation, resetApiClientCsrf } from "@/lib/client/api-client";
+import AccountPanel from "./AccountPanel";
 
 type NavigationItem = { href: string; label: string };
-type Profile = { displayName: string | null; email: string };
+type Profile = { displayName: string | null; email: string; username?: string | null; avatarUrl?: string | null };
 type Persona = { id: string; type: "CLIENT" | "FREELANCER" | "ORGANIZATION"; label: string; organizationName: string };
 type SearchResult = {
   id: string;
@@ -34,6 +36,8 @@ type Labels = {
   logout: string;
   loggingOut: string;
   logoutFailed: string;
+  profileSettings: string; analytics: string; payments: string; appearance: string;
+  light: string; dark: string; system: string; unavailable: string; accountTools: string;
   activePersona: string;
   switchPersona: string;
   managePersonas: string;
@@ -78,7 +82,10 @@ export default function NavbarClient({
   labels: Labels;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchInput = useRef<HTMLInputElement>(null);
+  const profileButton = useRef<HTMLButtonElement>(null);
+  const profileWasOpen = useRef(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -88,8 +95,8 @@ export default function NavbarClient({
   const [searchError, setSearchError] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingPersonaId, setSwitchingPersonaId] = useState("");
-  const primaryItems = items.slice(0, 5);
-  const overflowItems = items.slice(5);
+  const primaryItems = items.slice(0, 4);
+  const overflowItems = items.slice(4);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -112,6 +119,14 @@ export default function NavbarClient({
     const focus = window.setTimeout(() => searchInput.current?.focus(), 0);
     return () => window.clearTimeout(focus);
   }, [searchOpen]);
+
+  useEffect(() => {
+    if (profileOpen) profileWasOpen.current = true;
+    else if (profileWasOpen.current) {
+      profileWasOpen.current = false;
+      profileButton.current?.focus();
+    }
+  }, [profileOpen]);
 
   useEffect(() => {
     if (!searchOpen || query.trim().length < 2) {
@@ -176,7 +191,7 @@ export default function NavbarClient({
   }
 
   return (
-    <nav className="relative flex min-h-20 items-center gap-3 py-3" aria-label={labels.primaryNavigation}>
+    <nav className="relative flex min-h-16 items-center gap-2 py-2" aria-label={labels.primaryNavigation}>
       <Link href={authenticated ? "/dashboard" : "/"} className="shrink-0" aria-label={labels.home}>
         <Image
           src="/images/Logo.jpg"
@@ -184,13 +199,13 @@ export default function NavbarClient({
           width={230}
           height={74}
           priority
-          className="h-auto w-[145px] object-contain sm:w-[180px] 2xl:w-[210px]"
+          className="h-auto w-[132px] object-contain sm:w-[155px] 2xl:w-[180px]"
         />
       </Link>
 
-      <div className="hidden min-w-0 flex-1 items-center justify-center gap-4 text-sm font-bold text-[#0F4C5C] xl:flex" aria-label={labels.productModules}>
+      <div className="hidden min-w-0 flex-1 items-center justify-center gap-1 text-sm font-bold text-[#0F4C5C] xl:flex" aria-label={labels.productModules}>
         {primaryItems.map((item) => (
-          <Link key={item.href} href={item.href} className="whitespace-nowrap hover:text-[#009A44]">
+          <Link key={`${item.href}-${item.label}`} href={item.href} aria-current={pathname === item.href.split("?")[0] ? "page" : undefined} className="whitespace-nowrap rounded-full px-2.5 py-2 hover:bg-emerald-50 hover:text-[#009A44] focus-visible:outline-2 focus-visible:outline-[#009A44] aria-[current=page]:bg-emerald-50 aria-[current=page]:text-[#007A36]">
             {item.label}
           </Link>
         ))}
@@ -201,7 +216,7 @@ export default function NavbarClient({
             </summary>
             <div className="absolute end-0 top-full z-50 mt-2 grid min-w-52 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
               {overflowItems.map((item) => (
-                <Link key={item.href} href={item.href} className="rounded-xl px-4 py-2 hover:bg-slate-50 hover:text-[#009A44]">
+                <Link key={`${item.href}-${item.label}`} href={item.href} aria-current={pathname === item.href.split("?")[0] ? "page" : undefined} className="rounded-xl px-4 py-2 hover:bg-slate-50 hover:text-[#009A44] aria-[current=page]:bg-emerald-50">
                   {item.label}
                 </Link>
               ))}
@@ -224,6 +239,7 @@ export default function NavbarClient({
             {profile ? (
               <div className="relative">
                 <button
+                  ref={profileButton}
                   type="button"
                   onClick={() => setProfileOpen((current) => !current)}
                   className="flex items-center gap-2 rounded-full border border-slate-200 p-1.5 pe-3 text-start hover:border-[#009A44]"
@@ -233,36 +249,7 @@ export default function NavbarClient({
                   <span className="grid size-9 place-items-center rounded-full bg-[#0F4C5C] text-xs font-bold text-white">{initials(profile)}</span>
                   <span className="hidden max-w-32 truncate text-sm font-bold text-[#0F4C5C] lg:block">{profile.displayName || profile.email}</span>
                 </button>
-                {profileOpen ? (
-                  <div className="absolute end-0 top-full z-50 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
-                    <p className="truncate font-bold text-[#0F4C5C]">{profile.displayName || labels.account}</p>
-                    <p className="truncate text-xs text-slate-500">{profile.email}</p>
-                    <div className="my-3 border-t border-slate-100" />
-                    {personas.length ? (
-                      <div className="grid gap-1" aria-label={labels.switchPersona}>
-                        <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{labels.activePersona}</p>
-                        {personas.map((persona) => (
-                          <button
-                            key={persona.id}
-                            type="button"
-                            disabled={Boolean(switchingPersonaId) || persona.id === activePersonaId}
-                            onClick={() => void switchPersona(persona.id)}
-                            className={`rounded-xl px-3 py-2 text-start text-sm hover:bg-slate-50 disabled:opacity-70 ${persona.id === activePersonaId ? "bg-emerald-50 font-bold text-[#007A36]" : ""}`}
-                          >
-                            <span className="block font-bold">{switchingPersonaId === persona.id ? labels.switchingPersona : persona.label}</span>
-                            <span className="block text-xs text-slate-500">{persona.type} · {persona.organizationName}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    <Link href="/account/personas" className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-50">{labels.managePersonas}</Link>
-                    {canViewOrganization ? <Link href="/organization" className="block rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-50">{labels.organization}</Link> : null}
-                    <Link href="/identity" className="block rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-50">{labels.account}</Link>
-                    <button type="button" disabled={loggingOut} onClick={() => void logout()} className="mt-1 w-full rounded-xl px-3 py-2 text-start text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60">
-                      {loggingOut ? labels.loggingOut : labels.logout}
-                    </button>
-                  </div>
-                ) : null}
+                {profileOpen ? <AccountPanel profile={profile} personas={personas} activePersonaId={activePersonaId} labels={labels} busyPersonaId={switchingPersonaId} loggingOut={loggingOut} onClose={() => setProfileOpen(false)} onSwitchPersona={(id) => void switchPersona(id)} onLogout={() => void logout()} /> : null}
               </div>
             ) : null}
             <button
@@ -290,7 +277,7 @@ export default function NavbarClient({
           </button>
           <div className="grid gap-1">
             {items.map((item) => (
-              <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 font-bold text-[#0F4C5C] hover:bg-slate-50">
+              <Link key={`${item.href}-${item.label}`} href={item.href} aria-current={pathname === item.href.split("?")[0] ? "page" : undefined} onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 font-bold text-[#0F4C5C] hover:bg-slate-50 aria-[current=page]:bg-emerald-50 aria-[current=page]:text-[#007A36]">
                 {item.label}
               </Link>
             ))}

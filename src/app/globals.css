@@ -5,6 +5,9 @@
   --foreground: #0f4c5c;
 }
 
+:root[data-theme="dark"] { --background:#09151d; --foreground:#e7f2f3; color-scheme:dark; }
+:root[data-theme="light"] { --background:#ffffff; --foreground:#0f4c5c; color-scheme:light; }
+
 .product-console { max-width: 1180px; margin: 0 auto; color: #10233f; }
 .product-console__header { max-width: 780px; margin-bottom: 32px; }
 .product-console__header h1 { font-size: clamp(2rem, 5vw, 4rem); margin: 8px 0 16px; letter-spacing: -.04em; }
