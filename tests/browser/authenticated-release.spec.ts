@@ -124,8 +124,10 @@ async function switchPersona(page: Page, type: Persona["type"]) {
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "User profile" }).click();
   const switcher = page.getByLabel("Switch persona");
+  const switched = page.waitForResponse((response) => response.url().includes("/api/personas/switch") && response.request().method() === "POST");
   await switcher.getByRole("button").filter({ hasText: new RegExp(`^.*${type} ·`) }).click();
-  await expect.poll(async () => (await personas(page)).activePersonaId).toBe(target?.id);
+  expect((await switched).ok()).toBeTruthy();
+  await expect.poll(async () => (await personas(page)).activePersonaId, { timeout: 15_000 }).toBe(target?.id);
 }
 
 async function createListing(page: Page, title: string) {

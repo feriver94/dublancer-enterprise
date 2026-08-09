@@ -33,6 +33,8 @@ test("persona browser assertions use the same cookie jar as the switching UI", (
   const browser = read("tests/browser/authenticated-release.spec.ts");
   assert.match(browser, /page\.evaluate\(async \(\) =>/);
   assert.match(browser, /fetch\("\/api\/personas", \{ credentials: "same-origin"/);
+  assert.match(browser, /waitForResponse\(\(response\) => response\.url\(\)\.includes\("\/api\/personas\/switch"\)/);
+  assert.match(browser, /expect\(\(await switched\)\.ok\(\)\)\.toBeTruthy\(\)/);
   assert.doesNotMatch(browser, /return \(await api<PersonaOverview>\(page, "\/api\/personas"\)\)\.data/);
 });
 
