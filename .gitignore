@@ -8,3 +8,6 @@ out
 playwright-report
 test-results
 .phase3-runtime-*
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
