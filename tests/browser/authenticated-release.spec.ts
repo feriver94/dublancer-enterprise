@@ -106,7 +106,14 @@ async function completeOnboarding(page: Page, selected: Array<Persona["type"]>, 
 }
 
 async function personas(page: Page) {
-  return (await api<PersonaOverview>(page, "/api/personas")).data;
+  return page.evaluate(async () => {
+    const response = await fetch("/api/personas", { credentials: "same-origin", cache: "no-store" });
+    const envelope = await response.json() as { data?: PersonaOverview; error?: { code?: string; message?: string } };
+    if (!response.ok || !envelope.data) {
+      throw new Error(`GET /api/personas: HTTP ${response.status} ${JSON.stringify(envelope.error ?? {})}`);
+    }
+    return envelope.data;
+  });
 }
 
 async function switchPersona(page: Page, type: Persona["type"]) {

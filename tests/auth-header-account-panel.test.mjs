@@ -28,3 +28,10 @@ test("account panel uses real secure account actions and accessible modal behavi
   assert.match(panel, /document\.body/);
   assert.doesNotMatch(panel, /Add funds|Withdraw funds|Upload photo/);
 });
+
+test("persona browser assertions use the same cookie jar as the switching UI", () => {
+  const browser = read("tests/browser/authenticated-release.spec.ts");
+  assert.match(browser, /page\.evaluate\(async \(\) =>/);
+  assert.match(browser, /fetch\("\/api\/personas", \{ credentials: "same-origin"/);
+  assert.doesNotMatch(browser, /return \(await api<PersonaOverview>\(page, "\/api\/personas"\)\)\.data/);
+});
