@@ -35,6 +35,7 @@ export default function ProfileMediaControl({ target, asset, value, label, fallb
     try {
       const intent = await apiMutation<{ uploadUrl: string }>("/api/profile/media/intents", "POST", { target, asset, mimeType: file.type, sizeBytes: file.size, checksumSha256: await digest(file) });
       const uploaded = await apiBinaryMutation<{ url: string }>(intent.uploadUrl, file);
+      window.sessionStorage.setItem("dublancer-profile-media", uploaded.url);
       window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: uploaded.url } }));
       URL.revokeObjectURL(preview); setPreview(""); setFile(null); await onChanged();
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("mediaUploadFailed")); }
@@ -42,7 +43,7 @@ export default function ProfileMediaControl({ target, asset, value, label, fallb
   }
   async function remove() {
     setBusy(true); setError("");
-    try { await apiMutation("/api/profile/media", "DELETE", { target, asset }); window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: null } })); await onChanged(); }
+    try { await apiMutation("/api/profile/media", "DELETE", { target, asset }); window.sessionStorage.removeItem("dublancer-profile-media"); window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: null } })); await onChanged(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : t("mediaRemoveFailed")); }
     finally { setBusy(false); }
   }

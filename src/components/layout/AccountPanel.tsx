@@ -29,6 +29,8 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
+    const currentAvatar = window.sessionStorage.getItem("dublancer-profile-media");
+    if (currentAvatar) queueMicrotask(() => setAvatarUrl(currentAvatar));
     const saved = window.localStorage.getItem("dublancer-theme");
     const value: Theme = saved === "light" || saved === "dark" ? saved : "system";
     queueMicrotask(() => setTheme(value));
