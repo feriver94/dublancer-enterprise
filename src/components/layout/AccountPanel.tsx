@@ -22,6 +22,7 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
   const panel = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState<Theme>("system");
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl ?? null);
   const active = personas.find((persona) => persona.id === activePersonaId);
   const name = profile.displayName?.trim() || labels.account;
   const fallback = (name || profile.email).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
@@ -32,6 +33,15 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
     const value: Theme = saved === "light" || saved === "dark" ? saved : "system";
     queueMicrotask(() => setTheme(value));
     panel.current?.querySelector<HTMLElement>("a,button")?.focus();
+  }, []);
+
+  useEffect(() => {
+    function update(event: Event) {
+      const detail = (event as CustomEvent<{ asset?: string; url?: string | null }>).detail;
+      if (detail?.asset === "avatar" || detail?.asset === "logo") setAvatarUrl(detail.url ?? null);
+    }
+    window.addEventListener("dublancer:profile-media", update);
+    return () => window.removeEventListener("dublancer:profile-media", update);
   }, []);
 
   useEffect(() => {
@@ -59,7 +69,7 @@ export default function AccountPanel({ profile, personas, activePersonaId, label
     <div ref={panel} role="dialog" aria-modal="true" aria-label={labels.profile} onKeyDown={trap} className="absolute inset-x-0 bottom-0 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 text-slate-800 shadow-2xl sm:inset-x-auto sm:bottom-auto sm:end-4 sm:top-20 sm:w-[390px] sm:max-h-[calc(100vh-6rem)] sm:rounded-3xl">
       <section className="rounded-2xl bg-gradient-to-br from-[#0F4C5C] to-[#087A52] p-4 text-white">
         <div className="flex items-center gap-3">
-          <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white/15 text-lg font-black" style={profile.avatarUrl ? { backgroundImage: `url(${profile.avatarUrl})`, backgroundPosition: "center", backgroundSize: "cover" } : undefined} aria-label={labels.profile}>{profile.avatarUrl ? null : fallback}</span>
+          <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white/15 text-lg font-black" style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundPosition: "center", backgroundSize: "cover" } : undefined} aria-label={labels.profile}>{avatarUrl ? null : fallback}</span>
           <div className="min-w-0"><strong className="block truncate text-lg">{name}</strong><span className="block truncate text-sm text-white/75">{profile.username ? `@${profile.username}` : labels.unavailable}</span></div>
         </div>
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/15 pt-3 text-sm"><span>{labels.activePersona}</span><strong>{active?.label || labels.unavailable}</strong></div>

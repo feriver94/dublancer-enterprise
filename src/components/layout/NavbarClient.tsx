@@ -95,8 +95,18 @@ export default function NavbarClient({
   const [searchError, setSearchError] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingPersonaId, setSwitchingPersonaId] = useState("");
+  const [liveAvatarUrl, setLiveAvatarUrl] = useState(profile?.avatarUrl ?? null);
   const primaryItems = items.slice(0, 4);
   const overflowItems = items.slice(4);
+
+  useEffect(() => {
+    function update(event: Event) {
+      const detail = (event as CustomEvent<{ asset?: string; url?: string | null }>).detail;
+      if (detail?.asset === "avatar" || detail?.asset === "logo") setLiveAvatarUrl(detail.url ?? null);
+    }
+    window.addEventListener("dublancer:profile-media", update);
+    return () => window.removeEventListener("dublancer:profile-media", update);
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -246,7 +256,7 @@ export default function NavbarClient({
                   aria-expanded={profileOpen}
                   aria-label={labels.profile}
                 >
-                  <span className="grid size-9 place-items-center rounded-full bg-[#0F4C5C] text-xs font-bold text-white">{initials(profile)}</span>
+                  <span className="grid size-9 place-items-center rounded-full bg-[#0F4C5C] bg-cover bg-center text-xs font-bold text-white" style={liveAvatarUrl ? { backgroundImage: `url(${liveAvatarUrl})` } : undefined}>{liveAvatarUrl ? null : initials(profile)}</span>
                   <span className="hidden max-w-32 truncate text-sm font-bold text-[#0F4C5C] lg:block">{profile.displayName || profile.email}</span>
                 </button>
                 {profileOpen ? <AccountPanel profile={profile} personas={personas} activePersonaId={activePersonaId} labels={labels} busyPersonaId={switchingPersonaId} loggingOut={loggingOut} onClose={() => setProfileOpen(false)} onSwitchPersona={(id) => void switchPersona(id)} onLogout={() => void logout()} /> : null}

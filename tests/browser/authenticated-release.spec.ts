@@ -231,6 +231,38 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await switchPersona(providerPage, "FREELANCER");
     });
 
+    await test.step("validate the complete owned avatar lifecycle", async () => {
+      await switchPersona(page, "CLIENT");
+      await page.goto("/settings/profiles");
+      await page.getByRole("button", { name: "Client profile" }).click();
+      const media = page.getByRole("region", { name: "Avatar or logo URL" });
+      const input = media.locator('input[type="file"]');
+      await input.setInputFiles({ name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("not an image") });
+      await expect(media.getByRole("alert")).toContainText("JPEG, PNG, or WebP");
+      await input.setInputFiles({ name: "oversized.png", mimeType: "image/png", buffer: Buffer.alloc(5 * 1024 * 1024 + 1) });
+      await expect(media.getByRole("alert")).toContainText("5 MB or smaller");
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+      await input.setInputFiles({ name: "avatar.png", mimeType: "image/png", buffer: png });
+      await expect(media.getByRole("button", { name: "Confirm upload" })).toBeVisible();
+      await media.getByRole("button", { name: "Confirm upload" }).click();
+      await expect(media.getByRole("button", { name: "Change photo" })).toBeVisible();
+      await page.getByRole("button", { name: "User profile" }).click();
+      await expect(page.getByRole("dialog", { name: "User profile" }).locator('[style*="profile/media"]')).toBeVisible();
+      await page.keyboard.press("Escape");
+      await page.reload();
+      await page.getByRole("button", { name: "Client profile" }).click();
+      const persisted = page.getByRole("region", { name: "Avatar or logo URL" });
+      await expect(persisted.getByRole("button", { name: "Change photo" })).toBeVisible();
+      await persisted.locator('input[type="file"]').setInputFiles({ name: "avatar-changed.png", mimeType: "image/png", buffer: png });
+      await persisted.getByRole("button", { name: "Confirm upload" }).click();
+      await expect(persisted.getByRole("button", { name: "Remove photo" })).toBeVisible();
+      await persisted.getByRole("button", { name: "Remove photo" }).click();
+      await expect(persisted.getByRole("button", { name: "Upload photo" })).toBeVisible();
+      await page.getByRole("button", { name: "User profile" }).click();
+      await expect(page.getByRole("dialog", { name: "User profile" }).getByText("BC", { exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+    });
+
     let primaryListing: { id: string; title: string; version: number };
     let milestoneContractId = "";
     await test.step("publish and browse a project, submit, shortlist and award a proposal", async () => {
