@@ -12,7 +12,7 @@ async function digest(file: File) {
   return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function ProfileMediaControl({ target, asset, value, label, fallback, onChanged }: { target: Target; asset: Asset; value?: string | null; label: string; fallback: string; onChanged: () => Promise<unknown> }) {
+export default function ProfileMediaControl({ target, asset, value, label, fallback, onChanged }: { target: Target; asset: Asset; value?: string | null; label: string; fallback: string; onChanged: (outcome: "uploaded" | "removed") => Promise<unknown> }) {
   const t = useTranslations("ProfilePhaseB");
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState("");
@@ -37,13 +37,13 @@ export default function ProfileMediaControl({ target, asset, value, label, fallb
       const uploaded = await apiBinaryMutation<{ url: string }>(intent.uploadUrl, file);
       if (asset === "avatar" || asset === "logo") window.sessionStorage.setItem("dublancer-profile-avatar", uploaded.url);
       window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: uploaded.url } }));
-      URL.revokeObjectURL(preview); setPreview(""); setFile(null); if (input.current) input.current.value = ""; await onChanged();
+      URL.revokeObjectURL(preview); setPreview(""); setFile(null); if (input.current) input.current.value = ""; await onChanged("uploaded");
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("mediaUploadFailed")); }
     finally { setBusy(false); }
   }
   async function remove() {
     setBusy(true); setError("");
-    try { await apiMutation("/api/profile/media", "DELETE", { target, asset }); if (asset === "avatar" || asset === "logo") window.sessionStorage.removeItem("dublancer-profile-avatar"); window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: null } })); if (input.current) input.current.value = ""; await onChanged(); }
+    try { await apiMutation("/api/profile/media", "DELETE", { target, asset }); if (asset === "avatar" || asset === "logo") window.sessionStorage.removeItem("dublancer-profile-avatar"); window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: null } })); if (input.current) input.current.value = ""; await onChanged("removed"); }
     catch (reason) { setError(reason instanceof Error ? reason.message : t("mediaRemoveFailed")); }
     finally { setBusy(false); }
   }

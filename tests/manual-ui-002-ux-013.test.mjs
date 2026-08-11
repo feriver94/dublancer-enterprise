@@ -48,11 +48,17 @@ test("normal-user profile surfaces humanize countries, preferences and technical
 });
 
 test("profile media is signed, owned, integrity checked, proxied and CSRF protected", async () => {
-  const [media, service, intent, upload, remove] = await Promise.all([read("src/lib/profile/profile-media.ts"), read("src/lib/services/profile-media.service.ts"), read("src/app/api/profile/media/intents/route.ts"), read("src/app/api/profile/media/uploads/[token]/route.ts"), read("src/app/api/profile/media/route.ts")]);
+  const [media, service, intent, upload, remove, validation, settings, control] = await Promise.all([read("src/lib/profile/profile-media.ts"), read("src/lib/services/profile-media.service.ts"), read("src/app/api/profile/media/intents/route.ts"), read("src/app/api/profile/media/uploads/[token]/route.ts"), read("src/app/api/profile/media/route.ts"), read("src/lib/validation/profile.ts"), read("src/components/profile/ProfileSettingsClient.tsx"), read("src/components/profile/ProfileMediaControl.tsx")]);
   assert.match(media, /timingSafeEqual/);
   assert.match(media, /assertImageBytes/);
   assert.match(service, /intent\.userId !== context\.userId/);
   assert.match(service, /storageProvider\.verifyUpload/);
   assert.match(service, /\/api\/profile\/media\/\$\{reference\}/);
   for (const route of [intent, upload, remove]) assert.match(route, /requireCsrfToken\(request\)/);
+  assert.doesNotMatch(validation, /(?:avatarUrl|bannerUrl|logoUrl): optionalUrl/);
+  assert.doesNotMatch(settings, /(?:avatarUrl|bannerUrl|logoUrl): (?:data\.account|organization\.companyProfile)/);
+  assert.match(control, /onChanged\("uploaded"\)/);
+  assert.match(control, /onChanged\("removed"\)/);
+  assert.match(settings, /mediaUploadSucceeded/);
+  assert.match(settings, /mediaRemoveSucceeded/);
 });

@@ -284,6 +284,18 @@ export default function ProfileSettingsClient() {
     }
   }
 
+  async function mediaChanged(outcome: "uploaded" | "removed") {
+    setError("");
+    setNotice("");
+    const refreshed = await settings.refresh();
+    if (!refreshed) {
+      setError(t("mediaRefreshFailed"));
+      return null;
+    }
+    setNotice(t(outcome === "uploaded" ? "mediaUploadSucceeded" : "mediaRemoveSucceeded"));
+    return refreshed;
+  }
+
   async function saveSettings(
     event: React.FormEvent<HTMLFormElement>,
     selectedSection: "personal" | "client" | "freelancer" | "organization",
@@ -313,8 +325,6 @@ export default function ProfileSettingsClient() {
             headline: nullable(form, "headline"),
             about: nullable(form, "about"),
             visibility: text(form, "visibility"),
-            bannerUrl: data.account.clientProfile.bannerUrl,
-            avatarUrl: data.account.clientProfile.avatarUrl,
             industry: nullable(form, "industry"),
             companySize: nullable(form, "companySize"),
             website: nullable(form, "website"),
@@ -342,8 +352,6 @@ export default function ProfileSettingsClient() {
             currency: text(form, "currency").toUpperCase(),
             availability: text(form, "availability"),
             visibility: text(form, "visibility"),
-            bannerUrl: data.account.freelancerProfile.bannerUrl,
-            avatarUrl: data.account.freelancerProfile.avatarUrl,
             languages: list(form, "languages"),
             industries: list(form, "industries"),
             services: list(form, "services"),
@@ -370,8 +378,6 @@ export default function ProfileSettingsClient() {
             website: nullable(form, "website"),
             countryCode: text(form, "countryCode").toUpperCase(),
             visibility: text(form, "visibility"),
-            logoUrl: organization.companyProfile.logoUrl,
-            bannerUrl: organization.companyProfile.bannerUrl,
             industry: nullable(form, "industry"),
             locations: json(form, "locations", []),
             services: list(form, "services"),
@@ -558,7 +564,7 @@ export default function ProfileSettingsClient() {
             value={client.avatarUrl}
             label={t("profilePhoto")}
             fallback={mediaFallback}
-            onChanged={settings.refresh}
+            onChanged={mediaChanged}
           />
           <ProfileMediaControl
             target="client"
@@ -566,7 +572,7 @@ export default function ProfileSettingsClient() {
             value={client.bannerUrl}
             label={t("coverImage")}
             fallback=""
-            onChanged={settings.refresh}
+            onChanged={mediaChanged}
           />
         </div>
       ) : null}
@@ -578,7 +584,7 @@ export default function ProfileSettingsClient() {
             value={freelancer.avatarUrl}
             label={t("profilePhoto")}
             fallback={mediaFallback}
-            onChanged={settings.refresh}
+            onChanged={mediaChanged}
           />
           <ProfileMediaControl
             target="freelancer"
@@ -586,7 +592,7 @@ export default function ProfileSettingsClient() {
             value={freelancer.bannerUrl}
             label={t("coverImage")}
             fallback=""
-            onChanged={settings.refresh}
+            onChanged={mediaChanged}
           />
         </div>
       ) : null}
@@ -598,7 +604,7 @@ export default function ProfileSettingsClient() {
             value={organization.companyProfile.logoUrl}
             label={t("organizationLogo")}
             fallback={organization.name.slice(0, 2).toUpperCase()}
-            onChanged={settings.refresh}
+            onChanged={mediaChanged}
           />
           <ProfileMediaControl
             target="organization"
@@ -606,7 +612,7 @@ export default function ProfileSettingsClient() {
             value={organization.companyProfile.bannerUrl}
             label={t("coverImage")}
             fallback=""
-            onChanged={settings.refresh}
+            onChanged={mediaChanged}
           />
         </div>
       ) : null}
