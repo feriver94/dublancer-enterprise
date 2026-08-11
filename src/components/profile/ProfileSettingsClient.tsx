@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { apiMutation } from "@/lib/client/api-client";
 import { useApiResource } from "@/lib/client/use-api-resource";
 import ProfileMediaControl from "./ProfileMediaControl";
+import { CountrySelect, LocationsEditor, MultiChoiceField, MultiValueField, PortfolioEditor } from "./ProfileFormControls";
 
 type Visibility =
   "DRAFT" | "HIDDEN" | "PUBLIC" | "VERIFIED" | "SUSPENDED" | "ARCHIVED";
@@ -15,6 +17,13 @@ type ProfileRecord = Record<string, unknown> & {
 };
 type Settings = {
   activePersonaType: "CLIENT" | "FREELANCER" | "ORGANIZATION" | null;
+  activeOrganizationId: string;
+  capabilities: {
+    editClient: boolean;
+    editFreelancer: boolean;
+    manageContent: boolean;
+    editOrganizationIds: string[];
+  };
   account: {
     username: string | null;
     displayName: string | null;
@@ -109,6 +118,17 @@ const contentKinds = [
   "social-link",
 ] as const;
 type ContentKind = (typeof contentKinds)[number];
+const timezoneOptions = [
+  ["Asia/Dubai", "Dubai (GMT+4)"],
+  ["Asia/Riyadh", "Riyadh (GMT+3)"],
+  ["Asia/Karachi", "Karachi (GMT+5)"],
+  ["Asia/Kolkata", "New Delhi (GMT+5:30)"],
+  ["Asia/Singapore", "Singapore (GMT+8)"],
+  ["Europe/London", "London"],
+  ["America/New_York", "New York"],
+  ["Australia/Sydney", "Sydney"],
+  ["UTC", "UTC"],
+] as const;
 
 function text(form: FormData, name: string) {
   return String(form.get(name) ?? "").trim();
@@ -116,11 +136,11 @@ function text(form: FormData, name: string) {
 function nullable(form: FormData, name: string) {
   return text(form, name) || null;
 }
-function csv(form: FormData, name: string) {
-  return text(form, name)
-    .split(",")
+function list(form: FormData, name: string) {
+  return form.getAll(name)
+    .flatMap((item) => String(item).split(","))
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter((item, index, values) => Boolean(item) && values.findIndex((value) => value.toLocaleLowerCase() === item.toLocaleLowerCase()) === index);
 }
 function bool(form: FormData, name: string) {
   return form.get(name) === "on";
@@ -128,6 +148,24 @@ function bool(form: FormData, name: string) {
 function json(form: FormData, name: string, fallback: unknown) {
   const value = text(form, name);
   return value ? JSON.parse(value) : fallback;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
+}
+
+function hiringPreferences(form: FormData, current: unknown) {
+  const next = record(current);
+  const setOptional = (key: string, value: string) => { if (value) next[key] = value; else delete next[key]; };
+  setOptional("seniority", text(form, "hiringSeniority"));
+  setOptional("workMode", text(form, "hiringWorkMode"));
+  setOptional("projectLength", text(form, "hiringProjectLength"));
+  setOptional("preferredLocation", text(form, "hiringLocation"));
+  setOptional("notes", text(form, "hiringNotes"));
+  const skills = list(form, "hiringSkills");
+  if (skills.length) next.skills = skills; else delete next.skills;
+  next.remoteOnly = bool(form, "hiringRemoteOnly");
+  return Object.keys(next).length ? next : null;
 }
 function dateInput(value: unknown) {
   return typeof value === "string" && value ? value.slice(0, 10) : "";
@@ -170,14 +208,14 @@ function Field({
   );
 }
 
-function VisibilityField({ value }: { value: Visibility }) {
+function VisibilityField({ value, label, format }: { value: Visibility; label: string; format: (value: Visibility) => string }) {
   return (
     <label>
-      Visibility
+      {label}
       <select name="visibility" defaultValue={value}>
         {visibilityOptions.map((item) => (
           <option key={item} value={item}>
-            {item}
+            {format(item)}
           </option>
         ))}
       </select>
@@ -185,8 +223,21 @@ function VisibilityField({ value }: { value: Visibility }) {
   );
 }
 
+function FormSection({ titleText, description, children }: { titleText: string; description?: string; children: React.ReactNode }) {
+  return <fieldset className="profile-form__section"><legend><strong>{titleText}</strong>{description ? <span>{description}</span> : null}</legend><div className="profile-form__section-grid">{children}</div></fieldset>;
+}
+
+function PermissionState({ titleText, description, action }: { titleText: string; description: string; action: string }) {
+  return <section className="profile-permission-state" aria-live="polite"><span aria-hidden="true">🔒</span><div><h2>{titleText}</h2><p>{description}</p><Link href="/account/personas">{action}</Link></div></section>;
+}
+
+function EmptyState({ titleText, description, action }: { titleText: string; description: string; action: string }) {
+  return <section className="profile-empty-state"><div><h2>{titleText}</h2><p>{description}</p><Link href="/account/personas">{action}</Link></div></section>;
+}
+
 export default function ProfileSettingsClient() {
   const t = useTranslations("ProfilePhaseB");
+  const status = useTranslations("Status");
   const settings = useApiResource<Settings>("/api/profile/settings");
   const [section, setSection] = useState<
     "personal" | "client" | "freelancer" | "organization" | "content"
@@ -198,7 +249,7 @@ export default function ProfileSettingsClient() {
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const content = useApiResource<ProfileRecord[]>(
-    section === "content" ? `/api/profile/content/${kind}` : null,
+    section === "content" && settings.data?.capabilities.manageContent ? `/api/profile/content/${kind}` : null,
   );
   const data = settings.data;
   const organization = useMemo(
@@ -208,6 +259,10 @@ export default function ProfileSettingsClient() {
       ),
     [data, organizationId],
   );
+
+  useEffect(() => {
+    if (window.location.hash === "#portfolio") queueMicrotask(() => setSection("content"));
+  }, []);
 
   async function mutate(
     path: string,
@@ -263,14 +318,14 @@ export default function ProfileSettingsClient() {
             industry: nullable(form, "industry"),
             companySize: nullable(form, "companySize"),
             website: nullable(form, "website"),
-            languages: csv(form, "languages"),
+            languages: list(form, "languages"),
             responseTimeMinutes: text(form, "responseTimeMinutes")
               ? Number(text(form, "responseTimeMinutes"))
               : null,
             hiringAvailable: bool(form, "hiringAvailable"),
             showVerifiedSpend: bool(form, "showVerifiedSpend"),
-            hiringPreferences: json(form, "hiringPreferences", null),
-            engagementModels: csv(form, "engagementModels"),
+            hiringPreferences: hiringPreferences(form, data.account.clientProfile.hiringPreferences),
+            engagementModels: list(form, "engagementModels"),
           },
         };
       else if (
@@ -283,15 +338,15 @@ export default function ProfileSettingsClient() {
             version: data.account.freelancerProfile.version,
             headline: text(form, "headline"),
             bio: nullable(form, "bio"),
-            hourlyRateMinor: nullable(form, "hourlyRateMinor"),
+            hourlyRateMinor: text(form, "hourlyRate") ? String(Math.round(Number(text(form, "hourlyRate")) * 100)) : null,
             currency: text(form, "currency").toUpperCase(),
             availability: text(form, "availability"),
             visibility: text(form, "visibility"),
             bannerUrl: data.account.freelancerProfile.bannerUrl,
             avatarUrl: data.account.freelancerProfile.avatarUrl,
-            languages: csv(form, "languages"),
-            industries: csv(form, "industries"),
-            services: csv(form, "services"),
+            languages: list(form, "languages"),
+            industries: list(form, "industries"),
+            services: list(form, "services"),
             fixedPriceAvailable: bool(form, "fixedPriceAvailable"),
             yearsExperience: Number(text(form, "yearsExperience")),
             resumeUrl: nullable(form, "resumeUrl"),
@@ -319,8 +374,8 @@ export default function ProfileSettingsClient() {
             bannerUrl: organization.companyProfile.bannerUrl,
             industry: nullable(form, "industry"),
             locations: json(form, "locations", []),
-            services: csv(form, "services"),
-            technologies: csv(form, "technologies"),
+            services: list(form, "services"),
+            technologies: list(form, "technologies"),
             portfolio: json(form, "portfolio", []),
           },
         };
@@ -428,6 +483,18 @@ export default function ProfileSettingsClient() {
   const client = data.account.clientProfile;
   const freelancer = data.account.freelancerProfile;
   const item = selected;
+  const formatStatus = (value: Visibility | string) => status.has(value) ? status(value) : title(value);
+  const preference = record(client?.hiringPreferences);
+  const contentLabels: Record<ContentKind, string> = {
+    portfolio: t("portfolio"),
+    "case-study": t("caseStudies"),
+    publication: t("publications"),
+    research: t("research"),
+    experience: t("experience"),
+    education: t("education"),
+    certification: t("certifications"),
+    "social-link": t("socialLinks"),
+  };
   const mediaFallback = (
     data.account.displayName ||
     data.account.username ||
@@ -439,10 +506,9 @@ export default function ProfileSettingsClient() {
     .join("");
   const availableSections = [
     "personal",
-    "client",
-    "freelancer",
-    "organization",
-    ...(data.activePersonaType === "FREELANCER" ? ["content"] : []),
+    ...(client ? ["client"] : []),
+    ...(freelancer ? ["freelancer", "content"] : []),
+    ...(data.organizations.length ? ["organization"] : []),
   ] as Array<"personal" | "client" | "freelancer" | "organization" | "content">;
 
   return (
@@ -451,10 +517,10 @@ export default function ProfileSettingsClient() {
         <p>{t("profileSettings")}</p>
         <h1>{t("manageIdentity")}</h1>
         <div className="completion-strip">
-          {Object.entries(data.completion).map(([key, value]) => (
-            <span key={key}>
-              {title(key)} <strong>{value.percentage}%</strong>
-            </span>
+           {Object.entries(data.completion).map(([key, value]) => (
+             <span key={key}>
+              {t(key)} <strong>{value.percentage}%</strong>
+             </span>
           ))}
         </div>
       </header>
@@ -464,10 +530,11 @@ export default function ProfileSettingsClient() {
             type="button"
             key={key}
             aria-current={section === key ? "page" : undefined}
-            onClick={() => {
-              setSection(key);
-              setSelected(null);
-            }}
+             onClick={() => {
+               setSection(key);
+               setSelected(null);
+               window.history.replaceState(null, "", key === "content" ? "#portfolio" : window.location.pathname);
+             }}
           >
             {t(key)}
           </button>
@@ -483,13 +550,13 @@ export default function ProfileSettingsClient() {
           {error}
         </p>
       ) : null}
-      {section === "client" && client ? (
+      {section === "client" && client && data.capabilities.editClient ? (
         <div className="profile-media-grid">
           <ProfileMediaControl
             target="client"
             asset="avatar"
             value={client.avatarUrl}
-            label={t("avatar")}
+            label={t("profilePhoto")}
             fallback={mediaFallback}
             onChanged={settings.refresh}
           />
@@ -497,19 +564,19 @@ export default function ProfileSettingsClient() {
             target="client"
             asset="banner"
             value={client.bannerUrl}
-            label={t("banner")}
+            label={t("coverImage")}
             fallback=""
             onChanged={settings.refresh}
           />
         </div>
       ) : null}
-      {section === "freelancer" && freelancer ? (
+      {section === "freelancer" && freelancer && data.capabilities.editFreelancer ? (
         <div className="profile-media-grid">
           <ProfileMediaControl
             target="freelancer"
             asset="avatar"
             value={freelancer.avatarUrl}
-            label={t("avatar")}
+            label={t("profilePhoto")}
             fallback={mediaFallback}
             onChanged={settings.refresh}
           />
@@ -517,19 +584,19 @@ export default function ProfileSettingsClient() {
             target="freelancer"
             asset="banner"
             value={freelancer.bannerUrl}
-            label={t("banner")}
+            label={t("coverImage")}
             fallback=""
             onChanged={settings.refresh}
           />
         </div>
       ) : null}
-      {section === "organization" && organization?.companyProfile ? (
+      {section === "organization" && organization?.companyProfile && data.capabilities.editOrganizationIds.includes(organization.id) ? (
         <div className="profile-media-grid">
           <ProfileMediaControl
             target="organization"
             asset="logo"
             value={organization.companyProfile.logoUrl}
-            label={t("logo")}
+            label={t("organizationLogo")}
             fallback={organization.name.slice(0, 2).toUpperCase()}
             onChanged={settings.refresh}
           />
@@ -537,7 +604,7 @@ export default function ProfileSettingsClient() {
             target="organization"
             asset="banner"
             value={organization.companyProfile.bannerUrl}
-            label={t("banner")}
+            label={t("coverImage")}
             fallback=""
             onChanged={settings.refresh}
           />
@@ -548,235 +615,92 @@ export default function ProfileSettingsClient() {
           className="profile-form"
           onSubmit={(event) => void saveSettings(event, "personal")}
         >
-          <Field
-            label={t("username")}
-            name="username"
-            value={data.account.username}
-            required
-          />
-          <Field
-            label={t("displayName")}
-            name="displayName"
-            value={data.account.displayName}
-            required
-          />
-          <Field
-            label={t("preferredName")}
-            name="preferredName"
-            value={personal?.preferredName}
-            required
-          />
-          <Field
-            label={t("country")}
-            name="countryCode"
-            value={personal?.countryCode ?? "AE"}
-            required
-          />
-          <Field
-            label={t("timezone")}
-            name="timezone"
-            value={personal?.timezone ?? "Asia/Dubai"}
-            required
-          />
-          <label>
-            {t("language")}
-            <select
-              name="locale"
-              defaultValue={personal?.locale ?? data.account.preferredLocale}
-            >
-              <option value="en-AE">English</option>
-              <option value="ar-AE">العربية</option>
-            </select>
-          </label>
+          <FormSection titleText={t("accountIdentity")} description={t("accountIdentityHelp")}>
+            <label>{t("email")}<input value={data.account.email} type="email" disabled aria-describedby="email-help" /><small id="email-help">{t("emailManagedHelp")}</small></label>
+            <Field label={t("username")} name="username" value={data.account.username} required />
+            <Field label={t("displayName")} name="displayName" value={data.account.displayName} required />
+            <Field label={t("preferredName")} name="preferredName" value={personal?.preferredName} required />
+          </FormSection>
+          <FormSection titleText={t("regionalPreferences")} description={t("regionalPreferencesHelp")}>
+            <CountrySelect label={t("country")} name="countryCode" value={personal?.countryCode ?? "AE"} required />
+            <label>{t("timezone")}<select name="timezone" defaultValue={personal?.timezone ?? "Asia/Dubai"} required>{personal?.timezone && !timezoneOptions.some(([value]) => value === personal.timezone) ? <option value={personal.timezone}>{personal.timezone}</option> : null}{timezoneOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label>{t("language")}<select name="locale" defaultValue={personal?.locale ?? data.account.preferredLocale}><option value="en-AE">English (UAE)</option><option value="ar-AE">العربية (الإمارات)</option></select></label>
+          </FormSection>
           <button disabled={working}>{t("save")}</button>
         </form>
       ) : null}
       {section === "client" ? (
         client ? (
-          <form
+          data.capabilities.editClient ? <form
             className="profile-form"
             onSubmit={(event) => void saveSettings(event, "client")}
           >
-            <Field
-              label={t("displayName")}
-              name="displayName"
-              value={client.displayName}
-              required
-            />
-            <Field
-              label={t("headline")}
-              name="headline"
-              value={client.headline}
-            />
-            <Field
-              label={t("about")}
-              name="about"
-              value={client.about}
-              textarea
-            />
-            <VisibilityField value={client.visibility} />
-            <Field
-              label={t("industry")}
-              name="industry"
-              value={client.industry}
-            />
-            <Field
-              label={t("companySize")}
-              name="companySize"
-              value={client.companySize}
-            />
-            <Field
-              label={t("website")}
-              name="website"
-              value={client.website}
-              type="url"
-            />
-            <Field
-              label={t("languagesCsv")}
-              name="languages"
-              value={client.languages.join(", ")}
-            />
-            <Field
-              label={t("responseTime")}
-              name="responseTimeMinutes"
-              value={client.responseTimeMinutes}
-              type="number"
-            />
-            <Field
-              label={t("engagementModels")}
-              name="engagementModels"
-              value={client.engagementModels.join(", ")}
-            />
-            <Field
-              label={t("hiringPreferencesJson")}
-              name="hiringPreferences"
-              value={
-                client.hiringPreferences
-                  ? JSON.stringify(client.hiringPreferences, null, 2)
-                  : ""
-              }
-              textarea
-            />
-            <label className="profile-checkbox">
-              <input
-                type="checkbox"
-                name="hiringAvailable"
-                defaultChecked={client.hiringAvailable}
-              />
-              {t("hiring")}
-            </label>
-            <label className="profile-checkbox">
-              <input
-                type="checkbox"
-                name="showVerifiedSpend"
-                defaultChecked={client.showVerifiedSpend}
-              />
-              {t("showVerifiedSpend")}
-            </label>
+            <FormSection titleText={t("profilePresentation")} description={t("profilePresentationHelp")}>
+              <Field label={t("displayName")} name="displayName" value={client.displayName} required />
+              <Field label={t("headline")} name="headline" value={client.headline} />
+              <Field label={t("about")} name="about" value={client.about} textarea />
+              <VisibilityField value={client.visibility} label={t("visibility")} format={formatStatus} />
+            </FormSection>
+            <FormSection titleText={t("businessDetails")} description={t("businessDetailsHelp")}>
+              <Field label={t("industry")} name="industry" value={client.industry} />
+              <label>{t("companySize")}<select name="companySize" defaultValue={client.companySize ?? ""}><option value="">{t("notSpecified")}</option>{client.companySize && !["1", "2-10", "11-50", "51-200", "201-500", "501-1000", "1001+"].includes(client.companySize) ? <option value={client.companySize}>{title(client.companySize)}</option> : null}{["1", "2-10", "11-50", "51-200", "201-500", "501-1000", "1001+"].map((value) => <option key={value} value={value}>{value === "1" ? t("justMe") : value}</option>)}</select></label>
+              <Field label={t("website")} name="website" value={client.website} type="url" />
+              <MultiValueField label={t("languages")} name="languages" values={client.languages} placeholder={t("languagePlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+            </FormSection>
+            <FormSection titleText={t("hiringPreferences")} description={t("hiringPreferencesHelp")}>
+              <MultiChoiceField label={t("engagementModels")} name="engagementModels" values={client.engagementModels} options={[{ value: "FIXED_PRICE", label: status("FIXED_PRICE") }, { value: "HOURLY", label: status("HOURLY") }, { value: "RETAINER", label: status("RETAINER") }, { value: "EMPLOYMENT", label: status("EMPLOYMENT") }]} />
+              <label>{t("preferredSeniority")}<select name="hiringSeniority" defaultValue={typeof preference.seniority === "string" ? preference.seniority.toLocaleLowerCase() : ""}><option value="">{t("flexible")}</option><option value="entry">{status("ENTRY")}</option><option value="intermediate">{status("INTERMEDIATE")}</option><option value="expert">{status("EXPERT")}</option></select></label>
+              <label>{t("workMode")}<select name="hiringWorkMode" defaultValue={typeof preference.workMode === "string" ? preference.workMode : ""}><option value="">{t("flexible")}</option><option value="REMOTE">{t("remote")}</option><option value="HYBRID">{t("hybrid")}</option><option value="ON_SITE">{t("onSite")}</option></select></label>
+              <label>{t("projectLength")}<select name="hiringProjectLength" defaultValue={typeof preference.projectLength === "string" ? preference.projectLength : ""}><option value="">{t("flexible")}</option><option value="SHORT_TERM">{t("shortTerm")}</option><option value="MEDIUM_TERM">{t("mediumTerm")}</option><option value="LONG_TERM">{t("longTerm")}</option></select></label>
+              <Field label={t("preferredLocation")} name="hiringLocation" value={preference.preferredLocation} />
+              <MultiValueField label={t("preferredSkills")} name="hiringSkills" values={Array.isArray(preference.skills) ? preference.skills.filter((value): value is string => typeof value === "string") : []} placeholder={t("skillPlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+              <Field label={t("hiringNotes")} name="hiringNotes" value={preference.notes} textarea />
+              <label>{t("responseTime")}<input name="responseTimeMinutes" defaultValue={client.responseTimeMinutes ?? ""} type="number" min="0" max="525600" inputMode="numeric" /><small>{t("responseTimeHelp")}</small></label>
+              <label className="profile-checkbox"><input type="checkbox" name="hiringRemoteOnly" defaultChecked={Boolean(preference.remoteOnly)} />{t("remoteOnly")}</label>
+              <label className="profile-checkbox"><input type="checkbox" name="hiringAvailable" defaultChecked={client.hiringAvailable} />{t("hiring")}</label>
+            </FormSection>
+            <FormSection titleText={t("privacyControls")} description={t("privacyControlsHelp")}>
+              <label className="profile-checkbox"><input type="checkbox" name="showVerifiedSpend" defaultChecked={client.showVerifiedSpend} />{t("showVerifiedSpend")}</label>
+            </FormSection>
             <button disabled={working}>{t("save")}</button>
-          </form>
+          </form> : <PermissionState titleText={t("clientEditingUnavailable")} description={t("clientEditingPermission")} action={t("managePersonas")} />
         ) : (
-          <p className="profile-empty">{t("empty")}</p>
+          <EmptyState titleText={t("clientProfileEmpty")} description={t("clientProfileEmptyHelp")} action={t("managePersonas")} />
         )
       ) : null}
       {section === "freelancer" ? (
         freelancer ? (
-          <form
+          data.capabilities.editFreelancer ? <form
             className="profile-form"
             onSubmit={(event) => void saveSettings(event, "freelancer")}
           >
-            <Field
-              label={t("headline")}
-              name="headline"
-              value={freelancer.headline}
-              required
-            />
-            <Field
-              label={t("summary")}
-              name="bio"
-              value={freelancer.bio}
-              textarea
-            />
-            <VisibilityField value={freelancer.visibility} />
-            <Field
-              label={t("hourlyRateMinor")}
-              name="hourlyRateMinor"
-              value={freelancer.hourlyRateMinor}
-            />
-            <Field
-              label={t("currency")}
-              name="currency"
-              value={freelancer.currency}
-              required
-            />
-            <label>
-              {t("availability")}
-              <select
-                name="availability"
-                defaultValue={freelancer.availability}
-              >
-                <option>AVAILABLE</option>
-                <option>LIMITED</option>
-                <option>UNAVAILABLE</option>
-              </select>
-            </label>
-            <Field
-              label={t("yearsExperience")}
-              name="yearsExperience"
-              value={freelancer.yearsExperience}
-              type="number"
-            />
-            <Field
-              label={t("languagesCsv")}
-              name="languages"
-              value={freelancer.languages.join(", ")}
-            />
-            <Field
-              label={t("industriesCsv")}
-              name="industries"
-              value={freelancer.industries.join(", ")}
-            />
-            <Field
-              label={t("servicesCsv")}
-              name="services"
-              value={freelancer.services.join(", ")}
-            />
-            <Field
-              label={t("resume")}
-              name="resumeUrl"
-              value={freelancer.resumeUrl}
-              type="url"
-            />
-            <Field
-              label={t("videoIntroduction")}
-              name="videoUrl"
-              value={freelancer.videoUrl}
-              type="url"
-            />
-            <Field
-              label="GitHub"
-              name="githubUrl"
-              value={freelancer.githubUrl}
-              type="url"
-            />
-            <Field
-              label="LinkedIn"
-              name="linkedinUrl"
-              value={freelancer.linkedinUrl}
-              type="url"
-            />
-            <label className="profile-checkbox">
-              <input
-                type="checkbox"
-                name="fixedPriceAvailable"
-                defaultChecked={freelancer.fixedPriceAvailable}
-              />
-              {t("fixedPrice")}
-            </label>
+            <FormSection titleText={t("profilePresentation")} description={t("freelancerPresentationHelp")}>
+              <Field label={t("headline")} name="headline" value={freelancer.headline} required />
+              <Field label={t("summary")} name="bio" value={freelancer.bio} textarea />
+              <VisibilityField value={freelancer.visibility} label={t("visibility")} format={formatStatus} />
+            </FormSection>
+            <FormSection titleText={t("ratesAndAvailability")} description={t("ratesAndAvailabilityHelp")}>
+              <label>{t("hourlyRateAed")}<input name="hourlyRate" type="number" min="0" step="0.01" inputMode="decimal" defaultValue={freelancer.hourlyRateMinor ? Number(freelancer.hourlyRateMinor) / 100 : ""} /></label>
+              <label>{t("currency")}<select name="currency" defaultValue={freelancer.currency}><option value="AED">AED — {t("uaeDirham")}</option></select></label>
+              <label>{t("availability")}<select name="availability" defaultValue={freelancer.availability}><option value="AVAILABLE">{status("AVAILABLE")}</option><option value="LIMITED">{status("LIMITED")}</option><option value="UNAVAILABLE">{status("UNAVAILABLE")}</option></select></label>
+              <label>{t("yearsExperience")}<input name="yearsExperience" defaultValue={freelancer.yearsExperience} type="number" min="0" max="80" inputMode="numeric" /></label>
+              <label className="profile-checkbox"><input type="checkbox" name="fixedPriceAvailable" defaultChecked={freelancer.fixedPriceAvailable} />{t("fixedPrice")}</label>
+            </FormSection>
+            <FormSection titleText={t("expertiseAndServices")} description={t("expertiseAndServicesHelp")}>
+              <MultiValueField label={t("languages")} name="languages" values={freelancer.languages} placeholder={t("languagePlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+              <MultiValueField label={t("industries")} name="industries" values={freelancer.industries} placeholder={t("industryPlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+              <MultiValueField label={t("services")} name="services" values={freelancer.services} placeholder={t("servicePlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+            </FormSection>
+            <FormSection titleText={t("professionalLinks")} description={t("professionalLinksHelp")}>
+              <Field label={t("resume")} name="resumeUrl" value={freelancer.resumeUrl} type="url" />
+              <Field label={t("videoIntroduction")} name="videoUrl" value={freelancer.videoUrl} type="url" />
+              <Field label="GitHub" name="githubUrl" value={freelancer.githubUrl} type="url" />
+              <Field label="LinkedIn" name="linkedinUrl" value={freelancer.linkedinUrl} type="url" />
+            </FormSection>
             <button disabled={working}>{t("save")}</button>
-          </form>
+          </form> : <PermissionState titleText={t("freelancerEditingUnavailable")} description={t("freelancerEditingPermission")} action={t("managePersonas")} />
         ) : (
-          <p className="profile-empty">{t("empty")}</p>
+          <EmptyState titleText={t("freelancerProfileEmpty")} description={t("freelancerProfileEmptyHelp")} action={t("managePersonas")} />
         )
       ) : null}
       {section === "organization" ? (
@@ -795,92 +719,40 @@ export default function ProfileSettingsClient() {
             </select>
           </label>
           {organization?.companyProfile ? (
-            <form
+            data.capabilities.editOrganizationIds.includes(organization.id) ? <form
               key={organization.id}
               className="profile-form"
               onSubmit={(event) => void saveSettings(event, "organization")}
             >
-              <Field
-                label={t("legalName")}
-                name="legalName"
-                value={organization.companyProfile.legalName}
-                required
-              />
-              <Field
-                label={t("tradingName")}
-                name="tradingName"
-                value={organization.companyProfile.tradingName}
-              />
-              <Field
-                label={t("about")}
-                name="description"
-                value={organization.companyProfile.description}
-                textarea
-              />
-              <VisibilityField value={organization.companyProfile.visibility} />
-              <Field
-                label={t("website")}
-                name="website"
-                value={organization.companyProfile.website}
-                type="url"
-              />
-              <Field
-                label={t("country")}
-                name="countryCode"
-                value={organization.companyProfile.countryCode}
-              />
-              <Field
-                label={t("industry")}
-                name="industry"
-                value={organization.companyProfile.industry}
-              />
-              <Field
-                label={t("servicesCsv")}
-                name="services"
-                value={organization.companyProfile.services.join(", ")}
-              />
-              <Field
-                label={t("technologiesCsv")}
-                name="technologies"
-                value={organization.companyProfile.technologies.join(", ")}
-              />
-              <Field
-                label={t("locationsJson")}
-                name="locations"
-                value={
-                  organization.companyProfile.locations
-                    ? JSON.stringify(
-                        organization.companyProfile.locations,
-                        null,
-                        2,
-                      )
-                    : "[]"
-                }
-                textarea
-              />
-              <Field
-                label={t("portfolioJson")}
-                name="portfolio"
-                value={
-                  organization.companyProfile.portfolio
-                    ? JSON.stringify(
-                        organization.companyProfile.portfolio,
-                        null,
-                        2,
-                      )
-                    : "[]"
-                }
-                textarea
-              />
+              <FormSection titleText={t("organizationIdentity")} description={t("organizationIdentityHelp")}>
+                <Field label={t("legalName")} name="legalName" value={organization.companyProfile.legalName} required />
+                <Field label={t("tradingName")} name="tradingName" value={organization.companyProfile.tradingName} />
+                <Field label={t("about")} name="description" value={organization.companyProfile.description} textarea />
+                <VisibilityField value={organization.companyProfile.visibility} label={t("visibility")} format={formatStatus} />
+              </FormSection>
+              <FormSection titleText={t("businessDetails")} description={t("organizationBusinessHelp")}>
+                <Field label={t("website")} name="website" value={organization.companyProfile.website} type="url" />
+                <CountrySelect label={t("country")} name="countryCode" value={organization.companyProfile.countryCode} required />
+                <Field label={t("industry")} name="industry" value={organization.companyProfile.industry} />
+              </FormSection>
+              <FormSection titleText={t("capabilitiesAndLocations")} description={t("capabilitiesAndLocationsHelp")}>
+                <MultiValueField label={t("services")} name="services" values={organization.companyProfile.services} placeholder={t("servicePlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+                <MultiValueField label={t("technologies")} name="technologies" values={organization.companyProfile.technologies} placeholder={t("technologyPlaceholder")} addLabel={t("add")} removeLabel={t("remove")} help={t("tagInputHelp")} />
+                <LocationsEditor label={t("locations")} value={organization.companyProfile.locations} cityLabel={t("locationName")} countryLabel={t("country")} addLabel={t("addLocation")} removeLabel={t("remove")} emptyLabel={t("noLocations")} />
+              </FormSection>
+              <FormSection titleText={t("organizationPortfolio")} description={t("organizationPortfolioHelp")}>
+                <PortfolioEditor label={t("portfolioProjects")} value={organization.companyProfile.portfolio} titleLabel={t("title")} descriptionLabel={t("description")} urlLabel={t("projectUrl")} addLabel={t("addProject")} removeLabel={t("remove")} emptyLabel={t("noPortfolioProjects")} />
+              </FormSection>
               <button disabled={working}>{t("save")}</button>
-            </form>
+            </form> : <PermissionState titleText={t("organizationEditingUnavailable")} description={t("organizationEditingPermission")} action={t("managePersonas")} />
           ) : (
-            <p className="profile-empty">{t("empty")}</p>
+            <EmptyState titleText={t("organizationProfileEmpty")} description={t("organizationProfileEmptyHelp")} action={t("managePersonas")} />
           )}
         </>
       ) : null}
       {section === "content" ? (
-        <div id="portfolio" className="content-manager">
+        data.capabilities.manageContent ? <div id="portfolio" className="content-manager">
+          <div className="content-manager__intro"><p>{t("contentWorkspaceEyebrow")}</p><h2>{t("contentWorkspaceTitle")}</h2><span>{t("contentWorkspaceHelp")}</span></div>
           <div className="content-manager__toolbar">
             <label>
               {t("contentType")}
@@ -893,7 +765,7 @@ export default function ProfileSettingsClient() {
               >
                 {contentKinds.map((entry) => (
                   <option key={entry} value={entry}>
-                    {title(entry)}
+                    {contentLabels[entry]}
                   </option>
                 ))}
               </select>
@@ -920,7 +792,7 @@ export default function ProfileSettingsClient() {
                           t("content"),
                       )}
                     </strong>
-                    <span>{entry.visibility}</span>
+                    <span>{formatStatus(entry.visibility)}</span>
                     <div>
                       <button type="button" onClick={() => setSelected(entry)}>
                         {t("edit")}
@@ -932,7 +804,7 @@ export default function ProfileSettingsClient() {
                   </article>
                 ))
               ) : (
-                <p className="profile-empty">{t("empty")}</p>
+                <div className="profile-empty content-manager__empty"><strong>{t("contentEmptyTitle", { type: contentLabels[kind] })}</strong><span>{t("contentEmptyHelp")}</span></div>
               )}
             </div>
             <form
@@ -940,7 +812,8 @@ export default function ProfileSettingsClient() {
               className="profile-form content-manager__form"
               onSubmit={(event) => void saveContent(event)}
             >
-              <VisibilityField value={item?.visibility ?? "PUBLIC"} />
+              <div className="content-manager__form-heading"><p>{selected ? t("editingItem") : t("creatingItem")}</p><h2>{contentLabels[kind]}</h2></div>
+              <VisibilityField value={item?.visibility ?? "PUBLIC"} label={t("visibility")} format={formatStatus} />
               {["portfolio", "case-study", "publication", "research"].includes(
                 kind,
               ) ? (
@@ -976,7 +849,7 @@ export default function ProfileSettingsClient() {
                     type="date"
                   />
                   <Field
-                    label={t("sortOrder")}
+                    label={t("displayOrder")}
                     name="sortOrder"
                     value={item?.sortOrder ?? 0}
                     type="number"
@@ -1118,7 +991,7 @@ export default function ProfileSettingsClient() {
               </button>
             </form>
           </div>
-        </div>
+        </div> : <PermissionState titleText={t("contentEditingUnavailable")} description={t("contentEditingPermission")} action={t("managePersonas")} />
       ) : null}
     </div>
   );

@@ -36,6 +36,18 @@ export function formatAed(
   }).format(value);
 }
 
+export function formatCurrencyMinor(
+  value: string | number | bigint,
+  currency: string,
+  locale: AppLocale,
+) {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(value) / 100);
+}
+
 export function formatNumber(
   value: number,
   locale: AppLocale,

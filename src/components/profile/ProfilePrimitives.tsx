@@ -22,3 +22,23 @@ export function ProfileStats({ items }: { items: Array<{ label: string; value: R
 export function TagList({ items }: { items: string[] }) {
   return <div className="profile-tags">{items.map((item) => <span key={item}>{item}</span>)}</div>;
 }
+
+function humanize(value: string) {
+  return value
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .replace(/(^|\s)\S/g, (letter) => letter.toLocaleUpperCase());
+}
+
+function detailValue(value: unknown, yes: string, no: string): ReactNode {
+  if (typeof value === "boolean") return value ? yes : no;
+  if (Array.isArray(value)) return <TagList items={value.map((item) => typeof item === "string" ? humanize(item) : String(item))} />;
+  if (value && typeof value === "object") return <StructuredDetails value={value} yes={yes} no={no} />;
+  if (typeof value === "string") return /^[A-Z][A-Z0-9_]*$/.test(value) || /^[a-z]+$/.test(value) ? humanize(value.toLocaleLowerCase()) : value;
+  return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
+export function StructuredDetails({ value, yes, no }: { value: unknown; yes: string; no: string }) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return <dl className="profile-details">{Object.entries(value as Record<string, unknown>).map(([key, item]) => <div key={key}><dt>{humanize(key)}</dt><dd>{detailValue(item, yes, no)}</dd></div>)}</dl>;
+}

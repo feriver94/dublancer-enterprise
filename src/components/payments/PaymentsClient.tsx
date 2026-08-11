@@ -73,8 +73,8 @@ export default function PaymentsClient() {
     }), t("refundSubmitted"));
   }
 
-  return <main className="py-16">
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="font-bold uppercase tracking-widest text-[#009A44]">{t("eyebrow")}</p><h1 className="text-4xl font-bold text-[#0F4C5C]">{t("paymentsTitle")}</h1><p className="mt-2 max-w-3xl text-slate-600">{t("description")}</p></div><button type="button" onClick={() => void invoices.refresh()} className="rounded-full border px-5 py-2 font-bold">{common("refresh")}</button></div>
+  return <main className="py-10 lg:py-14">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div className="min-w-0"><p className="font-bold uppercase tracking-widest text-[#009A44]">{t("eyebrow")}</p><h1 className="text-3xl font-bold text-[#0F4C5C] sm:text-4xl xl:text-5xl">{t("paymentsTitle")}</h1><p className="mt-2 max-w-4xl text-slate-600">{t("description")}</p></div><button type="button" onClick={() => void invoices.refresh()} className="rounded-full border px-5 py-2 font-bold">{common("refresh")}</button></div>
     <Card variant="elevated" className="mb-6"><p className="text-sm text-slate-600"><strong>{t("providerBoundary")}</strong> {t("providerBoundaryDescription")}</p></Card>
     {invoices.error || contracts.error || error ? <p className="enterprise-error mb-6" role="alert">{invoices.error || contracts.error || error}</p> : null}
     {notice ? <p className="enterprise-notice mb-6" role="status">{notice}</p> : null}

@@ -26,7 +26,23 @@ test("account panel uses real secure account actions and accessible modal behavi
   assert.match(panel, /profile\.avatarUrl/);
   assert.match(panel, /createPortal/);
   assert.match(panel, /document\.body/);
+  assert.match(panel, /closeAccountPanel/);
+  assert.match(panel, /personaLabel\(persona\.type\)/);
+  assert.match(panel, /profile\.email/);
+  assert.match(panel, /dublancer-profile-avatar/);
+  assert.doesNotMatch(panel, /\{persona\.type\}/);
   assert.doesNotMatch(panel, /Add funds|Withdraw funds|Upload photo/);
+});
+
+test("persisted profile media hydrates the header and is isolated across persona switches", () => {
+  const shell = read("src/components/layout/AuthenticatedShell.tsx");
+  const navbar = read("src/components/layout/NavbarClient.tsx");
+  assert.match(shell, /clientProfile: \{ select: \{ avatarUrl: true \} \}/);
+  assert.match(shell, /freelancerProfile: \{ select: \{ avatarUrl: true \} \}/);
+  assert.match(shell, /companyProfile\.findUnique/);
+  assert.match(navbar, /setLiveAvatarUrl\(profile\?\.avatarUrl \?\? null\)/);
+  assert.match(navbar, /profile=\{\{ \.\.\.profile, avatarUrl: liveAvatarUrl \}\}/);
+  assert.match(navbar, /sessionStorage\.removeItem\("dublancer-profile-avatar"\)/);
 });
 
 test("persona browser assertions use the same cookie jar as the switching UI", () => {

@@ -42,6 +42,11 @@ type Labels = {
   switchPersona: string;
   managePersonas: string;
   switchingPersona: string;
+  currentPersona: string;
+  clientPersona: string;
+  freelancerPersona: string;
+  organizationPersona: string;
+  closeAccountPanel: string;
   organization: string;
   openWorkspace: string;
   dashboard: string;
@@ -107,6 +112,10 @@ export default function NavbarClient({
     window.addEventListener("dublancer:profile-media", update);
     return () => window.removeEventListener("dublancer:profile-media", update);
   }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => setLiveAvatarUrl(profile?.avatarUrl ?? null));
+  }, [profile?.avatarUrl]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -183,6 +192,7 @@ export default function NavbarClient({
     try {
       const result = await apiMutation<{ redirectTo?: string }>("/api/personas/switch", "POST", { personaId });
       resetApiClientCsrf();
+      window.sessionStorage.removeItem("dublancer-profile-avatar");
       setProfileOpen(false);
       router.replace(result.redirectTo || "/dashboard");
       router.refresh();
@@ -259,7 +269,7 @@ export default function NavbarClient({
                   <span className="grid size-9 place-items-center rounded-full bg-[#0F4C5C] bg-cover bg-center text-xs font-bold text-white" style={liveAvatarUrl ? { backgroundImage: `url(${liveAvatarUrl})` } : undefined}>{liveAvatarUrl ? null : initials(profile)}</span>
                   <span className="hidden max-w-32 truncate text-sm font-bold text-[#0F4C5C] lg:block">{profile.displayName || profile.email}</span>
                 </button>
-                {profileOpen ? <AccountPanel profile={profile} personas={personas} activePersonaId={activePersonaId} labels={labels} busyPersonaId={switchingPersonaId} loggingOut={loggingOut} onClose={() => setProfileOpen(false)} onSwitchPersona={(id) => void switchPersona(id)} onLogout={() => void logout()} /> : null}
+                {profileOpen ? <AccountPanel profile={{ ...profile, avatarUrl: liveAvatarUrl }} personas={personas} activePersonaId={activePersonaId} labels={labels} busyPersonaId={switchingPersonaId} loggingOut={loggingOut} onClose={() => setProfileOpen(false)} onSwitchPersona={(id) => void switchPersona(id)} onLogout={() => void logout()} /> : null}
               </div>
             ) : null}
             <button

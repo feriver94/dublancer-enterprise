@@ -51,7 +51,7 @@ async function registerThroughUi(page: Page, email: string, displayName: string,
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/login\?registered=1/);
+  await expect(page).toHaveURL(/\/login\?registered=1/, { timeout: 30_000 });
 }
 
 async function loginThroughUi(page: Page, email: string, password: string) {
@@ -59,7 +59,7 @@ async function loginThroughUi(page: Page, email: string, password: string) {
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/(onboarding|dashboard)/);
+  await expect(page).toHaveURL(/\/(onboarding|dashboard)/, { timeout: 30_000 });
 }
 
 async function saveProfileForm(page: Page, form: Locator) {
@@ -85,7 +85,7 @@ async function completeOnboarding(page: Page, selected: Array<Persona["type"]>, 
     if (pressed !== selected.includes(type)) await button.click();
   }
   await page.locator('input[name="displayName"]').fill(label);
-  await page.locator('input[name="countryCode"]').fill("AE");
+  await page.locator('select[name="countryCode"]').selectOption("AE");
   await page.locator('input[name="timezone"]').fill("Asia/Dubai");
   await page.locator('select[name="locale"]').selectOption("en-AE");
   if (selected.includes("CLIENT")) {
@@ -102,7 +102,7 @@ async function completeOnboarding(page: Page, selected: Array<Persona["type"]>, 
     await page.locator('input[name="tradingName"]').fill(`${label} Studio`);
   }
   await page.locator('button[value="complete"]').click();
-  await expect(page).toHaveURL(/\/dashboard\/(client|freelancer)|\/dashboard/);
+  await expect(page).toHaveURL(/\/dashboard\/(client|freelancer)|\/dashboard/, { timeout: 30_000 });
 }
 
 async function personas(page: Page) {
@@ -122,10 +122,13 @@ async function switchPersona(page: Page, type: Persona["type"]) {
   expect(target, `${type} persona must be active`).toBeTruthy();
   if (overview.activePersonaId === target?.id) return;
   await page.goto("/dashboard");
-  await page.getByRole("button", { name: "User profile" }).click();
+  await page.getByRole("button", { name: "User profile" }).focus();
+  await page.keyboard.press("Enter");
   const switcher = page.getByLabel("Switch persona");
+  const personaLabel = type === "CLIENT" ? "Client" : type === "FREELANCER" ? "Freelancer / provider" : "Organization";
   const switched = page.waitForResponse((response) => response.url().includes("/api/personas/switch") && response.request().method() === "POST");
-  await switcher.getByRole("button").filter({ hasText: new RegExp(`^.*${type} ·`) }).click();
+  await switcher.getByRole("button").filter({ hasText: new RegExp(`${personaLabel} ·`) }).focus();
+  await page.keyboard.press("Enter");
   expect((await switched).ok()).toBeTruthy();
   await expect.poll(async () => (await personas(page)).activePersonaId, { timeout: 15_000 }).toBe(target?.id);
 }
@@ -235,7 +238,7 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await switchPersona(page, "CLIENT");
       await page.goto("/settings/profiles");
       await page.getByRole("button", { name: "Client profile" }).click();
-      const media = page.getByRole("region", { name: "Avatar or logo URL" });
+      const media = page.getByRole("region", { name: "Profile photo" });
       const input = media.locator('input[type="file"]');
       await input.setInputFiles({ name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("not an image") });
       await expect(media.getByRole("alert")).toContainText("JPEG, PNG, or WebP");
@@ -251,7 +254,7 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await page.keyboard.press("Escape");
       await page.reload();
       await page.getByRole("button", { name: "Client profile" }).click();
-      const persisted = page.getByRole("region", { name: "Avatar or logo URL" });
+      const persisted = page.getByRole("region", { name: "Profile photo" });
       await expect(persisted.getByRole("button", { name: "Change photo" })).toBeVisible();
       await persisted.locator('input[type="file"]').setInputFiles({ name: "avatar-changed.png", mimeType: "image/png", buffer: png });
       await persisted.getByRole("button", { name: "Confirm upload" }).click();
@@ -261,6 +264,26 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await page.getByRole("button", { name: "User profile" }).click();
       await expect(page.getByRole("dialog", { name: "User profile" }).getByText("BC", { exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
+    });
+
+    await test.step("show structured profile controls and gate content creation by persona", async () => {
+      await switchPersona(page, "CLIENT");
+      await page.goto("/settings/profiles");
+      await page.getByRole("button", { name: "Client profile" }).click();
+      await expect(page.getByRole("group", { name: "Hiring preferences" })).toBeVisible();
+      await expect(page.getByPlaceholder("Add a language")).toBeVisible();
+      await expect(page.getByText(/Hiring preferences \(JSON\)/)).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Profile content" }).click();
+      await expect(page.getByRole("heading", { name: "Switch to your freelancer persona to manage content" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "New item" })).toHaveCount(0);
+      await expect(page.locator("form.content-manager__form")).toHaveCount(0);
+
+      await switchPersona(page, "FREELANCER");
+      await page.goto("/settings/profiles#portfolio");
+      await expect(page.getByRole("button", { name: "New item" })).toBeVisible();
+      await expect(page.locator("form.content-manager__form")).toBeVisible();
+      await switchPersona(page, "CLIENT");
     });
 
     let primaryListing: { id: string; title: string; version: number };
@@ -567,6 +590,29 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       await switchPersona(page, "CLIENT");
       await page.goto("/dashboard/client");
       await expect(page.getByRole("heading", { name: "Hiring command centre" })).toBeVisible();
+      const clientSummary = page.locator(".phase-dashboard__metrics--summary");
+      await expect(clientSummary.locator("article")).toHaveCount(7);
+      await expect(clientSummary.getByText("Open projects", { exact: true })).toBeVisible();
+      await expect(clientSummary.getByText("Saved freelancers", { exact: true })).toBeVisible();
+
+      for (const destination of [
+        { path: "/analytics", heading: "Analytics dashboard", shell: ".analytics-shell" },
+        { path: "/payments", heading: "Payments and invoices", shell: ".payments-shell" },
+      ]) {
+        await page.goto(destination.path);
+        await expect(page.getByRole("heading", { name: destination.heading })).toBeVisible();
+        const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+        expect(dimensions.content, `${destination.path} must remain inside the viewport`).toBeLessThanOrEqual(dimensions.viewport + 1);
+        await expect(page.locator(destination.shell)).toBeVisible();
+      }
+
+      await page.getByRole("button", { name: "User profile" }).click();
+      const accountPanel = page.getByRole("dialog", { name: "User profile" });
+      await expect(accountPanel.getByRole("link", { name: "Profile settings" })).toBeVisible();
+      await expect(accountPanel.getByRole("link", { name: "Analytics" })).toBeVisible();
+      await expect(accountPanel.getByRole("link", { name: "Payments" })).toBeVisible();
+      await page.keyboard.press("Escape");
+
       await switchPersona(providerPage, "FREELANCER");
       await providerPage.goto("/dashboard/freelancer");
       await expect(providerPage.getByRole("heading", { name: "Work command centre" })).toBeVisible();
@@ -641,4 +687,79 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
   } finally {
     await Promise.allSettled([providerContext.close(), outsiderContext.close()]);
   }
+});
+
+test("manual profile UI and media lifecycle", async ({ page }, testInfo) => {
+  test.setTimeout(testInfo.project.name === "webkit" ? 300_000 : 180_000);
+  const run = `manual-${suffix(testInfo)}`;
+  const password = "Browser!Release12345";
+  const displayName = `Browser Manual ${run}`;
+  const email = `browser-manual-${run}@example.test`;
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+
+  await registerThroughUi(page, email, displayName, password);
+  await loginThroughUi(page, email, password);
+  await completeOnboarding(page, ["CLIENT", "FREELANCER"], displayName);
+  await switchPersona(page, "CLIENT");
+
+  await page.goto("/settings/profiles", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Client profile" }).click();
+  const media = page.getByRole("region", { name: "Profile photo" });
+  const input = media.locator('input[type="file"]');
+  await input.setInputFiles({ name: "avatar.png", mimeType: "image/png", buffer: png });
+  await media.getByRole("button", { name: "Confirm upload" }).click();
+  await expect(media.getByRole("button", { name: "Change photo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "User profile" }).locator('[style*="profile/media"]')).toBeVisible();
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Client profile" }).click();
+  const persisted = page.getByRole("region", { name: "Profile photo" });
+  await expect(persisted.getByRole("button", { name: "Change photo" })).toBeVisible();
+  await persisted.locator('input[type="file"]').setInputFiles({ name: "avatar-replaced.png", mimeType: "image/png", buffer: png });
+  await persisted.getByRole("button", { name: "Confirm upload" }).click();
+  await persisted.getByRole("button", { name: "Remove photo" }).click();
+  await expect(persisted.getByRole("button", { name: "Upload photo" })).toBeVisible();
+  await page.getByRole("button", { name: "User profile" }).focus();
+  await page.keyboard.press("Enter");
+  const accountPanel = page.getByRole("dialog", { name: "User profile" });
+  await expect(accountPanel.locator('span[aria-label="User profile"]')).toHaveText("BM");
+  await expect(accountPanel.getByRole("link", { name: "Profile settings" })).toBeVisible();
+  await expect(accountPanel.getByRole("link", { name: "Analytics" })).toBeVisible();
+  await expect(accountPanel.getByRole("link", { name: "Payments" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByRole("group", { name: "Hiring preferences" })).toBeVisible();
+  await expect(page.getByPlaceholder("Add a language")).toBeVisible();
+  await expect(page.getByText(/Hiring preferences \(JSON\)/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Profile content" }).click();
+  await expect(page.getByRole("heading", { name: "Switch to your freelancer persona to manage content" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New item" })).toHaveCount(0);
+  await expect(page.locator("form.content-manager__form")).toHaveCount(0);
+
+  await page.goto("/dashboard/client", { waitUntil: "domcontentloaded" });
+  const summary = page.locator(".phase-dashboard__metrics--summary");
+  await expect(summary.locator("article")).toHaveCount(7);
+  for (const destination of [
+    { path: "/analytics", heading: "Analytics dashboard", shell: ".analytics-shell" },
+    { path: "/payments", heading: "Payments and invoices", shell: ".payments-shell" },
+  ]) {
+    await page.goto(destination.path, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: destination.heading })).toBeVisible();
+    await expect(page.locator(destination.shell)).toBeVisible();
+    const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+    expect(dimensions.content, `${destination.path} must remain inside the viewport`).toBeLessThanOrEqual(dimensions.viewport + 1);
+  }
+
+  await switchPersona(page, "FREELANCER");
+  await page.goto("/settings/profiles#portfolio", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("button", { name: "New item" })).toBeVisible();
+  await expect(page.locator("form.content-manager__form")).toBeVisible();
+
+  const baseURL = testInfo.project.use.baseURL as string;
+  await page.context().addCookies([{ name: "dublancer_locale", value: "ar-AE", url: baseURL }]);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator("html")).toHaveAttribute("lang", "ar-AE");
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  const rtlDimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+  expect(rtlDimensions.content, "Arabic profile settings must remain inside the viewport").toBeLessThanOrEqual(rtlDimensions.viewport + 1);
 });

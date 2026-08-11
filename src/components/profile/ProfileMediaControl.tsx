@@ -35,15 +35,15 @@ export default function ProfileMediaControl({ target, asset, value, label, fallb
     try {
       const intent = await apiMutation<{ uploadUrl: string }>("/api/profile/media/intents", "POST", { target, asset, mimeType: file.type, sizeBytes: file.size, checksumSha256: await digest(file) });
       const uploaded = await apiBinaryMutation<{ url: string }>(intent.uploadUrl, file);
-      window.sessionStorage.setItem("dublancer-profile-media", uploaded.url);
+      if (asset === "avatar" || asset === "logo") window.sessionStorage.setItem("dublancer-profile-avatar", uploaded.url);
       window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: uploaded.url } }));
-      URL.revokeObjectURL(preview); setPreview(""); setFile(null); await onChanged();
+      URL.revokeObjectURL(preview); setPreview(""); setFile(null); if (input.current) input.current.value = ""; await onChanged();
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("mediaUploadFailed")); }
     finally { setBusy(false); }
   }
   async function remove() {
     setBusy(true); setError("");
-    try { await apiMutation("/api/profile/media", "DELETE", { target, asset }); window.sessionStorage.removeItem("dublancer-profile-media"); window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: null } })); await onChanged(); }
+    try { await apiMutation("/api/profile/media", "DELETE", { target, asset }); if (asset === "avatar" || asset === "logo") window.sessionStorage.removeItem("dublancer-profile-avatar"); window.dispatchEvent(new CustomEvent("dublancer:profile-media", { detail: { target, asset, url: null } })); if (input.current) input.current.value = ""; await onChanged(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : t("mediaRemoveFailed")); }
     finally { setBusy(false); }
   }
@@ -53,7 +53,7 @@ export default function ProfileMediaControl({ target, asset, value, label, fallb
     <div className="profile-media__body"><strong>{label}</strong><span>{t("mediaHelp")}</span><div className="profile-media__actions">
       <input ref={input} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => select(event.target.files?.[0])} />
       <button type="button" disabled={busy} onClick={() => input.current?.click()}>{value ? t("changePhoto") : t("uploadPhoto")}</button>
-      {file ? <><button type="button" disabled={busy} onClick={() => void upload()}>{t("confirmUpload")}</button><button type="button" onClick={() => { URL.revokeObjectURL(preview); setPreview(""); setFile(null); }}>{t("cancel")}</button></> : null}
+      {file ? <><button type="button" disabled={busy} onClick={() => void upload()}>{t("confirmUpload")}</button><button type="button" onClick={() => { URL.revokeObjectURL(preview); setPreview(""); setFile(null); if (input.current) input.current.value = ""; }}>{t("cancel")}</button></> : null}
       {value && !file ? <button type="button" disabled={busy} onClick={() => void remove()}>{t("removePhoto")}</button> : null}
     </div>{error ? <p role="alert" className="enterprise-error">{error}</p> : null}</div>
   </section>;

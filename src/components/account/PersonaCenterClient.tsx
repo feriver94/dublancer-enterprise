@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { apiGet, apiMutation, resetApiClientCsrf } from "@/lib/client/api-client";
 import { Badge, Button, Card } from "@/components/ui";
+import { CountrySelect } from "@/components/profile/ProfileFormControls";
 
 type PersonaType = "CLIENT" | "FREELANCER" | "ORGANIZATION";
 type Persona = {
@@ -65,6 +66,7 @@ function value(form: FormData, key: string) {
 export default function PersonaCenterClient({ onboarding = false }: { onboarding?: boolean }) {
   const t = useTranslations("Persona");
   const common = useTranslations("Common");
+  const statusLabel = useTranslations("Status");
   const router = useRouter();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [selected, setSelected] = useState<PersonaType[]>([]);
@@ -219,7 +221,7 @@ export default function PersonaCenterClient({ onboarding = false }: { onboarding
           <div className="mb-5 flex items-center justify-between gap-4"><div><Badge variant="neutral">1</Badge><h2 className="mt-3 text-2xl font-bold text-[#0F4C5C]">{t("personalIdentity")}</h2></div><span className="text-sm text-slate-500">{overview.account.email}</span></div>
           <div className="grid gap-4 md:grid-cols-2">
             <label>{t("displayName")}<input name="displayName" defaultValue={identity?.preferredName ?? overview.account.displayName ?? ""} minLength={2} maxLength={120} required /></label>
-            <label>{t("countryCode")}<input name="countryCode" defaultValue={identity?.countryCode ?? "AE"} pattern="[A-Za-z]{2}" required /></label>
+            <CountrySelect label={t("country")} name="countryCode" value={identity?.countryCode ?? "AE"} required />
             <label>{t("legalFirstName")}<input name="legalFirstName" defaultValue={identity?.legalFirstName ?? ""} /></label>
             <label>{t("legalLastName")}<input name="legalLastName" defaultValue={identity?.legalLastName ?? ""} /></label>
             <label>{t("phoneCountryCode")}<input name="phoneCountryCode" defaultValue={identity?.phoneCountryCode ?? "+971"} pattern="\+[1-9][0-9]{0,3}" /></label>
@@ -252,7 +254,7 @@ export default function PersonaCenterClient({ onboarding = false }: { onboarding
         </div>
       </form>
 
-      {!onboarding ? <section className="mt-10"><h2 className="text-2xl font-bold text-[#0F4C5C]">{t("activatedPersonas")}</h2><div className="mt-4 grid gap-4 md:grid-cols-3">{overview.account.accountPersonas.map((persona) => <Card key={persona.id} variant={persona.id === overview.activePersonaId ? "elevated" : "soft"} className="p-5"><div className="flex items-center justify-between gap-3"><strong className="text-[#0F4C5C]">{persona.label}</strong><Badge variant={persona.status === "ACTIVE" ? "success" : "neutral"}>{persona.status}</Badge></div><p className="mt-2 text-sm text-slate-500">{t(`type.${persona.type}`)} · {persona.organization.name}</p><div className="mt-4 flex gap-2">{persona.status !== "ACTIVE" ? <Button size="sm" disabled={Boolean(pending)} onClick={() => void activate(persona.id)}>{t("activate")}</Button> : persona.id !== overview.activePersonaId ? <Button size="sm" variant="outline" disabled={Boolean(pending)} onClick={() => void switchPersona(persona.id)}>{t("switch")}</Button> : <span className="text-sm font-bold text-[#009A44]">{t("current")}</span>}</div></Card>)}</div></section> : null}
+      {!onboarding ? <section className="mt-10"><h2 className="text-2xl font-bold text-[#0F4C5C]">{t("activatedPersonas")}</h2><div className="mt-4 grid gap-4 md:grid-cols-3">{overview.account.accountPersonas.map((persona) => <Card key={persona.id} variant={persona.id === overview.activePersonaId ? "elevated" : "soft"} className="p-5"><div className="flex items-center justify-between gap-3"><strong className="text-[#0F4C5C]">{persona.label}</strong><Badge variant={persona.status === "ACTIVE" ? "success" : "neutral"}>{statusLabel.has(persona.status) ? statusLabel(persona.status) : persona.status}</Badge></div><p className="mt-2 text-sm text-slate-500">{t(`type.${persona.type}`)} · {persona.organization.name}</p><div className="mt-4 flex gap-2">{persona.status !== "ACTIVE" ? <Button size="sm" disabled={Boolean(pending)} onClick={() => void activate(persona.id)}>{t("activate")}</Button> : persona.id !== overview.activePersonaId ? <Button size="sm" variant="outline" disabled={Boolean(pending)} onClick={() => void switchPersona(persona.id)}>{t("switch")}</Button> : <span className="text-sm font-bold text-[#009A44]">{t("current")}</span>}</div></Card>)}</div></section> : null}
     </main>
   );
 }

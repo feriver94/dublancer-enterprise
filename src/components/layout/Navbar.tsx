@@ -67,6 +67,7 @@ export default async function Navbar({
   let personas = suppliedPersonas ?? [];
   let activePersonaId = suppliedActivePersonaId ?? null;
   let activePersonaType = personas.find((persona) => persona.id === activePersonaId)?.type ?? null;
+  let activeOrganizationId: string | null = null;
 
   if (isAuthenticated === undefined) {
     try {
@@ -77,6 +78,7 @@ export default async function Navbar({
       userId = context.userId;
       activePersonaId = context.activePersonaId ?? null;
       activePersonaType = context.activePersonaType ?? null;
+      activeOrganizationId = context.organizationId;
     } catch (error) {
       if (isAppError(error) && [401, 403].includes(error.statusCode)) {
         isAuthenticated = false;
@@ -99,22 +101,27 @@ export default async function Navbar({
 
   if (isAuthenticated && profile === undefined && userId) {
     [profile, personas] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          displayName: true,
-          email: true,
-          username: true,
-          clientProfile: { select: { avatarUrl: true } },
-          freelancerProfile: { select: { avatarUrl: true } },
-        },
-      }).then((user) => user ? ({
+      Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            displayName: true,
+            email: true,
+            username: true,
+            clientProfile: { select: { avatarUrl: true } },
+            freelancerProfile: { select: { avatarUrl: true } },
+          },
+        }),
+        activePersonaType === "ORGANIZATION" && activeOrganizationId ? prisma.companyProfile.findUnique({ where: { organizationId: activeOrganizationId }, select: { logoUrl: true } }) : null,
+      ]).then(([user, organization]) => user ? ({
         displayName: user.displayName,
         email: user.email,
         username: user.username,
         avatarUrl: activePersonaType === "FREELANCER"
           ? user.freelancerProfile?.avatarUrl
-          : user.clientProfile?.avatarUrl,
+          : activePersonaType === "ORGANIZATION"
+            ? organization?.logoUrl
+            : user.clientProfile?.avatarUrl,
       }) : null),
       prisma.accountPersona.findMany({
         where: { userId, status: "ACTIVE", organization: { status: "ACTIVE" } },
@@ -159,6 +166,7 @@ export default async function Navbar({
           profileSettings: t("profileSettings"), analytics: t("analytics"), payments: t("payments"), appearance: t("appearance"),
           light: t("light"), dark: t("dark"), system: t("system"), unavailable: t("unavailable"), accountTools: t("accountTools"),
           activePersona: t("activePersona"), switchPersona: t("switchPersona"), managePersonas: t("managePersonas"), switchingPersona: t("switchingPersona"),
+          currentPersona: t("currentPersona"), clientPersona: t("clientPersona"), freelancerPersona: t("freelancerPersona"), organizationPersona: t("organizationPersona"), closeAccountPanel: t("closeAccountPanel"),
           organization: t("organization"), openWorkspace: t("openWorkspace"), dashboard: t("dashboard"), login: t("login"), startFree: t("startFree"),
         }}
       />
