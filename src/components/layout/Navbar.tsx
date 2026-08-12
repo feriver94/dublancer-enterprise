@@ -36,13 +36,13 @@ const freelancerNavItems: NavItem[] = [
   { key: "dashboard", href: "/dashboard/freelancer", authenticated: true },
   { key: "findWork", href: "/marketplace", permission: "marketplace.listing.read" },
   { key: "invitations", href: "/marketplace?view=invitations", permission: "marketplace.listing.read" },
-  { key: "proposals", href: "/marketplace", permission: "marketplace.proposal.submit" },
+  { key: "proposals", href: "/marketplace", permission: "marketplace.proposal.manage" },
   { key: "contracts", href: "/contracts", permission: "marketplace.contract.manage" },
-  { key: "deliveries", href: "/workspace", permission: "project.read" },
+  { key: "workspace", href: "/workspace", permission: "project.read" },
   { key: "earnings", href: "/payments", permission: "finance.read" },
   { key: "chat", href: "/communications/chat", permission: "chat.read" },
   { key: "portfolio", href: "/settings/profiles#portfolio", authenticated: true },
-  { key: "analytics", href: "/analytics", authenticated: true },
+  { key: "analytics", href: "/analytics", permission: "analytics.read" },
 ];
 
 export default async function Navbar({
@@ -140,7 +140,10 @@ export default async function Navbar({
     : activePersonaType === "CLIENT" || activePersonaType === "ORGANIZATION"
       ? clientNavItems
       : commonNavItems;
-  const navItems = isAuthenticated ? [...personaItems, ...commonNavItems.filter((item) => item.key !== "dashboard")] : publicNavItems;
+  const supplementalItems = activePersonaType === "FREELANCER"
+    ? commonNavItems.filter((item) => item.key === "notifications")
+    : commonNavItems.filter((item) => item.key !== "dashboard");
+  const navItems = isAuthenticated ? [...personaItems, ...supplementalItems] : publicNavItems;
   const visibleItems = navItems.filter(
     (item) =>
       (!item.authenticated || isAuthenticated) &&

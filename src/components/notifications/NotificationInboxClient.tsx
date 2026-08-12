@@ -54,6 +54,7 @@ export default function NotificationInboxClient() {
   const dateTime = (value: string) => formatUaeDateTime(value, locale);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [preferences, setPreferences] = useState<Preference[]>([]);
+  const [availableChannels, setAvailableChannels] = useState<Array<(typeof CHANNELS)[number]>>(["IN_APP"]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("ALL");
   const [category, setCategory] = useState("ALL");
   const [cursor, setCursor] = useState<string | null>(null);
@@ -73,7 +74,12 @@ export default function NotificationInboxClient() {
 
   const loadPreferences = useCallback(async () => {
     try {
-      setPreferences(await apiGet<Preference[]>("/api/notification-preferences"));
+      const response = await apiGetWithMeta<Preference[]>("/api/notification-preferences");
+      setPreferences(response.data);
+      const channels: Array<(typeof CHANNELS)[number]> = Array.isArray(response.meta.availableChannels)
+        ? response.meta.availableChannels.filter((channel): channel is (typeof CHANNELS)[number] => typeof channel === "string" && CHANNELS.includes(channel as (typeof CHANNELS)[number]))
+        : ["IN_APP"];
+      setAvailableChannels(channels.length ? channels : ["IN_APP"]);
     } catch (reason) {
       setError(message(reason, t("preferencesLoadFailed")));
     }
@@ -202,7 +208,7 @@ export default function NotificationInboxClient() {
               return <article key={item.id} className={`rounded-3xl border p-5 ${item.status === "UNREAD" ? "border-[#009A44] bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{t.has(`categoryLabel.${item.category}`) ? t(`categoryLabel.${item.category}`) : item.category}</span><span className="text-xs font-bold text-[#009A44]">{statusLabel.has(item.priority) ? statusLabel(item.priority) : item.priority}</span></div><h2 className="mt-3 text-lg font-bold text-[#0F4C5C]">{item.title}</h2>{item.body ? <p className="mt-2 leading-6 text-slate-600">{item.body}</p> : null}</div><time className="text-xs text-slate-500" dateTime={item.createdAt}>{dateTime(item.createdAt)}</time></div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">{actionUrl ? <Link href={actionUrl} onClick={() => item.status === "UNREAD" ? void updateStatus(item, "read") : undefined} className="rounded-full bg-[#0F4C5C] px-4 py-2 text-sm font-bold text-white">{t("open")}</Link> : null}{item.status === "UNREAD" ? <button type="button" onClick={() => void updateStatus(item, "read")} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">{t("markRead")}</button> : item.status === "READ" ? <button type="button" onClick={() => void updateStatus(item, "unread")} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">{t("markUnread")}</button> : null}{item.status !== "ARCHIVED" ? <button type="button" onClick={() => void updateStatus(item, "archive")} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold">{t("archive")}</button> : null}</div>
-                {item.deliveries.length ? <details className="mt-4 text-xs text-slate-500"><summary className="cursor-pointer font-bold">{t("deliveryEvidence")}</summary><div className="mt-2 flex flex-wrap gap-2">{item.deliveries.map((delivery) => <span key={delivery.channel} title={delivery.lastError ?? undefined} className="rounded-full bg-slate-100 px-3 py-1">{t.has(`channel.${delivery.channel}`) ? t(`channel.${delivery.channel}`) : delivery.channel}: {statusLabel.has(delivery.status) ? statusLabel(delivery.status) : delivery.status}{delivery.attempts ? ` · ${t("attempts", { count: delivery.attempts })}` : ""}</span>)}</div></details> : null}
+                {item.deliveries.length ? <details className="mt-4 text-xs text-slate-500"><summary className="cursor-pointer font-bold">{t("deliveryEvidence")}</summary><div className="mt-2 flex flex-wrap gap-2">{item.deliveries.map((delivery) => <span key={delivery.channel} className="rounded-full bg-slate-100 px-3 py-1">{t.has(`channel.${delivery.channel}`) ? t(`channel.${delivery.channel}`) : delivery.channel}: {statusLabel.has(delivery.status) ? statusLabel(delivery.status) : delivery.status}</span>)}</div></details> : null}
               </article>;
             })}
           </div>
@@ -211,7 +217,7 @@ export default function NotificationInboxClient() {
 
         <aside className="h-fit rounded-3xl border border-slate-200 bg-slate-50 p-5">
           <h2 className="text-xl font-bold text-[#0F4C5C]">{t("preferences")}</h2><p className="mt-2 text-sm text-slate-600">{t("preferencesDescription")}</p>
-          <div className="mt-5 grid gap-4">{CATEGORIES.map((categoryName) => <section key={categoryName} className="rounded-2xl bg-white p-4"><h3 className="text-sm font-bold text-[#0F4C5C]">{t(`categoryLabel.${categoryName}`)}</h3><div className="mt-3 grid grid-cols-2 gap-2">{CHANNELS.map((channel) => { const enabled = preferenceEnabled(categoryName, channel); const key = `preference:${categoryName}:${channel}`; return <label key={channel} className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={enabled} disabled={pending === key} onChange={(event) => void togglePreference(categoryName, channel, event.target.checked)} />{t(`channel.${channel}`)}</label>; })}</div></section>)}</div>
+          <div className="mt-5 grid gap-4">{CATEGORIES.map((categoryName) => <section key={categoryName} className="rounded-2xl bg-white p-4"><h3 className="text-sm font-bold text-[#0F4C5C]">{t(`categoryLabel.${categoryName}`)}</h3><div className="mt-3 grid grid-cols-2 gap-2">{availableChannels.map((channel) => { const enabled = preferenceEnabled(categoryName, channel); const key = `preference:${categoryName}:${channel}`; return <label key={channel} className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={enabled} disabled={pending === key} onChange={(event) => void togglePreference(categoryName, channel, event.target.checked)} />{t(`channel.${channel}`)}</label>; })}</div></section>)}</div>
         </aside>
       </div>
     </main>

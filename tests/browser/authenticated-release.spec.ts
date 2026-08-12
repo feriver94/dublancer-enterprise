@@ -8,7 +8,7 @@ type Proposal = { id: string; status: string; version: number; coverLetter: stri
 type Submission = { id: string; status: string; version: number };
 type Milestone = { id: string; status: string; version: number; submissions: Submission[] };
 type ContractView = { id: string; title: string; status: string; version: number; valueMinor: string; currency: string; viewerParty: "CLIENT" | "PROVIDER"; termsHash: string; milestones: Milestone[] };
-type Invoice = { id: string; status: string; version: number; paymentSchedules: Array<{ status: string }> };
+type Invoice = { id: string; number: string; status: string; version: number; totalMinor: string; paymentSchedules: Array<{ status: string }> };
 type Charge = { id: string; status: string; organizationId: string; providerRef: string; amountMinor: string; currency: string };
 
 function suffix(testInfo: TestInfo) {
@@ -201,6 +201,19 @@ async function acceptContract(page: Page, contractId: string) {
   });
 }
 
+async function paymentFixtureOperation(type: "charge" | "refund", idempotencyKey: string) {
+  const baseUrl = process.env.PAYMENT_PROVIDER_BASE_URL;
+  const apiKey = process.env.PAYMENT_PROVIDER_API_KEY;
+  expect(baseUrl, "PAYMENT_PROVIDER_BASE_URL must point to the local payment fixture").toBeTruthy();
+  expect(apiKey, "PAYMENT_PROVIDER_API_KEY must be configured for the local payment fixture").toBeTruthy();
+  const response = await fetch(`${baseUrl?.replace(/\/$/, "")}/v1/operations?type=${type}&idempotencyKey=${encodeURIComponent(idempotencyKey)}`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  const raw = await response.text();
+  expect(response.status, raw).toBe(200);
+  return JSON.parse(raw) as { payload: { amountMinor: string; currency: string } };
+}
+
 test("authenticated release-critical journey", async ({ browser, page }, testInfo) => {
   test.setTimeout(240_000);
   const run = suffix(testInfo);
@@ -211,6 +224,7 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
   const providerPage = await providerContext.newPage();
   const outsiderContext = await browser.newContext({ baseURL: testInfo.project.use.baseURL as string });
   const outsiderPage = await outsiderContext.newPage();
+  let withdrawalListingId = "";
 
   try {
     await test.step("register, login, persist the session, navigate, log out and log in again", async () => {
@@ -331,6 +345,7 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
 
     await test.step("edit and withdraw a proposal with optimistic concurrency protection", async () => {
       const listing = await createListing(page, `Browser withdrawal ${run}`);
+      withdrawalListingId = listing.id;
       const draft = await createProposal(providerPage, listing.id, false);
       const edited = (await api<Proposal>(providerPage, `/api/marketplace/proposals/${draft.id}`, {
         method: "PATCH",
@@ -369,6 +384,15 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
         const rows = (await api<Proposal[]>(providerPage, "/api/marketplace/proposals")).data;
         return rows.find((item) => item.id === draft.id)?.status;
       }).toBe("WITHDRAWN");
+
+      await api(page, `/api/marketplace/listings/${listing.id}`, { method: "PATCH", body: { status: "CANCELLED" } });
+      withdrawalListingId = "";
+      await providerPage.goto("/dashboard/freelancer");
+      await expect(providerPage.getByText(listing.title, { exact: true })).toHaveCount(0);
+      await providerPage.goto("/marketplace");
+      await providerPage.locator("#marketplace-search").fill(listing.title);
+      await providerPage.locator("#marketplace-search").press("Enter");
+      await expect(providerPage.getByRole("link", { name: new RegExp(listing.title) })).toHaveCount(0);
     });
 
     await test.step("enforce persona sides, accept on both sides and expose milestones", async () => {
@@ -685,12 +709,15 @@ test("authenticated release-critical journey", async ({ browser, page }, testInf
       expect(dimensions.content, `${testInfo.project.name} must remain inside its viewport`).toBeLessThanOrEqual(dimensions.viewport + 1);
     });
   } finally {
+    if (withdrawalListingId) {
+      await api(page, `/api/marketplace/listings/${withdrawalListingId}`, { method: "PATCH", body: { status: "CANCELLED" }, expected: [200, 404] }).catch(() => undefined);
+    }
     await Promise.allSettled([providerContext.close(), outsiderContext.close()]);
   }
 });
 
 test("manual profile UI and media lifecycle", async ({ page }, testInfo) => {
-  test.setTimeout(testInfo.project.name === "webkit" ? 300_000 : 180_000);
+  test.setTimeout(900_000);
   const run = `manual-${suffix(testInfo)}`;
   const password = "Browser!Release12345";
   const displayName = `Browser Manual ${run}`;
@@ -776,10 +803,180 @@ test("manual profile UI and media lifecycle", async ({ page }, testInfo) => {
     expect(dimensions.content, `${destination.path} must remain inside the viewport`).toBeLessThanOrEqual(dimensions.viewport + 1);
   }
 
+  await test.step("convert invoice amounts exactly and preserve the same minor units through the provider boundary", async () => {
+    await page.goto("/payments", { waitUntil: "domcontentloaded" });
+    const form = page.locator("form.enterprise-form").filter({ has: page.locator('input[name="amount"]') }).first();
+    const dueAt = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    const values = [["1", "100"], ["10", "1000"], ["100", "10000"], ["123.45", "12345"], ["5000", "500000"]] as const;
+    let firstNumber = "";
+    for (const [major, expectedMinor] of values) {
+      await form.locator('input[name="number"]').fill(firstNumber ? "" : `INV-${new Date().getFullYear()}-`);
+      await form.locator('textarea[name="description"]').fill(`Exact AED ${major} ${run}`);
+      await form.locator('input[name="amount"]').fill(major);
+      await form.locator('input[name="dueAt"]').fill(dueAt);
+      const createdResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/finance/invoices" && response.status() === 201);
+      await form.getByRole("button", { name: "Create draft" }).click();
+      const response = await createdResponse;
+      expect(response.status(), await response.text()).toBe(201);
+      const created = (await response.json() as { data: Invoice }).data;
+      expect(created.totalMinor).toBe(expectedMinor);
+      expect(created.number).toMatch(/^INV-\d{4}-\d{6}$/);
+      firstNumber ||= created.number;
+      const formattedMajor = new Intl.NumberFormat("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(major));
+      await expect(page.locator("article").filter({ hasText: created.number })).toContainText(formattedMajor);
+
+      const issued = (await api<Invoice>(page, `/api/finance/invoices/${created.id}`, {
+        method: "PATCH",
+        body: { action: "ISSUE", expectedVersion: created.version, dueAt },
+      })).data;
+      const idempotencyKey = `amount-${run}-${expectedMinor}`;
+      const charge = (await api<Charge>(page, "/api/finance/charges", {
+        method: "POST",
+        expected: [202],
+        body: { invoiceId: issued.id, idempotencyKey },
+      })).data;
+      expect(charge.amountMinor).toBe(expectedMinor);
+      const provider = await paymentFixtureOperation("charge", idempotencyKey);
+      expect(provider.payload).toMatchObject({ amountMinor: expectedMinor, currency: "AED" });
+      await expect(form.getByRole("button", { name: "Create draft" })).toBeEnabled();
+    }
+
+    const duplicate = await api(page, "/api/finance/invoices", {
+      method: "POST",
+      expected: [409],
+      body: { number: firstNumber, currency: "AED", dueAt, lines: [{ description: "Duplicate number rejection", quantity: 1, unitAmountMinor: "100", taxRateBasisPoints: 0 }] },
+    });
+    expect(duplicate.error?.message).toContain("already in use");
+  });
+
   await switchPersona(page, "FREELANCER");
   await page.goto("/settings/profiles#portfolio", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "New item" })).toBeVisible();
-  await expect(page.locator("form.content-manager__form")).toBeVisible();
+  const contentForm = page.locator("form.content-manager__form");
+  await expect(contentForm).toBeVisible();
+  await expect(contentForm.locator('input[name="sortOrder"]')).toHaveCount(0);
+  await expect(contentForm.getByText(/public HTTPS link to an image or video/i)).toBeVisible();
+  const portfolioTitle = `Portfolio ${run}`;
+  await contentForm.locator('input[name="title"]').fill(portfolioTitle);
+  await contentForm.locator('textarea[name="description"]').fill("Governed portfolio lifecycle browser evidence.");
+  await contentForm.locator('input[name="projectUrl"]').fill("https://example.test/work");
+  await contentForm.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("status")).toContainText("Changes saved");
+  let portfolioItem = page.locator(".content-manager__list article").filter({ hasText: portfolioTitle });
+  await expect(portfolioItem).toBeVisible();
+  await portfolioItem.getByRole("button", { name: "Edit" }).click();
+  const updatedPortfolioTitle = `${portfolioTitle} updated`;
+  await contentForm.locator('input[name="title"]').fill(updatedPortfolioTitle);
+  const portfolioUpdated = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.startsWith("/api/profile/content/portfolio/") && response.status() === 200);
+  await contentForm.getByRole("button", { name: "Update" }).click();
+  await portfolioUpdated;
+  portfolioItem = page.locator(".content-manager__list article").filter({ hasText: updatedPortfolioTitle });
+  await expect(portfolioItem).toBeVisible({ timeout: 30_000 });
+  const portfolioArchived = page.waitForResponse((response) => response.request().method() === "DELETE" && new URL(response.url()).pathname.startsWith("/api/profile/content/portfolio/") && response.status() === 200);
+  await portfolioItem.getByRole("button", { name: "Archive" }).click();
+  await portfolioArchived;
+  await expect(portfolioItem).toHaveCount(0, { timeout: 30_000 });
+
+  await page.goto("/dashboard/freelancer", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Work command centre" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText(/NaN|Infinity|undefined/);
+  const primaryNavigation = page.getByRole("navigation", { name: "Primary navigation" });
+  if ((page.viewportSize()?.width ?? 1280) < 1280) {
+    await primaryNavigation.getByRole("button", { name: "Menu" }).click();
+  } else {
+    await primaryNavigation.getByText("More", { exact: true }).click();
+  }
+  await expect(primaryNavigation.getByRole("link", { name: "Workspace", exact: true })).toHaveCount(1);
+  for (const hiddenModule of ["Deliveries", "AI Workspace", "Identity", "Observability", "Enterprise"]) {
+    await expect(primaryNavigation.getByRole("link", { name: hiddenModule, exact: true })).toHaveCount(0);
+  }
+
+  await page.goto("/marketplace", { waitUntil: "domcontentloaded" });
+  await page.locator("#marketplace-search").fill("Browser withdrawal");
+  await page.locator("#marketplace-search").press("Enter");
+  await expect(page.locator("article").filter({ hasText: /Browser withdrawal|Deterministic authenticated browser release workflow listing/i })).toHaveCount(0);
+
+  await page.goto("/contracts", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "No contracts yet" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Find work" })).toHaveAttribute("href", "/marketplace");
+  await expect(page.locator("#contract-create")).toHaveCount(0);
+
+  await page.goto("/payments", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Earnings and settlements" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create draft invoice" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Charge outstanding|Issue invoice|Request refund/ })).toHaveCount(0);
+
+  await page.goto("/notifications", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Notification inbox" })).toBeVisible();
+  const markAllRead = page.getByRole("button", { name: "Mark all read" });
+  if (await page.getByText("No unread notifications in the active organization.").isVisible()) await expect(markAllRead).toBeDisabled();
+  const preferencesResponse = await page.context().request.get("/api/notification-preferences");
+  expect(preferencesResponse.status(), await preferencesResponse.text()).toBe(200);
+  const preferencesEnvelope = await preferencesResponse.json() as { meta: { availableChannels: string[] } };
+  const preferencesPanel = page.getByRole("complementary");
+  for (const [channel, label] of [["IN_APP", "In app"], ["EMAIL", "Email"], ["PUSH", "Push"], ["SMS", "SMS"]] as const) {
+    const channelControls = preferencesPanel.getByRole("checkbox", { name: label });
+    if (preferencesEnvelope.meta.availableChannels.includes(channel)) await expect(channelControls.first()).toBeVisible();
+    else await expect(channelControls).toHaveCount(0);
+  }
+
+  await page.goto("/communications/chat", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Realtime chat" })).toBeVisible();
+  const channelName = `freelancer-${run}`;
+  await page.getByRole("textbox", { name: "New channel name" }).fill(channelName);
+  const channelCreated = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/chat/channels" && response.status() === 201);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await channelCreated;
+  await expect(page.getByRole("status")).toContainText("Channel created.", { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: channelName })).toBeVisible({ timeout: 30_000 });
+  const chatMessage = `Freelancer lifecycle message ${run}`;
+  await page.getByRole("textbox", { name: "Message", exact: true }).fill(chatMessage);
+  const messageSent = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/chat\/channels\/[^/]+\/messages$/.test(new URL(response.url()).pathname) && response.status() === 201);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await messageSent;
+  await expect(page.locator("article").filter({ hasText: chatMessage })).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/workspace", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Your live projects" })).toBeVisible();
+  const projectTitle = `Freelancer workspace ${run}`;
+  const projectForm = page.getByRole("heading", { name: "Create project" }).locator("..").locator("form");
+  await projectForm.locator('input[name="title"]').fill(projectTitle);
+  await projectForm.locator('input[name="slug"]').fill(`freelancer-workspace-${run}`);
+  await projectForm.locator('textarea[name="description"]').fill("Freelancer project workflow browser evidence.");
+  await projectForm.locator('input[name="budget"]').fill("123.45");
+  const projectCreated = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/projects" && response.status() === 201);
+  await projectForm.getByRole("button", { name: "Create project" }).click();
+  const createdProject = (await (await projectCreated).json() as { data: { id: string } }).data;
+  await page.getByRole("link", { name: new RegExp(projectTitle) }).click();
+  await expect(page).toHaveURL(new RegExp(`/workspace/project/${createdProject.id}`));
+  await expect(page.getByRole("heading", { name: projectTitle })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("tab", { name: "Work" }).click();
+  const milestoneTitle = `Milestone ${run}`;
+  const milestonePanel = page.getByRole("heading", { name: "Milestones" }).locator("..");
+  await milestonePanel.locator('input[name="title"]').fill(milestoneTitle);
+  const milestoneCreated = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/projects/${createdProject.id}/milestones` && response.status() === 201);
+  await milestonePanel.getByRole("button", { name: "Add milestone" }).click();
+  await milestoneCreated;
+  await expect(milestonePanel.getByText(milestoneTitle)).toBeVisible({ timeout: 30_000 });
+  const taskTitle = `Task ${run}`;
+  const taskPanel = page.getByRole("heading", { name: "Tasks" }).locator("..");
+  await taskPanel.locator('input[name="title"]').fill(taskTitle);
+  const taskCreated = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/projects/${createdProject.id}/tasks` && response.status() === 201);
+  await taskPanel.getByRole("button", { name: "Add task" }).click();
+  await taskCreated;
+  await expect(taskPanel.getByText(taskTitle)).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("tab", { name: "Delivery" }).click();
+  const comment = `Project comment ${run}`;
+  const commentPanel = page.getByRole("heading", { name: "Comments" }).locator("..");
+  await commentPanel.locator('textarea[name="body"]').fill(comment);
+  const commentCreated = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/projects/${createdProject.id}/comments` && response.status() === 201);
+  await commentPanel.getByRole("button", { name: "Post comment" }).click();
+  await commentCreated;
+  await expect(commentPanel.getByText(comment)).toBeVisible({ timeout: 30_000 });
+  await api(page, `/api/projects/${createdProject.id}`, { method: "DELETE" });
+  await page.goto("/dashboard/freelancer", { waitUntil: "domcontentloaded" });
 
   const baseURL = testInfo.project.use.baseURL as string;
   await page.context().addCookies([{ name: "dublancer_locale", value: "ar-AE", url: baseURL }]);

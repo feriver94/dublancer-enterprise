@@ -343,7 +343,7 @@ export default function ChatWorkspaceClient() {
         mentionedUserIds: [],
       });
       if (parentId) setThreadDraft(""); else setDraft("");
-      await sendTyping(false);
+      void sendTyping(false);
       await refreshConversation(selectedId);
       if (parentId && threadRoot) await loadThread(selectedId, threadRoot);
     } catch (reason) {

@@ -227,7 +227,12 @@ export class ProfileManagementService {
     if (isPortfolioKind(kind)) {
       const input = portfolioContentSchema.parse(payload);
       await assertVisibility(context.userId, input.visibility);
-      const row = await prisma.portfolioItem.create({ data: { freelancerProfileId: profile.id, contentType: portfolioTypes[kind], ...input, version: 1 } });
+      const { sortOrder: _ignoredSortOrder, ...data } = input;
+      const current = await prisma.portfolioItem.aggregate({
+        where: { freelancerProfileId: profile.id, contentType: portfolioTypes[kind], deletedAt: null },
+        _max: { sortOrder: true },
+      });
+      const row = await prisma.portfolioItem.create({ data: { freelancerProfileId: profile.id, contentType: portfolioTypes[kind], ...data, sortOrder: Math.min((current._max.sortOrder ?? -1) + 1, 10_000), version: 1 } });
       await audit(context, `profile.${kind}.created`, "PortfolioItem", row.id, Object.keys(input));
       return row;
     }
@@ -273,7 +278,7 @@ export class ProfileManagementService {
         const input = portfolioContentSchema.parse(payload);
         await assertVisibility(context.userId, input.visibility);
         if (!input.version) throw new AppError("VALIDATION_ERROR", "A content version is required.", 422);
-        const { version, ...data } = input;
+        const { version, sortOrder: _ignoredSortOrder, ...data } = input;
         resourceType = "PortfolioItem";
         changed = (await prisma.portfolioItem.updateMany({ where: { id, freelancerProfileId: profile.id, contentType: portfolioTypes[kind], version, deletedAt: null }, data: { ...data, version: { increment: 1 } } })).count;
         fields = Object.keys(data);

@@ -8,6 +8,7 @@ import type { TenantContext } from "@/lib/tenancy/context";
 import { requirePermission } from "@/lib/authorization/permission-resolver";
 import { paymentWebhookSchema } from "@/lib/validation/product";
 import { requireActivePersona } from "@/lib/authorization/persona-policy";
+import { invoiceNumberPrefix, nextInvoiceNumber, requestedInvoiceNumber } from "@/lib/finance/invoice-input";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -134,12 +135,18 @@ export class MarketplaceService {
       where: {
         AND: [
           input.status ? { status: input.status } : { status: { not: "CANCELLED" } },
-          {
-            OR: [
-              { organizationId: context.organizationId },
-              { status: "PUBLISHED", visibility: "PUBLIC" },
-            ],
-          },
+          context.activePersonaType === "FREELANCER"
+            ? {
+                status: "PUBLISHED",
+                visibility: "PUBLIC",
+                organizationId: { not: context.organizationId },
+              }
+            : {
+                OR: [
+                  { organizationId: context.organizationId },
+                  { status: "PUBLISHED", visibility: "PUBLIC" },
+                ],
+              },
           input.query
             ? { OR: [{ title: { contains: input.query, mode: "insensitive" } }, { description: { contains: input.query, mode: "insensitive" } }] }
             : {},
@@ -771,7 +778,8 @@ export class FinanceService {
     return { ...invoice, canManage: invoice.organizationId === context.organizationId };
   }
 
-  async createInvoice(context: TenantContext, input: { number: string; contractId?: string; contractMilestoneId?: string; billToOrganizationId?: string; currency: string; dueAt?: Date; lines: Array<{ description: string; quantity: number; unitAmountMinor: bigint; taxRateBasisPoints: number; metadata?: Record<string, unknown> }> }) {
+  async createInvoice(context: TenantContext, input: { number?: string; contractId?: string; contractMilestoneId?: string; billToOrganizationId?: string; currency: string; dueAt?: Date; lines: Array<{ description: string; quantity: number; unitAmountMinor: bigint; taxRateBasisPoints: number; metadata?: Record<string, unknown> }> }) {
+    requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
     await requirePermission(context, "finance.manage");
     let milestone: { id: string; contractId: string; status: string; amountMinor: bigint; currency: string } | null = null;
     let billToOrganizationId = input.billToOrganizationId;
@@ -809,16 +817,28 @@ export class FinanceService {
     if (milestone && (milestone.currency !== input.currency || milestone.amountMinor !== totalMinor)) {
       throw new AppError("CONFLICT", "Invoice total and currency must match the accepted milestone.", 409);
     }
-    try {
-      return await prisma.$transaction(async (tx) => {
+    const customNumber = requestedInvoiceNumber(input.number);
+    const year = Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Dubai" }).format(new Date()));
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await prisma.$transaction(async (tx) => {
         if (milestone && await tx.paymentSchedule.findFirst({ where: { contractMilestoneId: milestone.id }, select: { id: true } })) {
           throw new AppError("CONFLICT", "The accepted milestone already has an invoice schedule.", 409);
         }
+        const number = customNumber ?? nextInvoiceNumber(
+          (await tx.invoice.findMany({
+            where: { organizationId: context.organizationId, number: { startsWith: invoiceNumberPrefix(year) } },
+            select: { number: true },
+            orderBy: { number: "desc" },
+            take: 1_000,
+          })).map((invoice) => invoice.number),
+          year,
+        );
         const invoice = await tx.invoice.create({
         data: {
           organizationId: context.organizationId,
           issuedById: context.userId,
-          number: input.number,
+          number,
           contractId: input.contractId ?? milestone?.contractId,
           billToOrganizationId,
           currency: input.currency,
@@ -834,16 +854,32 @@ export class FinanceService {
         await audit(tx, context, "finance.invoice.created", "Invoice", invoice.id, { number: invoice.number, contractId: invoice.contractId, totalMinor: invoice.totalMinor.toString() });
         await event(tx, context, "finance.invoice.created", "Invoice", invoice.id, { status: invoice.status, number: invoice.number, totalMinor: invoice.totalMinor.toString() });
         return invoice;
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && milestone) {
-        throw new AppError("CONFLICT", "The accepted milestone already has an invoice schedule.", 409);
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          if (customNumber && await prisma.invoice.findFirst({
+            where: { organizationId: context.organizationId, number: customNumber },
+            select: { id: true },
+          })) {
+            throw new AppError("CONFLICT", "That invoice number is already in use. Choose another number or leave the field blank for an automatic number.", 409);
+          }
+          if (milestone && await prisma.paymentSchedule.findFirst({
+            where: { contractMilestoneId: milestone.id },
+            select: { id: true },
+          })) throw new AppError("CONFLICT", "The accepted milestone already has an invoice schedule.", 409);
+          if (!customNumber && attempt < 2) continue;
+          if (!customNumber) throw new AppError("CONFLICT", "An invoice number could not be reserved. Please try again.", 409);
+        }
+        if (!customNumber && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && attempt < 2) continue;
+        if (!customNumber && error instanceof RangeError) throw new AppError("CONFLICT", "The annual invoice number sequence is unavailable. Contact an authorized finance administrator.", 409);
+        throw error;
       }
-      throw error;
     }
+    throw new AppError("CONFLICT", "An invoice number could not be reserved. Please try again.", 409);
   }
 
   async transitionInvoice(context: TenantContext, invoiceId: string, input: { action: "ISSUE" | "MARK_OVERDUE" | "VOID"; expectedVersion: number; dueAt?: Date; reason?: string }) {
+    requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
     await requirePermission(context, "finance.manage");
     const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, organizationId: context.organizationId }, include: { transactions: true } });
     if (!invoice) throw new AppError("NOT_FOUND", "Invoice not found.", 404);
@@ -878,6 +914,7 @@ export class FinanceService {
   }
 
   async chargeInvoice(context: TenantContext, invoiceId: string, idempotencyKey: string) {
+    requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
     await requirePermission(context, "finance.manage");
     const prior = await prisma.financialTransaction.findUnique({ where: { organizationId_idempotencyKey: { organizationId: context.organizationId, idempotencyKey } } });
     if (prior) {
@@ -925,6 +962,7 @@ export class FinanceService {
   }
 
   async createRefund(context: TenantContext, input: { transactionId: string; amountMinor: bigint; reason: string; idempotencyKey: string }) {
+    requireActivePersona(context, ["CLIENT", "ORGANIZATION"]);
     await requirePermission(context, "finance.manage");
     const prior = await prisma.refund.findUnique({ where: { organizationId_idempotencyKey: { organizationId: context.organizationId, idempotencyKey: input.idempotencyKey } }, include: { refundTransaction: true } });
     if (prior) {

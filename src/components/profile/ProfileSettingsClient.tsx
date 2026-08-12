@@ -178,6 +178,7 @@ function Field({
   type = "text",
   required,
   textarea,
+  help,
 }: {
   label: string;
   name: string;
@@ -185,6 +186,7 @@ function Field({
   type?: string;
   required?: boolean;
   textarea?: boolean;
+  help?: string;
 }) {
   return (
     <label>
@@ -204,6 +206,7 @@ function Field({
           }
         />
       )}
+      {help ? <small>{help}</small> : null}
     </label>
   );
 }
@@ -406,7 +409,6 @@ export default function ProfileSettingsClient() {
         projectUrl: nullable(form, "projectUrl"),
         mediaUrl: nullable(form, "mediaUrl"),
         completedAt: nullable(form, "completedAt"),
-        sortOrder: Number(text(form, "sortOrder") || 0),
       };
     if (kind === "experience")
       return {
@@ -841,24 +843,20 @@ export default function ProfileSettingsClient() {
                     name="projectUrl"
                     value={item?.projectUrl}
                     type="url"
+                    help={t("projectUrlHelp")}
                   />
                   <Field
                     label={t("mediaUrl")}
                     name="mediaUrl"
                     value={item?.mediaUrl}
                     type="url"
+                    help={t("portfolioMediaHelp")}
                   />
                   <Field
                     label={t("completedAt")}
                     name="completedAt"
                     value={dateInput(item?.completedAt)}
                     type="date"
-                  />
-                  <Field
-                    label={t("displayOrder")}
-                    name="sortOrder"
-                    value={item?.sortOrder ?? 0}
-                    type="number"
                   />
                 </>
               ) : null}

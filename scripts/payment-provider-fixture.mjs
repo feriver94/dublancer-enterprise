@@ -26,6 +26,21 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (request.method === "GET" && request.url?.startsWith("/v1/operations?")) {
+    if (!authorized(request.headers.authorization)) {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end('{"error":"unauthorized"}');
+      return;
+    }
+    const url = new URL(request.url, `http://${host}:${port}`);
+    const type = url.searchParams.get("type");
+    const idempotencyKey = url.searchParams.get("idempotencyKey");
+    const operation = type && idempotencyKey ? operations.get(`${type}:${idempotencyKey}`) : undefined;
+    response.writeHead(operation ? 200 : 404, { "content-type": "application/json", "cache-control": "no-store" });
+    response.end(JSON.stringify(operation ?? { error: "not_found" }));
+    return;
+  }
+
   if (request.method !== "POST" || !["/v1/charges", "/v1/refunds"].includes(request.url ?? "")) {
     response.writeHead(404, { "content-type": "application/json" });
     response.end('{"error":"not_found"}');
@@ -55,8 +70,9 @@ const server = createServer(async (request, response) => {
     }
     chunks.push(chunk);
   }
+  let payload;
   try {
-    JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+    payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
   } catch {
     response.writeHead(400, { "content-type": "application/json" });
     response.end('{"error":"invalid_json"}');
@@ -65,9 +81,9 @@ const server = createServer(async (request, response) => {
 
   const type = request.url === "/v1/refunds" ? "refund" : "charge";
   const operationKey = `${type}:${idempotencyKey}`;
-  const providerReference = operations.get(operationKey)
+  const providerReference = operations.get(operationKey)?.providerReference
     ?? `release-${type}-${createHash("sha256").update(operationKey).digest("hex").slice(0, 24)}`;
-  operations.set(operationKey, providerReference);
+  operations.set(operationKey, { providerReference, type, payload });
   response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
   response.end(JSON.stringify({
     providerReference,

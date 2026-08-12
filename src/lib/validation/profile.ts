@@ -108,7 +108,7 @@ export const portfolioContentSchema = contentBase.extend({
   projectUrl: optionalUrl,
   mediaUrl: optionalUrl,
   completedAt: z.coerce.date().optional().nullable(),
-  sortOrder: z.number().int().min(0).max(10000).default(0),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
 });
 
 export const experienceContentSchema = contentBase.extend({

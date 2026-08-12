@@ -170,7 +170,7 @@ export const aiDecisionSchema = z.object({
 });
 
 export const createInvoiceSchema = z.object({
-  number: z.string().trim().min(1).max(100),
+  number: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$/).optional(),
   contractId: id.optional(),
   contractMilestoneId: id.optional(),
   billToOrganizationId: id.optional(),
