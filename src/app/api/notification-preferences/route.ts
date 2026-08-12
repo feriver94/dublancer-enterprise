@@ -10,8 +10,13 @@ const service = new NotificationPreferenceService();
 export async function GET() {
   try {
     const context = await getAuthenticatedContext();
+    const externalDeliveryConfigured = Boolean(
+      process.env.NOTIFICATION_PROVIDER_BASE_URL && process.env.NOTIFICATION_PROVIDER_API_KEY,
+    );
     return apiSuccess(
       await service.list(context),
+      200,
+      { availableChannels: externalDeliveryConfigured ? ["IN_APP", "EMAIL", "PUSH", "SMS"] : ["IN_APP"] },
     );
   } catch (error) {
     return apiError(error);

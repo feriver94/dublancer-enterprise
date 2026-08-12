@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import { AUTH_CONFIG } from "./config";
 
 export async function setAuthCookies(accessToken: string, refreshToken: string) {
@@ -12,6 +13,13 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
 
 function setAccessCookieOnStore(store: Awaited<ReturnType<typeof cookies>>, accessToken: string) {
   store.set(AUTH_CONFIG.sessionCookieName, accessToken, {
+    httpOnly: true, secure: AUTH_CONFIG.cookieSecure, sameSite: "lax", path: "/",
+    maxAge: AUTH_CONFIG.accessTokenTtlSeconds,
+  });
+}
+
+export function setAccessCookieOnResponse(response: NextResponse, accessToken: string) {
+  response.cookies.set(AUTH_CONFIG.sessionCookieName, accessToken, {
     httpOnly: true, secure: AUTH_CONFIG.cookieSecure, sameSite: "lax", path: "/",
     maxAge: AUTH_CONFIG.accessTokenTtlSeconds,
   });

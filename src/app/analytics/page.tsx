@@ -6,5 +6,5 @@ import { AnalyticsDashboardClient } from "@/components/analytics";
 export default async function AnalyticsPage() {
   const authorization = await resolveAuthorization(await getAuthenticatedContext());
   const canBackfill = authorization.isPlatformAdmin || authorization.permissions.includes("platform.operations.read");
-  return <><Navbar/><Container><AnalyticsDashboardClient canBackfill={canBackfill}/></Container><Footer/></>;
+  return <><Navbar/><Container className="analytics-shell" maxWidth="1440px"><AnalyticsDashboardClient canBackfill={canBackfill}/></Container><Footer/></>;
 }

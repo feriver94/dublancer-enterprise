@@ -2,7 +2,8 @@ import { Prisma, type AccountPersonaType, type ProfileContentType, type ProfileV
 import { prisma } from "@/lib/database/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import { requireActivePersona, requirePersonaPermission } from "@/lib/authorization/persona-policy";
-import { requirePermission } from "@/lib/authorization/permission-resolver";
+import { requirePermission, resolveAuthorization } from "@/lib/authorization/permission-resolver";
+import type { PlatformPermission } from "@/lib/authorization/permissions";
 import type { TenantContext } from "@/lib/tenancy/context";
 import {
   certificationContentSchema,
@@ -72,7 +73,7 @@ async function freelancerProfile(context: TenantContext) {
 
 export class ProfileManagementService {
   async settings(context: TenantContext) {
-    const [user, organizations, completion] = await Promise.all([
+    const [user, organizations, completion, authorization] = await Promise.all([
       prisma.user.findUnique({
         where: { id: context.userId },
         select: {
@@ -101,9 +102,26 @@ export class ProfileManagementService {
         orderBy: { name: "asc" },
       }),
       new ProfileCompletionService().forUser(context.userId),
+      resolveAuthorization(context),
     ]);
     if (!user) throw new AppError("NOT_FOUND", "Account not found.", 404);
-    return { account: user, organizations, completion, activePersonaType: context.activePersonaType };
+    const can = (permission: PlatformPermission) => authorization.isPlatformAdmin || authorization.permissions.includes(permission);
+    const clientActive = context.activePersonaType === "CLIENT";
+    const freelancerActive = context.activePersonaType === "FREELANCER";
+    const organizationActive = context.activePersonaType === "ORGANIZATION";
+    return {
+      account: user,
+      organizations,
+      completion,
+      activePersonaType: context.activePersonaType,
+      activeOrganizationId: context.organizationId,
+      capabilities: {
+        editClient: clientActive && can("marketplace.listing.manage"),
+        editFreelancer: freelancerActive && can("marketplace.profile.manage"),
+        manageContent: freelancerActive && can("marketplace.profile.manage"),
+        editOrganizationIds: organizationActive && can("organization.update") ? [context.organizationId] : [],
+      },
+    };
   }
 
   async updateSettings(context: TenantContext, input: SettingsInput) {
@@ -209,7 +227,12 @@ export class ProfileManagementService {
     if (isPortfolioKind(kind)) {
       const input = portfolioContentSchema.parse(payload);
       await assertVisibility(context.userId, input.visibility);
-      const row = await prisma.portfolioItem.create({ data: { freelancerProfileId: profile.id, contentType: portfolioTypes[kind], ...input, version: 1 } });
+      const { sortOrder: _ignoredSortOrder, ...data } = input;
+      const current = await prisma.portfolioItem.aggregate({
+        where: { freelancerProfileId: profile.id, contentType: portfolioTypes[kind], deletedAt: null },
+        _max: { sortOrder: true },
+      });
+      const row = await prisma.portfolioItem.create({ data: { freelancerProfileId: profile.id, contentType: portfolioTypes[kind], ...data, sortOrder: Math.min((current._max.sortOrder ?? -1) + 1, 10_000), version: 1 } });
       await audit(context, `profile.${kind}.created`, "PortfolioItem", row.id, Object.keys(input));
       return row;
     }
@@ -255,7 +278,7 @@ export class ProfileManagementService {
         const input = portfolioContentSchema.parse(payload);
         await assertVisibility(context.userId, input.visibility);
         if (!input.version) throw new AppError("VALIDATION_ERROR", "A content version is required.", 422);
-        const { version, ...data } = input;
+        const { version, sortOrder: _ignoredSortOrder, ...data } = input;
         resourceType = "PortfolioItem";
         changed = (await prisma.portfolioItem.updateMany({ where: { id, freelancerProfileId: profile.id, contentType: portfolioTypes[kind], version, deletedAt: null }, data: { ...data, version: { increment: 1 } } })).count;
         fields = Object.keys(data);

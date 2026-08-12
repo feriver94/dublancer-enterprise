@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Card } from "@/components/ui";
-import { apiMutation } from "@/lib/client/api-client";
+import { apiGetWithMeta, apiMutation } from "@/lib/client/api-client";
 import { useApiResource } from "@/lib/client/use-api-resource";
 import ProposalReviewClient, {
   type MarketplaceProposal,
@@ -82,15 +82,35 @@ function ListingDirectory({ activePersonaType }: { activePersonaType: PersonaTyp
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null | undefined>();
   const [error, setError] = useState("");
   const listings = useApiResource<Listing[]>(
-    `/api/marketplace/listings?take=100${search ? `&query=${encodeURIComponent(search)}` : ""}`,
+    `/api/marketplace/listings?take=24${search ? `&query=${encodeURIComponent(search)}` : ""}`,
   );
   const proposals = useApiResource<MarketplaceProposal[]>(
     "/api/marketplace/proposals",
   );
   const canHire = activePersonaType === "CLIENT" || activePersonaType === "ORGANIZATION";
   const canProvide = activePersonaType === "FREELANCER";
+  const cursor = nextCursor === undefined
+    ? typeof listings.meta.nextCursor === "string" ? listings.meta.nextCursor : null
+    : nextCursor;
+
+  async function loadMore() {
+    if (!cursor) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const response = await apiGetWithMeta<Listing[]>(`/api/marketplace/listings?take=24&cursor=${encodeURIComponent(cursor)}${search ? `&query=${encodeURIComponent(search)}` : ""}`);
+      listings.setData((current) => [...(current ?? []), ...response.data.filter((item) => !current?.some((existing) => existing.id === item.id))]);
+      setNextCursor(typeof response.meta.nextCursor === "string" ? response.meta.nextCursor : null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("loadFailed"));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -111,6 +131,7 @@ function ListingDirectory({ activePersonaType }: { activePersonaType: PersonaTyp
         skillIds: [],
       });
       form.reset();
+      setNextCursor(undefined);
       await listings.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("createFailed"));
@@ -136,6 +157,7 @@ function ListingDirectory({ activePersonaType }: { activePersonaType: PersonaTyp
               className="mb-6 flex gap-3"
               onSubmit={(event) => {
                 event.preventDefault();
+                setNextCursor(undefined);
                 setSearch(query.trim());
               }}
             >
@@ -197,6 +219,7 @@ function ListingDirectory({ activePersonaType }: { activePersonaType: PersonaTyp
                     </div>
                   </Link>
                 ))}
+                {cursor ? <Button type="button" variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? t("loading") : t("loadMore")}</Button> : null}
               </div>
             ) : (
               <p className="enterprise-empty">{t("noListings")}</p>

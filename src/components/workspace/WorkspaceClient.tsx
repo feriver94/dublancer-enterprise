@@ -69,6 +69,9 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+const workspaceSections = ["overview", "work", "delivery", "team", "files", "activity", "advanced"] as const;
+type WorkspaceSection = (typeof workspaceSections)[number];
+
 export default function WorkspaceClient({ projectId }: { projectId?: string }) {
   return projectId ? (
     <ProjectWorkspace projectId={projectId} />
@@ -215,6 +218,7 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [section, setSection] = useState<WorkspaceSection>("overview");
   const label = (value: string) =>
     status.has(value) ? status(value) : value.replaceAll("_", " ");
   async function mutate(
@@ -293,8 +297,11 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
           {notice}
         </p>
       ) : null}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card variant="elevated">
+      <nav className="workspace-tabs" aria-label={t("workspaceSections")} role="tablist">
+        {workspaceSections.map((item) => <button key={item} type="button" role="tab" aria-selected={section === item} onClick={() => setSection(item)}>{t(`section.${item}`)}</button>)}
+      </nav>
+      <div className="grid gap-6">
+        {section === "overview" ? <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("settings")}</h2>
           <form
             className="enterprise-form"
@@ -352,7 +359,8 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
               </Button>
             </div>
           </form>
-        </Card>
+        </Card> : null}
+        {section === "work" ? <>
         <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("milestones")}</h2>
           <form
@@ -464,7 +472,8 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
             ))}
           </List>
         </Card>
-        <Card variant="elevated">
+        </> : null}
+        {section === "delivery" ? <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("comments")}</h2>
           <form
             className="enterprise-form mb-5"
@@ -492,8 +501,8 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
               />
             ))}
           </List>
-        </Card>
-        <Card variant="elevated">
+        </Card> : null}
+        {section === "team" ? <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("members")}</h2>
           <ProjectMemberManagement
             projectId={projectId}
@@ -501,8 +510,8 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
             members={data.memberships}
             onChanged={() => project.refresh()}
           />
-        </Card>
-        <Card variant="elevated">
+        </Card> : null}
+        {section === "files" ? <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("files")}</h2>
           <form
             className="enterprise-form mb-5"
@@ -537,8 +546,8 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
               )),
             ]}
           </List>
-        </Card>
-        <Card variant="elevated" className="xl:col-span-2">
+        </Card> : null}
+        {section === "activity" ? <Card variant="elevated">
           <h2 className="mb-4 text-xl font-bold">{t("activity")}</h2>
           <List empty={t("noActivity")}>
             {data.activities.map((item) => (
@@ -549,13 +558,13 @@ function ProjectWorkspace({ projectId }: { projectId: string }) {
               />
             ))}
           </List>
-        </Card>
+        </Card> : null}
       </div>
-      <AdvancedDeliveryClient
+      {section === "advanced" ? <AdvancedDeliveryClient
         projectId={projectId}
         tasks={data.tasks.map(({ id, title }) => ({ id, title }))}
         members={data.memberships.map(({ user }) => user)}
-      />
+      /> : null}
     </main>
   );
 }

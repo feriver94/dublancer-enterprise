@@ -142,6 +142,13 @@ export async function apiMutation<T>(
   return parse<T>(response);
 }
 
+export async function apiBinaryMutation<T>(path: string, body: Blob): Promise<T> {
+  const execute = async () => fetch(path, { method: "PUT", credentials: "same-origin", headers: { accept: "application/json", "content-type": body.type, "x-csrf-token": await csrfToken() }, body });
+  let response = await execute();
+  if (response.status === 403) { csrfPromise = null; response = await execute(); }
+  return parse<T>(response);
+}
+
 export function resetApiClientCsrf(): void {
   csrfPromise = null;
 }

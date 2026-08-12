@@ -54,8 +54,8 @@ test("Sprint 1 navbar is responsive and global search supports six blocker entit
   const navbar = read("src/components/layout/NavbarClient.tsx");
   const search = read("src/lib/services/search-index.service.ts");
   const schema = read("src/lib/validation/phase4.ts");
-  assert.match(navbar, /primaryItems = items\.slice\(0, 5\)/);
-  assert.match(navbar, /overflowItems = items\.slice\(5\)/);
+  assert.match(navbar, /primaryItems = items\.slice\(0, 4\)/);
+  assert.match(navbar, /overflowItems = items\.slice\(4\)/);
   assert.match(navbar, /xl:hidden/);
   assert.match(navbar, /event\.ctrlKey \|\| event\.metaKey/);
   for (const entity of ["PROJECT", "TASK", "USER", "FILE", "CONTRACT", "ORGANIZATION"]) {

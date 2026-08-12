@@ -93,7 +93,12 @@ export class ProfileDashboardService {
     ] };
     const [recommendedWork, proposalGroups, invitations, contractGroups, milestones, tasks, earnings, pendingWithdrawals, unread, reputation, completion, portfolioGroups, skills, calendarMilestones] = await Promise.all([
       prisma.marketplaceListing.findMany({
-        where: { status: "PUBLISHED", visibility: "PUBLIC", proposals: { none: { freelancerProfileId: profile.id } } },
+        where: {
+          status: "PUBLISHED",
+          visibility: "PUBLIC",
+          organizationId: { not: context.organizationId },
+          proposals: { none: { freelancerProfileId: profile.id } },
+        },
         select: { id: true, title: true, engagementType: true, budgetMinMinor: true, budgetMaxMinor: true, currency: true, remoteAllowed: true, publishedAt: true, skills: { select: { skill: { select: { nameEn: true, slug: true } } } } },
         orderBy: { publishedAt: "desc" },
         take: 8,
@@ -125,7 +130,11 @@ export class ProfileDashboardService {
       pendingWithdrawals: { amountMinor: (pendingWithdrawals._sum.amountMinor ?? BigInt(0)).toString(), count: pendingWithdrawals._count },
       messages: { unread },
       calendar: { milestones: calendarMilestones, tasks: tasks.filter((task) => task.dueAt && task.dueAt >= now) },
-      reviewsSummary: reputation,
+      reviewsSummary: {
+        average: reputation.overall,
+        count: reputation.reviewCount,
+        status: reputation.status,
+      },
       profileCompletion: completion.freelancer,
       portfolioPerformance: portfolioGroups.map((group) => ({ contentType: group.contentType, visibility: group.visibility, count: group._count })),
       skillVerification: { total: skills.length, verified: skills.filter((skill) => Boolean(skill.verifiedAt)).length, skills },

@@ -23,6 +23,8 @@ export async function createSseResponse(
     );
   }
 
+  let streamCancelled = false;
+  let shutdown: ((closeController: boolean) => Promise<void>) | undefined;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false;
@@ -59,7 +61,7 @@ export async function createSseResponse(
           retryable: true,
           at: new Date().toISOString(),
         });
-        void close();
+        void close(true);
       });
 
       const heartbeat = setInterval(() => {
@@ -68,7 +70,7 @@ export async function createSseResponse(
         });
       }, 25000);
 
-      const close = async () => {
+      const close = async (closeController: boolean) => {
         if (closed) return;
         closed = true;
         clearInterval(heartbeat);
@@ -80,13 +82,16 @@ export async function createSseResponse(
           } else {
             subscriber.disconnect(false);
           }
+        } catch {
+          subscriber.disconnect(false);
         } finally {
-          controller.close();
+          if (closeController && !streamCancelled) controller.close();
         }
       };
+      shutdown = close;
 
       signal.addEventListener("abort", () => {
-        void close();
+        void close(true);
       });
 
       send("connected", {
@@ -95,6 +100,8 @@ export async function createSseResponse(
       });
     },
     cancel() {
+      streamCancelled = true;
+      if (shutdown) return shutdown(false);
       subscriber.disconnect(false);
     },
   });
